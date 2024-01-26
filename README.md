@@ -134,3 +134,8 @@ display(title!("Temperature distribution"))
 ```
 Giving:
 ![plot](./temperaturedistribution.png)
+As the last step, we also validate the code against the analytical solution of Crosbie and Schrenker (1982). Plotting source function for the centerline perpendicular to the incident radiation and comparing it to the analytical solution gives:
+![plot](./validation.png)
+
+
+
