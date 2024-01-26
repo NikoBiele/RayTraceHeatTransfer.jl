@@ -46,7 +46,7 @@ include("readMatricesFromCSV.jl")
 # this function call uses all of the above functions
 # except the ones related to CSV-files
 # N_rays_tot is the total number of rays traced in the enclosure
-N_rays_tot = 100_000_000
+N_rays_tot = 10_000_000
 # Ndim is the number of divisions of each side of the square enclosure
 Ndim = 11
 # this function call returns nothing,
