@@ -29,7 +29,7 @@ For now this repository must be downloaded from GitHub since it is not yet regis
 ### Generate geometry
 The geometry is defined by a number of connected sub-enclosures.
 The sub-enclosures are stacked on top of each other.
-Here we define a 1x1 square (a single sub-enclosure).
+Here we define a 1x1 square (a single sub-enclosure), but the code should work for almost any user defined geometry.
 We start by defining the bounding geometry.
 ```julia
 yLayersHeight = [0.0, 1.0]; # create the y-positions or height-layers
@@ -38,7 +38,7 @@ xLayersWidth = zeros(2, length(yLayersHeight)); # define the x-positions for eac
 xLayersWidth[:,1] = [0.0, 1.0]; # bottom
 xLayersWidth[:,2] = [0.0, 1.0]; # top
 ```
-Now that our bounding geometry has been defined, it is time to mesh it. We mesh it twice. We need a coarse mesh since it is much more efficient to ray trace on a coarse mesh. But we also want our results to be fine-grained, so we map the absorption points to a fine mesh. We use the 'geometry' function to mesh the geometry. First the coarse geometry:
+Now that our bounding geometry has been defined, it is time to mesh it. We mesh it twice. We need a coarse mesh since it is much more efficient to ray trace on a coarse mesh. But we also want our results to be fine-grained, so we map the absorption points to a fine mesh. We use the 'geometry' function to mesh the geometry. First the coarse geometry mesh:
 ```julia
 displayGeometry = false; # do not show the geometry
 # define the number of coarse splits in each enclosure
@@ -47,3 +47,22 @@ Ny_coarse = 2; # must be minimum 2
 point1_coarse, point2_coarse, point3_coarse, point4_coarse, N_surfs_coarse, N_vols_coarse =
                         geometry(yLayersHeight,xLayersWidth,Ny_coarse,Nx_coarse,displayGeometry);
 ```
+Next, the fine mesh:
+```julia
+# define the number of fine splits in each enclosure
+Nx_fine = 11 # must be minimum 3
+Ny_fine = 11
+point1_fine, point2_fine, point3_fine, point4_fine, N_surfs_fine, N_vols_fine =
+                        geometry(yLayersHeight,xLayersWidth,Ny_fine,Nx_fine,displayGeometry);
+```
+Now our geometry is defined by the point-arrays. Then we define the properties of our participating medium:
+```julia
+sigma_s = 0.0 # set scattering coefficient
+kappa = 1.0 # set absorption coefficient
+beta = sigma_s+kappa # extinction coefficient
+omega = sigma_s/beta
+```
+
+
+
+
