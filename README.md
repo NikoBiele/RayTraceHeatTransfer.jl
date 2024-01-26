@@ -56,15 +56,16 @@ Ny_fine = Ndim
 point1_fine, point2_fine, point3_fine, point4_fine, N_surfs_fine, N_vols_fine =
                         geometry(yLayersHeight,xLayersWidth,Ny_fine,Nx_fine,displayGeometry);
 ```
-Now our geometry is defined by the point-arrays. Then we define the properties of our participating medium:
+Now our geometry is defined by the point-arrays.
+### Monte Carlo ray tracing
+Now that our geometry is in place, it is time to ray trace the domain. First we define the properties of our participating medium:
 ```julia
 sigma_s = 0.0 # set scattering coefficient
 kappa = 1.0 # set absorption coefficient
 beta = sigma_s+kappa # extinction coefficient
 omega = sigma_s/beta
 ```
-### Monte Carlo ray tracing
-Now that our geometry is in place, it is time to ray trace the domain and save the results in exchange factor matrices:
+Then we ray trace and save the results in exchange factor matrices:
 ```julia
 displayWhileTracing = false # option to view the rays while they are traced (warning: very demanding)
 N_rays_tot = 1e7; # total number of rays
@@ -79,13 +80,11 @@ else
 end
 
 # SAMPLE SURFACES
-println("ray tracing surface emissions")
 FSS, FSG = sampleSurfaces(point1_coarse, point2_coarse, point3_coarse, point4_coarse, Ny_coarse, Nx_coarse,
                     N_surfs_fine,N_vols_fine,point1_fine, point2_fine, point3_fine, point4_fine, Ny_fine, Nx_fine,
                     beta,omega,N_rays,displayWhileTracing,nthreads,N_subs);
 
 # SAMPLE VOLUMES
-println("ray tracing volume emissions")
 FGS, FGG = sampleVolumes(point1_coarse, point2_coarse,point3_coarse, point4_coarse, Ny_coarse, Nx_coarse,
                     N_surfs_fine,N_vols_fine,point1_fine, point2_fine,point3_fine, point4_fine, Ny_fine, Nx_fine,
                     beta,omega,N_rays,displayWhileTracing,nthreads,N_subs);
@@ -118,6 +117,7 @@ Tw, Tg, iter_count, Grelabs = steadyStateRigorous(Nx_fine,Ny_fine,N_subs,Area,Vo
                                                     fixWalls,epsw_vec,kappa,maxIter,relTol,
                                                     Tw_init,Tg_init)
 ```
-
+Below is a plot of how our calculation has converged:
+![plot](./convergencehistory.png)
 
 
