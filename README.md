@@ -95,7 +95,7 @@ width = 1.0 # width of domain
 Area, Volume = calculateAreaVolume(Nx_fine,Ny_fine,N_subs,width,point1_fine,point2_fine,point3_fine,point4_fine)
 ```
 ### Solve heat transfer problem for steady state temperature distribution
-Now it is time to solve heat transfer problems on the domain defined by our geometry. First we fix the wall temperatures and set the initial gas temperatures.
+Now it is time to solve heat transfer problems on the domain defined by our geometry. First we fix the wall temperatures and set the initial gas temperatures. Then we solve for the steady state.
 ```julia
 # define which wall temperatures are fixed
 fixWalls = Vector{Bool}(undef, 4*Ndim)
@@ -119,5 +119,18 @@ Tw, Tg, iter_count, Grelabs = steadyStateRigorous(Nx_fine,Ny_fine,N_subs,Area,Vo
 ```
 Below is a plot of how our calculation has converged:
 ![plot](./convergencehistory.png)
-
-
+Now let's rearrange our gas volume temperature vector into the square that it represents:
+```julia
+Tg_matrix = Array{Float64}(undef, Nx_fine, Ny_fine*N_subs)
+Tg_count = 0
+for i = 1:Nx_fine
+    for j = 1:Ny_fine*N_subs
+        Tg_count += 1
+        Tg_matrix[i,j] = Tg[Tg_count]
+    end
+end
+display(contourf(Tg_matrix',aspect_ratio=1.0))
+display(title!("Temperature distribution"))
+```
+Giving:
+![plot](./temperaturedistribution.png)
