@@ -38,4 +38,12 @@ xLayersWidth = zeros(2, length(yLayersHeight)); # define the x-positions for eac
 xLayersWidth[:,1] = [0.0, 1.0]; # bottom
 xLayersWidth[:,2] = [0.0, 1.0]; # top
 ```
-Now that our bounding geometry has been defined, it is time to mesh it. We mesh it twice. We need a coarse mesh since it is much more efficient to ray trace on a coarse mesh. But we also want our results to be fine-grained, so we map the absorption points to a fine mesh.
+Now that our bounding geometry has been defined, it is time to mesh it. We mesh it twice. We need a coarse mesh since it is much more efficient to ray trace on a coarse mesh. But we also want our results to be fine-grained, so we map the absorption points to a fine mesh. We use the 'geometry' function to mesh the geometry. First the coarse geometry:
+```julia
+displayGeometry = false; # do not show the geometry
+# define the number of coarse splits in each enclosure
+Nx_coarse = 3; # must be minimum 3
+Ny_coarse = 2; # must be minimum 2
+point1_coarse, point2_coarse, point3_coarse, point4_coarse, N_surfs_coarse, N_vols_coarse =
+                        geometry(yLayersHeight,xLayersWidth,Ny_coarse,Nx_coarse,displayGeometry);
+```
