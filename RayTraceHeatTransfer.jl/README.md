@@ -1,6 +1,7 @@
 # RayTraceHeatTransfer.jl
 
 [![Build Status](https://travis-ci.com/NikoBiele/RayTraceHeatTransfer.jl.svg?branch=main)](https://travis-ci.com/NikoBiele/RayTraceHeatTransfer.jl)
+[![Coverage](https://codecov.io/gh/NikoBiele/RayTraceHeatTransfer.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/NikoBiele/RayTraceHeatTransfer.jl)
 
 This repository can be used for radiation heat transfer calculations in an enclosure including a participating medium.
 It contains a number of functions which collectively enables the user to ray trace a user defined geometry.
