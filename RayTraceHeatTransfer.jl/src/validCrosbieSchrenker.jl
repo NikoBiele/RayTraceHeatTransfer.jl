@@ -85,11 +85,11 @@ function validCrosbieSchrenker(N_rays_tot,Ndim)
     # set the emissivities
     epsw_vec = ones(4*Ndim)
     # convergence criteria (which ever happens first)
-    maxIter = 200
+    maxIter = 100
     relTol = 1e-3
 
     println("Calculating steady state temperature distribution")
-    Tw, Tg, break_count, Grelabs = steadyStateRigorous(Nx_fine,Ny_fine,N_subs,Area,Volume,FSS,FSG,FGS,FGG,
+    Tw, Tg, iter_count, Grelabs = steadyStateRigorous(Nx_fine,Ny_fine,N_subs,Area,Volume,FSS,FSG,FGS,FGG,
                                                         fixWalls,epsw_vec,kappa,maxIter,relTol,
                                                         Tw_init,Tg_init)
 
@@ -106,6 +106,7 @@ function validCrosbieSchrenker(N_rays_tot,Ndim)
         end
     end
     display(contourf(Tg_matrix',aspect_ratio=1.0))
+    display(title!("Temperature distribution"))
     sleep(5.0)
 
 
