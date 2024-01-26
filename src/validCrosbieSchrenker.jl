@@ -100,8 +100,7 @@ function validCrosbieSchrenker(N_rays_tot,Ndim)
 
     println("plotting temperature distribution in the gas")
     Tg_matrix = plotTrapezoids(Nx_fine,Ny_fine,N_subs,Tg,point1_fine,point2_fine,point3_fine,point4_fine)
-    sleep(5.0)
-
+    sleep(30.0)
 
     ### COMPARISON WITH ANALYTICAL SOLUTION (Crosbie & Schrenker, 1982)
     
