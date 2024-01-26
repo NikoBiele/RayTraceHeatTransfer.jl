@@ -27,7 +27,10 @@ For now this repository must be downloaded from GitHub since it is not yet regis
 ## Usage
 
 ### Generate geometry
-here we define a 1x1 square, we start with the bounding geometry
+The geometry is defined by a number of connected sub-enclosures.
+The sub-enclosures are stacked on top of each other.
+Here we define a 1x1 square (a single sub-enclosure).
+We start by defining the bounding geometry.
 ```julia
 yLayersHeight = [0.0, 1.0]; # create the y-positions or height-layers
 N_subs = length(yLayersHeight)-1; # number of sub-enclosures (one for this example)
