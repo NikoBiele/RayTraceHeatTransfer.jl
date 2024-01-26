@@ -119,5 +119,18 @@ Tw, Tg, iter_count, Grelabs = steadyStateRigorous(Nx_fine,Ny_fine,N_subs,Area,Vo
 ```
 Below is a plot of how our calculation has converged:
 ![plot](./convergencehistory.png)
-
-
+Now let's rearrange our temperatures into the square that they represent:
+```julia
+Tg_matrix = Array{Float64}(undef, Nx_fine, Ny_fine*N_subs)
+Tg_count = 0
+for i = 1:Nx_fine
+    for j = 1:Ny_fine*N_subs
+        Tg_count += 1
+        Tg_matrix[i,j] = Tg[Tg_count]
+    end
+end
+display(contourf(Tg_matrix',aspect_ratio=1.0))
+display(title!("Temperature distribution"))
+```
+Giving:
+![plot](./temperaturedistribution.png)
