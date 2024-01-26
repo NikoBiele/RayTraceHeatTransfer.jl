@@ -39,7 +39,7 @@ function steadyStateRigorous(Nx,Ny,N_subs,Area,Volume,FSS,FSG,FGS,FGG,
     Tw = Tw_init
     Tg = Tg_init
     for i = 1:maxIter
-        # calculate emissive powers + source
+        # calculate emissive powers
         Ew = epsw_vec .* sigma .* Area .* Tw.^4
         Eg = 4 * kappa * sigma * Volume .* Tg.^4
 
