@@ -19,3 +19,9 @@ It is also limited to 2D enclosures (or more accurately: specular/mirrorlike fro
 - 'Save' ray tracing result as Exchange Factor matrices (also as CSV-files)
 - Quickly calculate heat transfer in the geometry using the Exchange Factors
 - Avoid ray tracing the same geometry multiple times
+
+## Installation
+
+For now this repository must be downloaded from GitHub since it is not yet registered.
+
+## Usage
