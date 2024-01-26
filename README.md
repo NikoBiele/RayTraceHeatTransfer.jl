@@ -47,10 +47,10 @@ Ny_coarse = 2; # must be minimum 2
 point1_coarse, point2_coarse, point3_coarse, point4_coarse, N_surfs_coarse, N_vols_coarse =
                         geometry(yLayersHeight,xLayersWidth,Ny_coarse,Nx_coarse,displayGeometry);
 ```
-Next, the fine mesh:
+Next, the fine mesh (we split into 51x51):
 ```julia
 # define the number of fine splits in each enclosure
-Ndim = 11
+Ndim = 51
 Nx_fine = Ndim # must be minimum 3
 Ny_fine = Ndim
 point1_fine, point2_fine, point3_fine, point4_fine, N_surfs_fine, N_vols_fine =
@@ -119,22 +119,14 @@ Tw, Tg, iter_count, Grelabs = steadyStateRigorous(Nx_fine,Ny_fine,N_subs,Area,Vo
 ```
 Below is a plot of how our calculation has converged:
 ![plot](./convergencehistory.png)
-Now let's rearrange our gas volume temperature vector into the square that it represents:
+Now let's rearrange our gas volume temperature vector into the square of squares that it represents and plot them all:
 ```julia
-Tg_matrix = Array{Float64}(undef, Nx_fine, Ny_fine*N_subs)
-Tg_count = 0
-for i = 1:Nx_fine
-    for j = 1:Ny_fine*N_subs
-        Tg_count += 1
-        Tg_matrix[i,j] = Tg[Tg_count]
-    end
-end
-display(contourf(Tg_matrix',aspect_ratio=1.0))
-display(title!("Temperature distribution"))
+Tg_matrix = plotTrapezoids(Nx_fine,Ny_fine,N_subs,Tg,point1_fine,point2_fine,point3_fine,point4_fine)
 ```
 Giving:
 ![plot](./temperaturedistribution.png)
-As the last step, we also validate the code against the analytical solution of Crosbie and Schrenker (1982). Plotting source function for the centerline perpendicular to the incident radiation and comparing it to the analytical solution gives:
+As the last step, we also validate the code against the analytical solution of Crosbie and Schrenker (1982). Plotting the dimensionless source function for the centerline perpendicular to the incident radiation and comparing it to the analytical solution gives:
 ![plot](./validation.png)
-Which is not perfect, but still quite close considering that we only traced 10 million rays in total. Increasing the number of rays will improve the accuracy.
+Which is not perfect, but still quite close considering that we only traced 10 million rays in total. Increasing the number of rays to 1 billion and repeating gives:
+
 
