@@ -95,7 +95,7 @@ width = 1.0 # width of domain
 Area, Volume = calculateAreaVolume(Nx_fine,Ny_fine,N_subs,width,point1_fine,point2_fine,point3_fine,point4_fine)
 ```
 ### Solve heat transfer problem for steady state temperature distribution
-Now it is time to solve heat transfer problems on the domain defined by our geometry. First we fix the wall temperatures and set the initial gas temperatures.
+Now it is time to solve heat transfer problems on the domain defined by our geometry. First we fix the wall temperatures and set the initial gas temperatures. Then we solve for the steady state.
 ```julia
 # define which wall temperatures are fixed
 fixWalls = Vector{Bool}(undef, 4*Ndim)
