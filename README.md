@@ -38,3 +38,4 @@ xLayersWidth = zeros(2, length(yLayersHeight)); # define the x-positions for eac
 xLayersWidth[:,1] = [0.0, 1.0]; # bottom
 xLayersWidth[:,2] = [0.0, 1.0]; # top
 ```
+Now that our bounding geometry has been defined, it is time to mesh it. We mesh it twice. We need a coarse mesh since it is much more efficient to ray trace on a coarse mesh. But we also want our results to be fine-grained, so we map the absorption points to a fine mesh.
