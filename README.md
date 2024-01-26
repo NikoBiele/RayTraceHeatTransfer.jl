@@ -25,3 +25,11 @@ It is also limited to 2D enclosures (or more accurately: specular/mirrorlike fro
 For now this repository must be downloaded from GitHub since it is not yet registered.
 
 ## Usage
+
+### Generate geometry
+
+yLayersHeight = [0.0, 1.0];
+    N_subs = length(yLayersHeight)-1; # number of sub-enclosures
+    xLayersWidth = zeros(2, length(yLayersHeight));
+    xLayersWidth[:,1] = [0.0, 1.0];
+    xLayersWidth[:,2] = [0.0, 1.0];
