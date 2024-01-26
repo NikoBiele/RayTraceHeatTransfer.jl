@@ -47,10 +47,10 @@ Ny_coarse = 2; # must be minimum 2
 point1_coarse, point2_coarse, point3_coarse, point4_coarse, N_surfs_coarse, N_vols_coarse =
                         geometry(yLayersHeight,xLayersWidth,Ny_coarse,Nx_coarse,displayGeometry);
 ```
-Next, the fine mesh:
+Next, the fine mesh (we split into 51x51):
 ```julia
 # define the number of fine splits in each enclosure
-Ndim = 11
+Ndim = 51
 Nx_fine = Ndim # must be minimum 3
 Ny_fine = Ndim
 point1_fine, point2_fine, point3_fine, point4_fine, N_surfs_fine, N_vols_fine =
