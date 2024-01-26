@@ -119,7 +119,7 @@ Tw, Tg, iter_count, Grelabs = steadyStateRigorous(Nx_fine,Ny_fine,N_subs,Area,Vo
 ```
 Below is a plot of how our calculation has converged:
 ![plot](./convergencehistory.png)
-Now let's rearrange our temperatures into the square that they represent:
+Now let's rearrange our gas volume temperature vector into the square that it represents:
 ```julia
 Tg_matrix = Array{Float64}(undef, Nx_fine, Ny_fine*N_subs)
 Tg_count = 0
