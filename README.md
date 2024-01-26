@@ -50,8 +50,9 @@ point1_coarse, point2_coarse, point3_coarse, point4_coarse, N_surfs_coarse, N_vo
 Next, the fine mesh:
 ```julia
 # define the number of fine splits in each enclosure
-Nx_fine = 11 # must be minimum 3
-Ny_fine = 11
+Ndim = 11
+Nx_fine = Ndim # must be minimum 3
+Ny_fine = Ndim
 point1_fine, point2_fine, point3_fine, point4_fine, N_surfs_fine, N_vols_fine =
                         geometry(yLayersHeight,xLayersWidth,Ny_fine,Nx_fine,displayGeometry);
 ```
@@ -62,7 +63,7 @@ kappa = 1.0 # set absorption coefficient
 beta = sigma_s+kappa # extinction coefficient
 omega = sigma_s/beta
 ```
-### Ray tracing
+### Monte Carlo ray tracing
 Now that our geometry is in place, it is time to ray trace the domain and save the results in exchange factor matrices:
 ```julia
 displayWhileTracing = false # option to view the rays while they are traced (warning: very demanding)
@@ -89,3 +90,34 @@ FGS, FGG = sampleVolumes(point1_coarse, point2_coarse,point3_coarse, point4_coar
                     N_surfs_fine,N_vols_fine,point1_fine, point2_fine,point3_fine, point4_fine, Ny_fine, Nx_fine,
                     beta,omega,N_rays,displayWhileTracing,nthreads,N_subs);
 ```
+Now that our matrices are calculated we calculate the area and volume of all zones in the fine domain:
+```julia
+width = 1.0 # width of domain
+Area, Volume = calculateAreaVolume(Nx_fine,Ny_fine,N_subs,width,point1_fine,point2_fine,point3_fine,point4_fine)
+```
+### Solve heat transfer problem for steady state temperature distribution
+Now it is time to solve heat transfer problems on the domain defined by our geometry. First we fix the wall temperatures and set the initial gas temperatures.
+```julia
+# define which wall temperatures are fixed
+fixWalls = Vector{Bool}(undef, 4*Ndim)
+fixWalls .= true # all are fixed
+Tw_init = zeros(4*Ndim)
+Tw_init[1:Ny_fine] .= 0.0
+Tw_init[Ny_fine+1:2*Ny_fine] .= 0.0
+Tw_init[2*Ny_fine+1:2*Ny_fine+Nx_fine] .= 1.0
+Tw_init[2*Ny_fine+Nx_fine+1:2*Ny_fine+2*Nx_fine] .= 0.0
+# gas initial temperatures
+Tg_init = zeros(Ndim^2) .+ 100.0 # not fixed
+# set the emissivities
+epsw_vec = ones(4*Ndim)
+# convergence criteria (which ever happens first)
+maxIter = 100
+relTol = 1e-3
+
+Tw, Tg, iter_count, Grelabs = steadyStateRigorous(Nx_fine,Ny_fine,N_subs,Area,Volume,FSS,FSG,FGS,FGG,
+                                                    fixWalls,epsw_vec,kappa,maxIter,relTol,
+                                                    Tw_init,Tg_init)
+```
+
+
+
