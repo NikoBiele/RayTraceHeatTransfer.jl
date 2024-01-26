@@ -1,6 +1,7 @@
 # RayTraceHeatTransfer.jl
 
-[![Build Status](https://github.com/NikoBiele/RayTraceHeatTransfer.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/NikoBiele/RayTraceHeatTransfer.jl/actions/workflows/CI.yml?query=branch%3Amain)
+[![Build Status](https://travis-ci.com/NikoBiele/RayTraceHeatTransfer.jl.svg?branch=main)](https://travis-ci.com/NikoBiele/RayTraceHeatTransfer.jl)
+[![Coverage](https://codecov.io/gh/NikoBiele/RayTraceHeatTransfer.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/NikoBiele/RayTraceHeatTransfer.jl)
 
 ## Description
 
