@@ -27,9 +27,8 @@ For now this repository must be downloaded from GitHub since it is not yet regis
 ## Usage
 
 ### Generate geometry
-
+here we define a 1x1 square, we start with the bounding geometry
 ```julia
-# here we define a 1x1 square, we start with the bounding geometry
 yLayersHeight = [0.0, 1.0]; # create the y-positions or height-layers
 N_subs = length(yLayersHeight)-1; # number of sub-enclosures (one for this example)
 xLayersWidth = zeros(2, length(yLayersHeight)); # define the x-positions for each height layer
