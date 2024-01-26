@@ -117,6 +117,7 @@ Tw, Tg, iter_count, Grelabs = steadyStateRigorous(Nx_fine,Ny_fine,N_subs,Area,Vo
                                                     fixWalls,epsw_vec,kappa,maxIter,relTol,
                                                     Tw_init,Tg_init)
 ```
+Below is a plot of how our calculation has converged:
 ![plot](./convergencehistory.png)
 
 
