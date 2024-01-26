@@ -117,7 +117,7 @@ Tw, Tg, iter_count, Grelabs = steadyStateRigorous(Nx_fine,Ny_fine,N_subs,Area,Vo
                                                     fixWalls,epsw_vec,kappa,maxIter,relTol,
                                                     Tw_init,Tg_init)
 ```
-![alt text](https://github.com/NikoBiele/RayTraceHeatTransfer.jl/blob/convergencehistory.png?raw=true)
+![alt text](https://github.com/NikoBiele/RayTraceHeatTransfer.jl/convergencehistory.png?raw=true)
 
 
 
