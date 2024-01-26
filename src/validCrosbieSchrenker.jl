@@ -99,16 +99,7 @@ function validCrosbieSchrenker(N_rays_tot,Ndim)
     sleep(5.0)
 
     println("plotting temperature distribution in the gas")
-    Tg_matrix = Array{Float64}(undef, Nx_fine, Ny_fine*N_subs)
-    Tg_count = 0
-    for i = 1:Nx_fine
-        for j = 1:Ny_fine*N_subs
-            Tg_count += 1
-            Tg_matrix[i,j] = Tg[Tg_count]
-        end
-    end
-    display(contourf(Tg_matrix',aspect_ratio=1.0))
-    display(title!("Temperature distribution"))
+    Tg_matrix = plotTrapezoids(Nx_fine,Ny_fine,N_subs,Tg,point1_fine,point2_fine,point3_fine,point4_fine)
     sleep(5.0)
 
 

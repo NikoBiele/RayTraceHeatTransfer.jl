@@ -19,6 +19,7 @@ export steadyStateRigorous
 export calculateAreaVolume
 export rayTracing_2D
 export readMatricesFromCSV
+export plotTrapezoids
 
 using Plots, LinearAlgebra, CSV, DataFrames, StaticArrays
 
@@ -41,6 +42,7 @@ include("steadyStateRigorous.jl")
 include("calculateAreaVolume.jl")
 include("rayTracing_2D.jl")
 include("readMatricesFromCSV.jl")
+include("plotTrapezoids.jl")
 
 # example code within this function call
 # this function call uses all of the above functions
@@ -48,7 +50,7 @@ include("readMatricesFromCSV.jl")
 # N_rays_tot is the total number of rays traced in the enclosure
 N_rays_tot = 10_000_000
 # Ndim is the number of divisions of each side of the square enclosure
-Ndim = 11
+Ndim = 51
 # this function call returns nothing,
 # however it prints to the REPL and plots
 # it performs a validation of the code against an analytical solution
