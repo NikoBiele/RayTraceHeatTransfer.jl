@@ -29,9 +29,10 @@ For now this repository must be downloaded from GitHub since it is not yet regis
 ### Generate geometry
 
 ```julia
-yLayersHeight = [0.0, 1.0];
-    N_subs = length(yLayersHeight)-1; # number of sub-enclosures
-    xLayersWidth = zeros(2, length(yLayersHeight));
-    xLayersWidth[:,1] = [0.0, 1.0];
-    xLayersWidth[:,2] = [0.0, 1.0];
+# here we define a 1x1 square, we start with the bounding geometry
+yLayersHeight = [0.0, 1.0]; # create the y-positions or height-layers
+N_subs = length(yLayersHeight)-1; # number of sub-enclosures (one for this example)
+xLayersWidth = zeros(2, length(yLayersHeight)); # define the x-positions for each height layer
+xLayersWidth[:,1] = [0.0, 1.0]; # bottom
+xLayersWidth[:,2] = [0.0, 1.0]; # top
 ```
