@@ -1,5 +1,7 @@
 # RayTraceHeatTransfer.jl
 
+[![Build Status](https://travis-ci.com/NikoBiele/RayTraceHeatTransfer.jl.svg?branch=main)](https://travis-ci.com/NikoBiele/RayTraceHeatTransfer.jl)
+
 This repository can be used for radiation heat transfer calculations in an enclosure including a participating medium.
 It contains a number of functions which collectively enables the user to ray trace a user defined geometry.
 The result of the ray tracing are four 'exchange factor' matrices which together describe how the enclosure is radiatively connected.
