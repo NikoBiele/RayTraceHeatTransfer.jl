@@ -17,4 +17,5 @@ It is also limited to 2D enclosures (or more accurately: specular/mirrorlike fro
 - Define a custom geometry
 - Ray trace the geometry rapidly
 - 'Save' ray tracing result as Exchange Factor matrices (also as CSV-files)
-- Calculate heat transfer in geometry
+- Quickly calculate heat transfer in the geometry using the Exchange Factors
+- Avoid ray tracing the same geometry multiple times
