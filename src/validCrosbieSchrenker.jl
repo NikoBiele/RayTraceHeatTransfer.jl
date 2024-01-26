@@ -93,7 +93,9 @@ function validCrosbieSchrenker(N_rays_tot,Ndim)
                                                         fixWalls,epsw_vec,kappa,maxIter,relTol,
                                                         Tw_init,Tg_init)
 
-    display(plot(Grelabs[3:end],title="Convergence history"))
+    display(plot(Grelabs[3:end],title="Convergence history",legend=false))
+    display(xlabel!("Iterations"))
+    display(ylabel!("Relative change in heat flux"))
     sleep(5.0)
 
     println("plotting temperature distribution in the gas")
