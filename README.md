@@ -62,7 +62,30 @@ kappa = 1.0 # set absorption coefficient
 beta = sigma_s+kappa # extinction coefficient
 omega = sigma_s/beta
 ```
+### Ray tracing
+Now that our geometry is in place, it is time to ray trace the domain and save the results in exchange factor matrices:
+```julia
+displayWhileTracing = false # option to view the rays while they are traced (warning: very demanding)
+N_rays_tot = 1e7; # total number of rays
+# number of rays to trace from each zone
+N_rays = trunc(Int, N_rays_tot/(Nx_fine*Ny_fine*N_subs+2*Nx_fine+2*Ny_fine))
 
+# We execute the calculation in parallel on all available threads
+if displayWhileTracing
+    nthreads = 1
+else
+    nthreads = Threads.nthreads()
+end
 
+# SAMPLE SURFACES
+println("ray tracing surface emissions")
+FSS, FSG = sampleSurfaces(point1_coarse, point2_coarse, point3_coarse, point4_coarse, Ny_coarse, Nx_coarse,
+                    N_surfs_fine,N_vols_fine,point1_fine, point2_fine, point3_fine, point4_fine, Ny_fine, Nx_fine,
+                    beta,omega,N_rays,displayWhileTracing,nthreads,N_subs);
 
-
+# SAMPLE VOLUMES
+println("ray tracing volume emissions")
+FGS, FGG = sampleVolumes(point1_coarse, point2_coarse,point3_coarse, point4_coarse, Ny_coarse, Nx_coarse,
+                    N_surfs_fine,N_vols_fine,point1_fine, point2_fine,point3_fine, point4_fine, Ny_fine, Nx_fine,
+                    beta,omega,N_rays,displayWhileTracing,nthreads,N_subs);
+```
