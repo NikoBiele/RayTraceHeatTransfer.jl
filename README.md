@@ -28,6 +28,7 @@ For now this repository must be downloaded from GitHub since it is not yet regis
 
 ### Generate geometry
 
+'''julia
 yLayersHeight = [0.0, 1.0];
     N_subs = length(yLayersHeight)-1; # number of sub-enclosures
     xLayersWidth = zeros(2, length(yLayersHeight));
