@@ -80,13 +80,11 @@ else
 end
 
 # SAMPLE SURFACES
-println("ray tracing surface emissions")
 FSS, FSG = sampleSurfaces(point1_coarse, point2_coarse, point3_coarse, point4_coarse, Ny_coarse, Nx_coarse,
                     N_surfs_fine,N_vols_fine,point1_fine, point2_fine, point3_fine, point4_fine, Ny_fine, Nx_fine,
                     beta,omega,N_rays,displayWhileTracing,nthreads,N_subs);
 
 # SAMPLE VOLUMES
-println("ray tracing volume emissions")
 FGS, FGG = sampleVolumes(point1_coarse, point2_coarse,point3_coarse, point4_coarse, Ny_coarse, Nx_coarse,
                     N_surfs_fine,N_vols_fine,point1_fine, point2_fine,point3_fine, point4_fine, Ny_fine, Nx_fine,
                     beta,omega,N_rays,displayWhileTracing,nthreads,N_subs);
@@ -119,6 +117,7 @@ Tw, Tg, iter_count, Grelabs = steadyStateRigorous(Nx_fine,Ny_fine,N_subs,Area,Vo
                                                     fixWalls,epsw_vec,kappa,maxIter,relTol,
                                                     Tw_init,Tg_init)
 ```
+![alt text](https://github.com/NikoBiele/RayTraceHeatTransfer.jl/blob/convergencehistory.png?raw=true)
 
 
 
