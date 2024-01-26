@@ -130,3 +130,4 @@ As the last step, we also validate the code against the analytical solution of C
 Which is not perfect, but still quite close considering that we only traced 10 million rays in total. Increasing the number of rays to 1 billion and repeating gives:
 ![plot](./temperaturedistribution_oneBillion.png)
 ![plot](./validation_oneBillion.png)
+Decreasing the number of subdivisions would further increase the accuracy.
