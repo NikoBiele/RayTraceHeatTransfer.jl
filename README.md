@@ -151,3 +151,16 @@ xLayersWidth[:,6] = [0.0, 1.0];
 ```
 Which gives the geometry:
 ![plot](./customGeometry.png)
+
+In general the numbering of the walls and volumes are in the following way which is important for defining wall properties and source terms.
+
+Walls are numbered:
+First the left wall from bottom to top.
+Next the right wall from bottom to top.
+Third the bottom wall from left to right.
+Fourth the top wall from left to right.
+
+Volumes are numbered:
+First the leftmost column of volumes, from bottom to top.
+Next go one step to the right and repeat, from bottom to top.
+Continue like this, until the last column which is the rightmost column, from bottom to top.
