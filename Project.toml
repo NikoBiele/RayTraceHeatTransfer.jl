@@ -12,6 +12,10 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [compat]
 julia = "1"
+CSV = "0.10" # compatible with versions 0.10.x
+DataFrames = "1.6" # compatible with versions 1.6.x
+Plots = "1.40" # compatible with versions 1.40.x
+StaticArrays = "1.9" # compatible with versions 1.9.x
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
