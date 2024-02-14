@@ -3,6 +3,11 @@ function geometry(yLayersHeight::Vector{Float64},xLayersWidth::Matrix{Float64},
     # This function divides the geometry into a 2D computational mesh
     # over which the ray tracing is performed.    
                     
+    # function to plot geometry
+    function trapezoid(point1, point2, point3, point4)
+        Shape([point1[1], point2[1], point3[1], point4[1]],[point1[2], point2[2], point3[2], point4[2]])
+    end
+
     # The number of sub-enclosures (height layers minus one).
     N_subs = length(yLayersHeight)-1
 
@@ -101,12 +106,8 @@ function geometry(yLayersHeight::Vector{Float64},xLayersWidth::Matrix{Float64},
                 pointTwo = point2[m,n] # Set the bottom right point.
                 pointThree = point3[m,n] # Set the top right point.
                 pointFour = point4[m,n] # Set the top left point.
-                if displayGeometry
-                    display(plot!([pointOne[1], pointTwo[1]], [pointOne[2], pointTwo[2]], label="",legend=false,color=:gray))
-                    display(plot!([pointTwo[1], pointThree[1]], [pointTwo[2], pointThree[2]], label="",legend=false,color=:gray))
-                    display(plot!([pointThree[1], pointFour[1]], [pointThree[2], pointFour[2]], label="",legend=false,color=:gray))
-                    display(plot!([pointFour[1], pointOne[1]], [pointFour[2], pointOne[2]], label="",legend=false,color=:gray))
-                end
+                display(plot!(trapezoid(pointOne, pointTwo, pointThree, pointFour),
+                                legend=false,color=:white))
             end
         end
     end
