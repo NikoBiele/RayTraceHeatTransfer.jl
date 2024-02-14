@@ -98,18 +98,8 @@ function geometry(yLayersHeight::Vector{Float64},xLayersWidth::Matrix{Float64},
     
     # Option to view geometry.
     if displayGeometry
-        plot!(aspect_ratio=1.0)
-        for m = 1:Nx # Plot imaginary walls between points to show the domain.
-            for n = 1:N_subs*Ny
-                # Plot all cells if requested.
-                pointOne = point1[m,n] # Set the bottom left point.
-                pointTwo = point2[m,n] # Set the bottom right point.
-                pointThree = point3[m,n] # Set the top right point.
-                pointFour = point4[m,n] # Set the top left point.
-                display(plot!(trapezoid(pointOne, pointTwo, pointThree, pointFour),
-                                legend=false,color=:white))
-            end
-        end
+        display(plot!([trapezoid(point1[i,j], point2[i,j], point3[i,j], point4[i,j]) for i in 1:Nx for j in 1:Ny*N_subs],
+                        legend=false,color=:white,aspect_ratio=1.0))
     end
 
     # miscellaneous useful numbers related to geometry
