@@ -131,3 +131,23 @@ Which is not perfect, but still quite close considering that we only traced 10 m
 ![plot](./temperaturedistribution_oneBillion.png)
 ![plot](./validation_oneBillion.png)
 Decreasing the number of subdivisions would further increase the accuracy.
+
+## Defining a custom geometry
+
+To define a custom geometry, use different values in yLayersHeight and xLayersWidth:
+```julia
+# now we need to know the Coordinates of all the points in the enclosure
+# set the height of the outer points (the y-coordinates)
+displayGeometry = true;
+yLayersHeight = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0];
+N_subs = length(yLayersHeight)-1; # number of sub-enclosures
+xLayersWidth = zeros(2, length(yLayersHeight));
+xLayersWidth[:,1] = [0.0, 1.0];
+xLayersWidth[:,2] = [0.0, 1.0];
+xLayersWidth[:,3] = [-1.0, 0.0];
+xLayersWidth[:,4] = [-1.0, 0.0];
+xLayersWidth[:,5] = [0.0, 1.0];
+xLayersWidth[:,6] = [0.0, 1.0];
+```
+Which gives the geometry:
+![plot](./customGeometry.png)
