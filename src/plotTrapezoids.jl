@@ -19,7 +19,11 @@ function plotTrapezoids(Nx_fine,Ny_fine,N_subs,Tg,point1,point2,point3,point4)
         fill_z = [Tg_matrix[i,j] for i in 1:Nx_fine for j in 1:Ny_fine*N_subs]',
         color = :thermal,
         aspect_ratio = 1.0,
-        title = "Temperature distribution"
+        cbar = true,
+        title = "Temperature distribution in gas",
+        colorbar_title = "Temperature / K",
+        xlabel = "Position / m",
+        ylabel = "Position / m"
     ))
 
     return Tg_matrix

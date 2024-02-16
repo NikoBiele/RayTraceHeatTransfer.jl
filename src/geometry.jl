@@ -106,6 +106,36 @@ function geometry(yLayersHeight::Vector{Float64},xLayersWidth::Matrix{Float64},
     N_surfs = 2*Nx+2*Ny*N_subs
     N_vols = Nx*Ny*N_subs
 
-    return point1, point2, point3, point4, N_surfs, N_vols
+    # find the neighbor cells to each cells (to improve the search speed when ray tracing)
+    NeighborIndices = Array{Array{SVector{2, Int64}}}(undef, Nx, Ny*N_subs)
+    for i in 1:Nx
+        for j in 1:Ny*N_subs
+            Indices = []
+            for k = 1:9
+                if k == 1 && i > 1 && j > 1 # lower left corner neighbor
+                    push!(Indices, SVector(i-1,j-1))
+                elseif k == 2 && i > 1 # left neighbor
+                    push!(Indices, SVector(i-1,j))
+                elseif k == 3 && i > 1 && j < Ny*N_subs # upper left neighbor
+                    push!(Indices, SVector(i-1,j+1))
+                elseif k == 4 && j > 1 # bottom below
+                    push!(Indices, SVector(i,j-1))
+                elseif k == 5 # this is the previous cell itself (always included)
+                    push!(Indices, SVector(i,j))
+                elseif k == 6 && j < Ny*N_subs # the cell above
+                    push!(Indices, SVector(i,j+1))
+                elseif k == 7 && i < Nx && j > 1 # lower right neighbor
+                    push!(Indices, SVector(i+1,j-1))
+                elseif k == 8 && i < Nx # right side neighbor
+                    push!(Indices, SVector(i+1,j))
+                elseif k == 9 && i < Nx && j < Ny*N_subs # top right corner
+                    push!(Indices, SVector(i+1,j+1))
+                end
+            end
+            NeighborIndices[i,j] = Indices
+        end
+    end
+
+    return point1, point2, point3, point4, N_surfs, N_vols, NeighborIndices
 
 end

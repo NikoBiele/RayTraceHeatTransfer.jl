@@ -5,7 +5,8 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                         beta::Float64, omega::Float64, N_rays::Int64,
                         displayWhileTracing::Bool, nthreads::Int64,
                         wallEmitter::Int, volumeEmitter::Int, N_subs::Int, xCountSample::Int, yCountSample::Int,
-                        sampleLeftRight::Bool, sampleTopBottom::Bool)
+                        sampleLeftRight::Bool, sampleTopBottom::Bool,
+                        NeighborIndices_coarse::Matrix{Array{SVector{2, Int64}}})
 
     # This function ray traces a single ray in a 2D domain (or a number of rays in parallel).
     # The ray (or rays) is emitted from a specified emitter (wall or volume) and
@@ -61,7 +62,7 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
 
                 # sample volume
                 point, i1 = sampleVolume(Nx_fine, Ny_fine, N_subs, volumeEmitter,
-                                            point1_fine, point2_fine, point3_fine, point4_fine)
+                                            point1_fine, point2_fine, point3_fine, point4_fine,xCountSample,yCountSample)
 
             else
                 println("Unknown volume emitter.")
@@ -75,7 +76,7 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
 
             # here we find out which (coarse) enclosure we are in
             xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
-                                                                N_subs, Nx_coarse, Ny_coarse)
+                                                               N_subs, Nx_coarse, Ny_coarse)
 
             R_S = rand() # sample for finding ray distance
             S = -(1/beta)*log(R_S) # get the ray distance travelled before absorption or scattering
@@ -148,7 +149,7 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                 
                 # here we find out which (coarse) enclosure we are
                 xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
-                                                                    N_subs, Nx_coarse, Ny_coarse)
+                                                                    N_subs, Nx_coarse, Ny_coarse, NeighborIndices_coarse[xCount_coarse,yCount_coarse])
 
                 # we calculate the point on each wall based on the control volume we are currently in
                 wallPointBottom, wallPointRight, wallPointTop, wallPointLeft, bottomWallNormal, rightWallNormal, topWallNormal, leftWallNormal =
@@ -222,7 +223,8 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                     S -= u_real # update the remaining distance
 
                     # here we find out which (coarse) enclosure we ended up in
-                    xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse, N_subs, Nx_coarse, Ny_coarse)
+                    xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
+                                                            N_subs, Nx_coarse, Ny_coarse,NeighborIndices_coarse[xCount_coarse,yCount_coarse])
 
                     # we calculate the point on each wall based on the control volume we are currently in
                     wallPointBottom, wallPointRight, wallPointTop, wallPointLeft, bottomWallNormal, rightWallNormal, topWallNormal, leftWallNormal =
