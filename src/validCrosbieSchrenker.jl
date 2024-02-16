@@ -1,4 +1,4 @@
-function validCrosbieSchrenker(N_rays_tot,Ndim)
+function validCrosbieSchrenker(N_rays_tot,Ndim,Tw_hot)
     # this function performs a comparison of the ray traced result
     # with the analytical 2D solution tabulated by Crosbie & Schrenker (1982)
 
@@ -22,14 +22,19 @@ function validCrosbieSchrenker(N_rays_tot,Ndim)
     # define the number of coarse splits in each enclosure
     Nx_coarse = 3; # must be minimum 3
     Ny_coarse = 2; # must be minimum 2
-    point1_coarse, point2_coarse, point3_coarse, point4_coarse, N_surfs_coarse, N_vols_coarse =
+    point1_coarse, point2_coarse, point3_coarse, point4_coarse, N_surfs_coarse, N_vols_coarse, NeighborIndices_coarse =
                             geometry(yLayersHeight,xLayersWidth,Ny_coarse,Nx_coarse,displayGeometry);
 
     # define the number of fine splits in each enclosure
     Nx_fine = Ndim # must be minimum 3
-    Ny_fine = Ndim
-    point1_fine, point2_fine, point3_fine, point4_fine, N_surfs_fine, N_vols_fine =
+    Ny_fine = Ndim # must be minimum 2
+    point1_fine, point2_fine, point3_fine, point4_fine, N_surfs_fine, N_vols_fine, NeighborIndices_fine =
                             geometry(yLayersHeight,xLayersWidth,Ny_fine,Nx_fine,displayGeometry);
+
+    ### CALCULATE AREA AND VOLUME OF EACH ZONE
+
+    width = 1.0 # width of domain
+    Area, Volume = calculateAreaVolume(Nx_fine,Ny_fine,N_subs,width,point1_fine,point2_fine,point3_fine,point4_fine);
 
     ### DEFINE GAS PROPERTIES
 
@@ -54,21 +59,19 @@ function validCrosbieSchrenker(N_rays_tot,Ndim)
     end
 
     ### SAMPLE SURFACES
-    println("ray tracing surface emissions")
-    FSS, FSG = sampleSurfaces(point1_coarse, point2_coarse, point3_coarse, point4_coarse, Ny_coarse, Nx_coarse,
-                        N_surfs_fine,N_vols_fine,point1_fine, point2_fine, point3_fine, point4_fine, Ny_fine, Nx_fine,
-                        beta,omega,N_rays,displayWhileTracing,nthreads,N_subs);
-    
-    ### SAMPLE VOLUMES
-    println("ray tracing volume emissions")
-    FGS, FGG = sampleVolumes(point1_coarse, point2_coarse,point3_coarse, point4_coarse, Ny_coarse, Nx_coarse,
-                        N_surfs_fine,N_vols_fine,point1_fine, point2_fine,point3_fine, point4_fine, Ny_fine, Nx_fine,
-                        beta,omega,N_rays,displayWhileTracing,nthreads,N_subs);
+    @time begin
+        println("Starting ray tracing of $N_rays_tot ray bundles in total ($N_rays per emitter):")
+        FSS, FSG = sampleSurfaces(point1_coarse,point2_coarse,point3_coarse,point4_coarse,Ny_coarse,Nx_coarse,
+                                        N_surfs_fine,N_vols_fine,point1_fine,point2_fine,point3_fine,point4_fine,Ny_fine,Nx_fine,
+                                        beta,omega,N_rays,displayWhileTracing,nthreads,N_subs,NeighborIndices_coarse);
 
-    ### CALCULATE AREA AND VOLUME OF EACH ZONE
-
-    width = 1.0 # width of domain
-    Area, Volume = calculateAreaVolume(Nx_fine,Ny_fine,N_subs,width,point1_fine,point2_fine,point3_fine,point4_fine)
+        ### SAMPLE VOLUMES
+        FGS, FGG = sampleVolumes(point1_coarse,point2_coarse,point3_coarse,point4_coarse,Ny_coarse,Nx_coarse,N_surfs_fine,
+                                    N_vols_fine,point1_fine,point2_fine,point3_fine,point4_fine,Ny_fine,Nx_fine,
+                                    beta,omega,N_rays,displayWhileTracing,nthreads,N_subs,
+                                    NeighborIndices_coarse);
+        println("Ray tracing finished, the total time elapsed was:")
+    end;
 
     ### CALCULATE THE STEADY STATE TEMPERATURE DISTRIBUTION
 
@@ -78,7 +81,7 @@ function validCrosbieSchrenker(N_rays_tot,Ndim)
     Tw_init = zeros(4*Ndim)
     Tw_init[1:Ny_fine] .= 0.0
     Tw_init[Ny_fine+1:2*Ny_fine] .= 0.0
-    Tw_init[2*Ny_fine+1:2*Ny_fine+Nx_fine] .= 1.0
+    Tw_init[2*Ny_fine+1:2*Ny_fine+Nx_fine] .= Tw_hot
     Tw_init[2*Ny_fine+Nx_fine+1:2*Ny_fine+2*Nx_fine] .= 0.0
     # gas initial temperatures
     Tg_init = zeros(Ndim^2) .+ 100.0 # not fixed
@@ -88,23 +91,23 @@ function validCrosbieSchrenker(N_rays_tot,Ndim)
     maxIter = 100
     relTol = 1e-3
 
-    println("Calculating steady state temperature distribution")
+    println("Calculating steady state temperature distribution.")
     Tw, Tg, iter_count, Grelabs = steadyStateRigorous(Nx_fine,Ny_fine,N_subs,Area,Volume,FSS,FSG,FGS,FGG,
                                                         fixWalls,epsw_vec,kappa,maxIter,relTol,
-                                                        Tw_init,Tg_init)
+                                                        Tw_init,Tg_init);
 
     display(plot(Grelabs[3:end],title="Convergence history",legend=false))
     display(xlabel!("Iterations"))
     display(ylabel!("Relative change in heat flux"))
     sleep(5.0)
 
-    println("plotting temperature distribution in the gas")
+    println("Plotting temperature distribution in the gas.")
     Tg_matrix = plotTrapezoids(Nx_fine,Ny_fine,N_subs,Tg,point1_fine,point2_fine,point3_fine,point4_fine)
-    sleep(30.0)
+    sleep(10.0)
 
     ### COMPARISON WITH ANALYTICAL SOLUTION (Crosbie & Schrenker, 1982)
     
-    println("comparison with analytical solution")
+    println("Comparison with analytical solution.")
     # check the center source function (1m x 1m, albedo = 1 which is equal to kappa = 1 for radiative equilibrium)
     # relative optical depth
     relativeTauz = [0.0, 0.00611, 0.02037, 0.04251, 0.07216, 0.10884, 0.15194, 0.20076, 0.25449,
@@ -118,7 +121,7 @@ function validCrosbieSchrenker(N_rays_tot,Ndim)
     display(plot(relativeTauz, sourceFuncCenter,label="Analytical Solution, Crosbie & Schenker (1982)"))
     N_rays_tot_mio = trunc(Int, N_rays_tot/1e6)
     label = "Monte Carlo Ray Tracing, $N_rays_tot_mio million rays"
-    display(scatter!(0.0+1/(Ndim*2):1/Ndim:1.0-1/(Ndim*2),Tg_matrix[trunc(Int,(Ndim-1)/2),:].^4,marker=:star,label=label))
+    display(scatter!(0.0+1/(Ndim*2):1/Ndim:1.0-1/(Ndim*2),(Tg_matrix[trunc(Int,(Ndim-1)/2),:]./Tw_hot).^4,marker=:star,label=label))
     display(xlabel!("Position / m"))
     display(ylabel!("Dimensionless Source Function"))
 

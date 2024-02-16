@@ -1,29 +1,11 @@
 function sampleVolume(Nx, Ny, N_subs, volumeEmitter::Int, point1::Matrix{SVector{2,Float64}},
-                        point2::Matrix{SVector{2,Float64}}, point3::Matrix{SVector{2,Float64}}, point4::Matrix{SVector{2,Float64}})
+                        point2::Matrix{SVector{2,Float64}}, point3::Matrix{SVector{2,Float64}}, point4::Matrix{SVector{2,Float64}},
+                        xCount::Int64,yCount::Int64)
     
     # This function samples an emission point and direction in a volume (a surface in 2D), by separating it in
     # two triangles and sampling according to their area.
     # This operation requires knowledge of the mesh, which is why the point matrices are also inputs.
     
-    # reset counters    
-    volCount = 0
-    xCount = 0
-    yCount = 0
-
-    # Loop over all volumes to find the coordinates of the current volume.
-    # The volumes are counted upwards from the bottom, first the leftmost column,
-    # then the next and so on, and lastly the rightmost column.
-    @inbounds for m = 1:Nx
-        @inbounds for n = 1:Ny*N_subs
-            volCount += 1
-            if volumeEmitter == volCount
-                xCount = m
-                yCount = n
-                break # when we find the coordinates of the current volume
-            end
-        end
-    end
-
     # get the vertices of the cell
     A = point1[xCount, yCount]
     B = point2[xCount, yCount]
