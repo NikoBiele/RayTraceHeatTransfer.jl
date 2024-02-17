@@ -30,12 +30,16 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
     # enter the multi-threaded loop
     Threads.@threads for logicalCores = 1:nthreads
  
-        @label emitNewRay # emit a new ray
-        point = [] # reset the emission point
-        RayCountTotal[logicalCores] += 1 # increment emission counter
+        # @label emitNewRay # emit a new ray
+        # point = [] # reset the emission point
+        # RayCountTotal[logicalCores] += 1 # increment emission counter
 
         # first check if all of the rays have been emitted
-        if RayCountTotal[logicalCores] <= rays_per_thread
+        # if RayCountTotal[logicalCores] <= rays_per_thread
+        while RayCountTotal[logicalCores] <= rays_per_thread
+
+            point = [] # reset the emission point
+            RayCountTotal[logicalCores] += 1 # increment emission counter
 
             # emitter is specified as a surface
             if wallEmitter == 0 # set to zero if we do not emit from any surface
@@ -95,211 +99,229 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                                                     topWallNormal, bottomWallNormal, leftWallNormal, rightWallNormal)
 
             # now we determine if the ray hit a wall
-            @label doesRayHitWall
-            if S < u_real
-                # S < u_real, so ray does not hit a wall but is scattered or absorbed in gas
-                # bundle is scattered or absorbed in the participating medium
-                while S < u_real
-                    # this loop keeps running as long as the ray keeps scattering
-                    # this loop ends if the ray is absorbed in the gas or it hits a wall
+            # @label doesRayHitWall
+            emitNewRay = false # ensure that we don't break out unintended
+            doesRayHitWall = true
+            while doesRayHitWall == true
+                if S < u_real
+                    # S < u_real, so ray does not hit a wall but is scattered or absorbed in gas
+                    # bundle is scattered or absorbed in the participating medium
+                    while S < u_real
+                        # this loop keeps running as long as the ray keeps scattering
+                        # this loop ends if the ray is absorbed in the gas or it hits a wall
 
-                    # update position and save old point for plotting
-                    pointOld = point
-                    point = point + (S-1e-9)*i1
+                        # update position and save old point for plotting
+                        pointOld = point
+                        point = point + (S-1e-9)*i1
 
-                    # means we hit the gas and either absorp or scatters
-                    # if we absorp, we increase counter and emit a new ray
-                    # if we scatter we sample a new direction from a scattering phase function
-                    R_omega = rand()
-                    if R_omega > omega
-                        # ray is absorbed, increase counter and emit a new ray
+                        # means we hit the gas and either absorp or scatters
+                        # if we absorp, we increase counter and emit a new ray
+                        # if we scatter we sample a new direction from a scattering phase function
+                        R_omega = rand()
+                        if R_omega > omega
+                            # ray is absorbed, increase counter and emit a new ray
 
-                        # here we find out which (fine) enclosure we are in
-                        xCount_fine, yCount_fine = whichEnclosure(point, point1_fine, point2_fine, point3_fine, point4_fine, N_subs, Nx_fine, Ny_fine)
+                            # here we find out which (fine) enclosure we are in
+                            xCount_fine, yCount_fine = whichEnclosure(point, point1_fine, point2_fine, point3_fine, point4_fine, N_subs, Nx_fine, Ny_fine)
 
-                        N_abs_gas[xCount_fine, yCount_fine, logicalCores] += 1 # increase counter (on fine grid)
+                            N_abs_gas[xCount_fine, yCount_fine, logicalCores] += 1 # increase counter (on fine grid)
 
-                        if displayWhileTracing # green for absorption
-                            display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
-                            display(scatter!((point[1], point[2]), color = "green", label = "", markersize = 2))
+                            if displayWhileTracing # green for absorption
+                                display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
+                                display(scatter!((point[1], point[2]), color = "green", label = "", markersize = 2))
+                            end
+
+                            # @goto emitNewRay
+                            emitNewRay = true
+                            break
+
+                        else # R_omega < omega
+                            # ray is scattered
+
+                            if displayWhileTracing # red for scattering
+                                display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
+                                display(scatter!((point[1], point[2]), color = "red", label = "", markersize = 2))
+                            end
+
+                            # Find isotropic scatter direction (3D spherical projected onto 2D)
+                            theta = acos(2.0*rand()-1.0) # cone angle
+                            phi = 2*pi*rand() # circumferential angle (turn the cone angle around the plane)
+                            # direction vector according to conventions
+                            r = 1
+                            xdir = r*sin(theta)*cos(phi)
+                            # ydir = r*sin(theta)*sin(phi) # this one is projected onto plane (set to zero)
+                            zdir = r*cos(theta) 
+                            i1 = SVector(xdir, zdir)
+
+                            # now we emit a new ray from the scatter point
+                            R_S = rand() # sample for finding distance travelled by ray
+                            S = -(1/beta)*log(R_S) # distance travelled by ray
+                            
+                            # here we find out which (coarse) enclosure we are
+                            xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
+                                                                                N_subs, Nx_coarse, Ny_coarse, NeighborIndices_coarse[xCount_coarse,yCount_coarse])
+
+                            # we calculate the point on each wall based on the control volume we are currently in
+                            wallPointBottom, wallPointRight, wallPointTop, wallPointLeft, bottomWallNormal, rightWallNormal, topWallNormal, leftWallNormal =
+                                                                localWalls(xCount_coarse, yCount_coarse, point1_coarse, point2_coarse, point3_coarse, point4_coarse)
+
+                            # get distances to (coarse) surfaces
+                            u_real, u_index = distToSurface(point, i1, wallPointTop, wallPointBottom, wallPointLeft, wallPointRight, topWallNormal, bottomWallNormal, leftWallNormal, rightWallNormal)
                         end
-
-                        @goto emitNewRay
-
-                    else # R_omega < omega
-                        # ray is scattered
-
-                        if displayWhileTracing # red for scattering
-                            display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
-                            display(scatter!((point[1], point[2]), color = "red", label = "", markersize = 2))
-                        end
-
-                        # Find isotropic scatter direction (3D spherical projected onto 2D)
-                        theta = acos(2.0*rand()-1.0) # cone angle
-                        phi = 2*pi*rand() # circumferential angle (turn the cone angle around the plane)
-                        # direction vector according to conventions
-                        r = 1
-                        xdir = r*sin(theta)*cos(phi)
-                        # ydir = r*sin(theta)*sin(phi) # this one is projected onto plane (set to zero)
-                        zdir = r*cos(theta) 
-                        i1 = SVector(xdir, zdir)
 
                     end
 
-                    # now we emit a new ray from the scatter point
-                    R_S = rand() # sample for finding distance travelled by ray
-                    S = -(1/beta)*log(R_S) # distance travelled by ray
-                    
-                    # here we find out which (coarse) enclosure we are
-                    xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
-                                                                        N_subs, Nx_coarse, Ny_coarse, NeighborIndices_coarse[xCount_coarse,yCount_coarse])
+                    # if emitNewRay was set to true, also break out of the doesRayHitWall-loop
+                    if emitNewRay == true
+                        break
+                    end
 
-                    # we calculate the point on each wall based on the control volume we are currently in
-                    wallPointBottom, wallPointRight, wallPointTop, wallPointLeft, bottomWallNormal, rightWallNormal, topWallNormal, leftWallNormal =
+                    # we go out of the loop above when the remaining distance is longer than the distance to the wall
+                    # therefore we break out of the loop above when we hit a wall!
+
+                    # find out if any of the boundaries of the current cell are not allowed to be crossed (solid walls)
+                    solidWallx, solidWally = solidWall(Nx_coarse, Ny_coarse, xCount_coarse, yCount_coarse, N_subs)
+
+                    # then we found out if our ray hit a solid wall
+                    if u_index == solidWallx || u_index == solidWally # ray hits a solid wall
+
+                        pointOld = point # save old point before update (for plotting)
+                        S = S - u_real # update the travelled distance
+                        point = point + (u_real-1e-9)*i1 # go almost into the wall (for plotting)
+
+                        # then go to reflect or absorp
+                        R_alpha = rand() # sample surface
+                        if R_alpha > alphaWalls # currently alpha == 1 so always absorbed (due to exchange factor approach)
+                            # then the ray is reflected diffusely
+                            # sample a new direction on the given surface
+                            # use a rotation matrix to transfer the angle from local to global
+
+                        else # then the ray is absorbed
+
+                            if displayWhileTracing
+                                display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = "",))
+                                display(scatter!((point[1], point[2]), color = "green", label = "", markersize = 2))
+                            end
+
+                            # Here we get the position in the fine grid
+                            xCount_fine, yCount_fine = whichEnclosure(point, point1_fine, point2_fine, point3_fine, point4_fine, N_subs, Nx_fine, Ny_fine)
+
+                            # increase a counter for the wall which was hit in order to measure the factors
+                            if u_index == solidWallx # necessary to discern between x and y for enclosures with 2 walls
+                                Wall_absorbX[xCount_fine,yCount_fine,logicalCores] += 1 # increase counter for the given wall
+                            elseif u_index == solidWally
+                                Wall_absorbY[xCount_fine,yCount_fine,logicalCores] += 1 # increase counter for the given wall
+                            else
+                                println("Unknown wall error in absorption.")
+                            end
+
+                            # then emit a new ray
+                            # @goto emitNewRay
+                            emitNewRay = true
+                            break
+
+                        end
+                    else # ray hits an imaginary boundary
+
+                        pointOld = point # save old point before update
+                        point = point + (u_real+1e-10).*i1 # transfer ray to next enclosure
+                        
+                        if displayWhileTracing
+                            display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
+                        end
+
+                        S -= u_real # update the remaining distance
+
+                        # here we find out which (coarse) enclosure we ended up in
+                        xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
+                                                                N_subs, Nx_coarse, Ny_coarse,NeighborIndices_coarse[xCount_coarse,yCount_coarse])
+
+                        # we calculate the point on each wall based on the control volume we are currently in
+                        wallPointBottom, wallPointRight, wallPointTop, wallPointLeft, bottomWallNormal, rightWallNormal, topWallNormal, leftWallNormal =
                                                         localWalls(xCount_coarse, yCount_coarse, point1_coarse, point2_coarse, point3_coarse, point4_coarse)
 
-                    # get distances to (coarse) surfaces
-                    u_real, u_index = distToSurface(point, i1, wallPointTop, wallPointBottom, wallPointLeft, wallPointRight, topWallNormal, bottomWallNormal, leftWallNormal, rightWallNormal)
+                        # get distance to surfaces
+                        u_real, u_index = distToSurface(point, i1, wallPointTop, wallPointBottom, wallPointLeft, 
+                                                        wallPointRight, topWallNormal, bottomWallNormal, leftWallNormal, rightWallNormal)
+                
+                        # check if ray hits wall
+                        # @goto doesRayHitWall
+                        doesRayHitWall = true
 
-                end
-                # we go out of the loop above when the remaining distance is longer than the distance to the wall
-                # therefore we break out of the loop above when we hit a wall!
+                    end
 
-                # find out if any of the boundaries of the current cell are not allowed to be crossed (solid walls)
-                solidWallx, solidWally = solidWall(Nx_coarse, Ny_coarse, xCount_coarse, yCount_coarse, N_subs)
+                else
+                    # u_real < S, so bundle hits a wall! (real or imaginary)
 
-                # then we found out if our ray hit a solid wall
-                if u_index == solidWallx || u_index == solidWally # ray hits a solid wall
+                    # find out if any of the boundaries of the current cell are not allowed to be crossed (solid walls)
+                    solidWallx, solidWally = solidWall(Nx_coarse, Ny_coarse, xCount_coarse, yCount_coarse, N_subs)
 
-                    pointOld = point # save old point before update (for plotting)
-                    S = S - u_real # update the travelled distance
-                    point = point + (u_real-1e-9)*i1 # go almost into the wall (for plotting)
+                    # then we found out if our ray hit a solid wall
+                    if u_index == solidWallx || u_index == solidWally # ray hits a solid wall
 
-                    # then go to reflect or absorp
-                    R_alpha = rand() # sample surface
-                    if R_alpha > alphaWalls # currently alpha == 1 so always absorbed (due to exchange factor approach)
-                        # then the ray is reflected diffusely
-                        # sample a new direction on the given surface
-                        # use a rotation matrix to transfer the angle from local to global
+                        pointOld = point # save old point before update (for plotting)
+                        S = S - u_real # update the travelled distance
+                        point = point + (u_real-1e-9)*i1 # go almost into the wall (for plotting)
 
-                    else # then the ray is absorbed
+                        # then go to reflect or absorp
+                        R_alpha = rand() # sample surface
+                        if R_alpha > alphaWalls # currently alpha == 1 so always absorbed (due to exchange factor approach)
+                            # then the ray is reflected diffusely
+                            # sample a new direction on the given surface
+                            # use a rotation matrix to transfer the angle from local to global
 
+                        else # then the ray is absorbed
+
+                            if displayWhileTracing
+                                display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = "",))
+                                display(scatter!((point[1], point[2]), color = "green", label = "", markersize = 2))
+                            end
+
+                            # Here we get the position in the fine grid
+                            xCount_fine, yCount_fine = whichEnclosure(point, point1_fine, point2_fine, point3_fine, point4_fine, N_subs, Nx_fine, Ny_fine)
+
+                            # increase a counter for the wall which was hit in order to measure the factors
+                            if u_index == solidWallx # necessary to discern between x and y for enclosures with 2 walls
+                                Wall_absorbX[xCount_fine,yCount_fine,logicalCores] += 1 # increase counter for the given wall
+                            elseif u_index == solidWally
+                                Wall_absorbY[xCount_fine,yCount_fine,logicalCores] += 1 # increase counter for the given wall
+                            else
+                                println("Unknown wall error in absorption.")
+                            end
+
+                            # then emit a new ray
+                            # @goto emitNewRay
+                            emitNewRay = true
+                            break
+
+                        end
+                    else # ray hits an imaginary boundary
+
+                        pointOld = point # save old point before update
+                        point = point + (u_real+1e-10).*i1 # transfer ray to next enclosure
+                        
                         if displayWhileTracing
-                            display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = "",))
-                            display(scatter!((point[1], point[2]), color = "green", label = "", markersize = 2))
+                            display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
                         end
 
-                        # Here we get the position in the fine grid
-                        xCount_fine, yCount_fine = whichEnclosure(point, point1_fine, point2_fine, point3_fine, point4_fine, N_subs, Nx_fine, Ny_fine)
+                        S -= u_real # update the remaining distance
 
-                        # increase a counter for the wall which was hit in order to measure the factors
-                        if u_index == solidWallx # necessary to discern between x and y for enclosures with 2 walls
-                            Wall_absorbX[xCount_fine,yCount_fine,logicalCores] += 1 # increase counter for the given wall
-                        elseif u_index == solidWally
-                            Wall_absorbY[xCount_fine,yCount_fine,logicalCores] += 1 # increase counter for the given wall
-                        else
-                            println("Unknown wall error in absorption.")
-                        end
+                        # here we find out which (coarse) enclosure we ended up in
+                        xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
+                                                                N_subs, Nx_coarse, Ny_coarse,NeighborIndices_coarse[xCount_coarse,yCount_coarse])
 
-                        # then emit a new ray
-                        @goto emitNewRay
+                        # we calculate the point on each wall based on the control volume we are currently in
+                        wallPointBottom, wallPointRight, wallPointTop, wallPointLeft, bottomWallNormal, rightWallNormal, topWallNormal, leftWallNormal =
+                                                        localWalls(xCount_coarse, yCount_coarse, point1_coarse, point2_coarse, point3_coarse, point4_coarse)
 
+                        # get distance to surfaces
+                        u_real, u_index = distToSurface(point, i1, wallPointTop, wallPointBottom, wallPointLeft, 
+                                                        wallPointRight, topWallNormal, bottomWallNormal, leftWallNormal, rightWallNormal)
+                
+                        # check if ray hits wall
+                        # @goto doesRayHitWall
+                        doesRayHitWall = true
                     end
-                else # ray hits an imaginary boundary
-
-                    pointOld = point # save old point before update
-                    point = point + (u_real+1e-10).*i1 # transfer ray to next enclosure
-                    
-                    if displayWhileTracing
-                        display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
-                    end
-
-                    S -= u_real # update the remaining distance
-
-                    # here we find out which (coarse) enclosure we ended up in
-                    xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
-                                                            N_subs, Nx_coarse, Ny_coarse,NeighborIndices_coarse[xCount_coarse,yCount_coarse])
-
-                    # we calculate the point on each wall based on the control volume we are currently in
-                    wallPointBottom, wallPointRight, wallPointTop, wallPointLeft, bottomWallNormal, rightWallNormal, topWallNormal, leftWallNormal =
-                                                    localWalls(xCount_coarse, yCount_coarse, point1_coarse, point2_coarse, point3_coarse, point4_coarse)
-
-                    # get distance to surfaces
-                    u_real, u_index = distToSurface(point, i1, wallPointTop, wallPointBottom, wallPointLeft, 
-                                                    wallPointRight, topWallNormal, bottomWallNormal, leftWallNormal, rightWallNormal)
-            
-                    # check if ray hits wall
-                    @goto doesRayHitWall
-                end
-
-            else
-                # u_real < S, so bundle hits a wall! (real or imaginary)
-
-                # find out if any of the boundaries of the current cell are not allowed to be crossed (solid walls)
-                solidWallx, solidWally = solidWall(Nx_coarse, Ny_coarse, xCount_coarse, yCount_coarse, N_subs)
-
-                # then we found out if our ray hit a solid wall
-                if u_index == solidWallx || u_index == solidWally # ray hits a solid wall
-
-                    pointOld = point # save old point before update (for plotting)
-                    S = S - u_real # update the travelled distance
-                    point = point + (u_real-1e-9)*i1 # go almost into the wall (for plotting)
-
-                    # then go to reflect or absorp
-                    R_alpha = rand() # sample surface
-                    if R_alpha > alphaWalls # currently alpha == 1 so always absorbed (due to exchange factor approach)
-                        # then the ray is reflected diffusely
-                        # sample a new direction on the given surface
-                        # use a rotation matrix to transfer the angle from local to global
-
-                    else # then the ray is absorbed
-
-                        if displayWhileTracing
-                            display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = "",))
-                            display(scatter!((point[1], point[2]), color = "green", label = "", markersize = 2))
-                        end
-
-                        # Here we get the position in the fine grid
-                        xCount_fine, yCount_fine = whichEnclosure(point, point1_fine, point2_fine, point3_fine, point4_fine, N_subs, Nx_fine, Ny_fine)
-
-                        # increase a counter for the wall which was hit in order to measure the factors
-                        if u_index == solidWallx # necessary to discern between x and y for enclosures with 2 walls
-                            Wall_absorbX[xCount_fine,yCount_fine,logicalCores] += 1 # increase counter for the given wall
-                        elseif u_index == solidWally
-                            Wall_absorbY[xCount_fine,yCount_fine,logicalCores] += 1 # increase counter for the given wall
-                        else
-                            println("Unknown wall error in absorption.")
-                        end
-
-                        # then emit a new ray
-                        @goto emitNewRay
-
-                    end
-                else # ray hits an imaginary boundary
-
-                    pointOld = point # save old point before update
-                    point = point + (u_real+1e-10).*i1 # transfer ray to next enclosure
-                    
-                    if displayWhileTracing
-                        display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
-                    end
-
-                    S -= u_real # update the remaining distance
-
-                    # here we find out which (coarse) enclosure we ended up in
-                    xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
-                                                            N_subs, Nx_coarse, Ny_coarse,NeighborIndices_coarse[xCount_coarse,yCount_coarse])
-
-                    # we calculate the point on each wall based on the control volume we are currently in
-                    wallPointBottom, wallPointRight, wallPointTop, wallPointLeft, bottomWallNormal, rightWallNormal, topWallNormal, leftWallNormal =
-                                                    localWalls(xCount_coarse, yCount_coarse, point1_coarse, point2_coarse, point3_coarse, point4_coarse)
-
-                    # get distance to surfaces
-                    u_real, u_index = distToSurface(point, i1, wallPointTop, wallPointBottom, wallPointLeft, 
-                                                    wallPointRight, topWallNormal, bottomWallNormal, leftWallNormal, rightWallNormal)
-            
-                    # check if ray hits wall
-                    @goto doesRayHitWall
                 end
             end
         end
