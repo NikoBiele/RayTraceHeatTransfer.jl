@@ -1,7 +1,6 @@
-# function validCrosbieSchrenker(N_rays_tot,Ndim,Tw_hot)
+function validCrosbieSchrenker(N_rays_tot,Ndim,Tw_hot)
     # this function performs a comparison of the ray traced result
     # with the analytical 2D solution tabulated by Crosbie & Schrenker (1982)
-    Ndim = 21
 
     # ensure that the dimension is an odd number (for comparison to analytical)
     if iseven(Ndim)
@@ -50,7 +49,6 @@
 
     displayWhileTracing = false # false
     # number of rays to trace from each zone
-    N_rays_tot = 1_000_000_000
     N_rays = trunc(Int, N_rays_tot/(Nx_fine*Ny_fine*N_subs+2*Nx_fine+2*Ny_fine))
     # N_rays_tot = N_rays*Nx_fine*Ny_fine*N_subs
     # Here I make the calculation run in parallel on all available threads
@@ -76,7 +74,6 @@
     end;
 
     ### CALCULATE THE STEADY STATE TEMPERATURE DISTRIBUTION
-    Tw_hot = 1000.0
 
     # define which wall temperatures are fixed
     fixWalls = Vector{Bool}(undef, 4*Ndim)
