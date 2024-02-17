@@ -20,6 +20,7 @@ export calculateAreaVolume
 export rayTracing_2D
 export readMatricesFromCSV
 export plotTrapezoids
+export sampleDomain
 
 using Plots, LinearAlgebra, CSV, DataFrames, StaticArrays
 
@@ -43,5 +44,6 @@ include("calculateAreaVolume.jl")
 include("rayTracing_2D.jl")
 include("readMatricesFromCSV.jl")
 include("plotTrapezoids.jl")
+include("sampleDomain.jl")
 
 end

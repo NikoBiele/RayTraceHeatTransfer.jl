@@ -16,14 +16,14 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
     # and returned for use in the exchange factor matrices.
     # The ray tracing is performed on a coarse grid and absorption points are mapped to a fine grid.
     # This approach greatly improves the efficiency as opposed to tracing on a fine grid.
-
+    
     # set counters to zero for each logical core
     N_abs_gas = zeros(Nx_fine, Ny_fine*N_subs, nthreads) # set gas absorption counters to zero
     Wall_absorbX = zeros(Nx_fine, Ny_fine*N_subs, nthreads) # set wall absorption counters to zero
     Wall_absorbY = zeros(Nx_fine, Ny_fine*N_subs, nthreads) # set wall absorption counters to zero
     RayCountTotal = zeros(nthreads)  # counters for how many rays have been emitted from emissive power
     rays_per_thread = trunc(Int, round(N_rays/nthreads)) # total number of rays to emit
-    
+
     # set absorptivity of walls (walls always absorb)
     alphaWalls = 1.0 # must be = 1
 
@@ -328,10 +328,10 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
     end
 
     # sum up the outputs
-    Wall_absorbX_tot = dropdims(sum(Wall_absorbX, dims=3),dims=3)
-    Wall_absorbY_tot = dropdims(sum(Wall_absorbY, dims=3),dims=3)
-    N_abs_gas_tot = dropdims(sum(N_abs_gas, dims=3),dims=3)
-    RayCountTotal_tot = sum(RayCountTotal)
+    Wall_absorbX_sum = dropdims(sum(Wall_absorbX, dims=3),dims=3)
+    Wall_absorbY_sum = dropdims(sum(Wall_absorbY, dims=3),dims=3)
+    N_abs_gas_sum = dropdims(sum(N_abs_gas, dims=3),dims=3)
+    RayCountTotal_sum = sum(RayCountTotal)
 
-    return Wall_absorbX_tot, Wall_absorbY_tot, N_abs_gas_tot, RayCountTotal_tot
+    return Wall_absorbX_sum, Wall_absorbY_sum, N_abs_gas_sum, RayCountTotal_sum
 end

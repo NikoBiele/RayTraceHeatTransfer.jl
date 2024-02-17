@@ -32,7 +32,7 @@ function sampleSurfaces(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse
                 yCountSample = n
 
                 # sample left-right walls one by one
-                Wall_absorbX, Wall_absorbY, N_abs_gas, RayCountTotal = rayTracing_2D(
+                Wall_absorbX_sum, Wall_absorbY_sum, N_abs_gas_sum, RayCountTotal_sum = rayTracing_2D(
                                                             point1_coarse, point2_coarse, point3_coarse, 
                                                             point4_coarse, Ny_coarse, Nx_coarse,
                                                             point1_fine, point2_fine, point3_fine,
@@ -43,11 +43,10 @@ function sampleSurfaces(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse
                                                             xCountSample, yCountSample,
                                                             sampleLeftRight, sampleTopBottom,
                                                             NeighborIndices_coarse)
-
                 # determine coefficients in matrices (to save the ray tracing)
-                FSS[wallEmitter, :], FSG[wallEmitter, :] = coefs_FSS_FSG(Wall_absorbX, Wall_absorbY,
-                                                                        N_abs_gas, N_surfs_fine, N_vols_fine,
-                                                                        RayCountTotal, Nx_fine, Ny_fine, N_subs)  
+                FSS[wallEmitter, :], FSG[wallEmitter, :] = coefs_FSS_FSG(Wall_absorbX_sum, Wall_absorbY_sum,
+                                                                        N_abs_gas_sum, N_surfs_fine, N_vols_fine,
+                                                                        RayCountTotal_sum, Nx_fine, Ny_fine, N_subs)  
             end
         end
 
@@ -65,7 +64,7 @@ function sampleSurfaces(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse
                 yCountSample = n
 
                 # sample top-bottom walls one by one
-                Wall_absorbX, Wall_absorbY, N_abs_gas, RayCountTotal = rayTracing_2D( 
+                Wall_absorbX_sum, Wall_absorbY_sum, N_abs_gas_sum, RayCountTotal_sum = rayTracing_2D( 
                                                                     point1_coarse, point2_coarse, point3_coarse, 
                                                                     point4_coarse, Ny_coarse, Nx_coarse,
                                                                     point1_fine, point2_fine, point3_fine,
@@ -77,9 +76,9 @@ function sampleSurfaces(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse
                                                                     sampleLeftRight, sampleTopBottom,
                                                                     NeighborIndices_coarse)
                 # determine coefficients in matrices (to save the ray tracing)
-                FSS[wallEmitter, :], FSG[wallEmitter, :] = coefs_FSS_FSG(Wall_absorbX, Wall_absorbY,
-                                                                    N_abs_gas, N_surfs_fine, N_vols_fine,
-                                                                    RayCountTotal, Nx_fine, Ny_fine, N_subs)    
+                FSS[wallEmitter, :], FSG[wallEmitter, :] = coefs_FSS_FSG(Wall_absorbX_sum, Wall_absorbY_sum,
+                                                                    N_abs_gas_sum, N_surfs_fine, N_vols_fine,
+                                                                    RayCountTotal_sum, Nx_fine, Ny_fine, N_subs)    
             end   
         end
         println("Surface sampling finished, the elapsed time for surface sampling was:")

@@ -29,11 +29,12 @@ function sampleVolumes(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
             for j = 1:Ny_fine*N_subs
                 volumeEmitter += 1
                 println("Now sampling volume emitter number $volumeEmitter/$N_vols.") # progress update in the REPL.
+
                 xCountSample = i
                 yCountSample = j
 
                 # Call ray tracing function and sample current volume.
-                Wall_absorbX, Wall_absorbY, N_abs_gas, RayCountTotal = rayTracing_2D(point1_coarse, point2_coarse,
+                Wall_absorbX_sum, Wall_absorbY_sum, N_abs_gas_sum, RayCountTotal_sum = rayTracing_2D(point1_coarse, point2_coarse,
                                                                                     point3_coarse, point4_coarse,
                                                                                     Ny_coarse, Nx_coarse, point1_fine,
                                                                                     point2_fine, point3_fine, point4_fine,
@@ -44,8 +45,8 @@ function sampleVolumes(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                                                                                     sampleLeftRight, sampleTopBottom,
                                                                                     NeighborIndices_coarse)
                 # Determine coefficients in matrices.
-                FGS[volumeEmitter, :], FGG[volumeEmitter, :] = coefs_FGS_FGG(Wall_absorbX, Wall_absorbY, N_abs_gas, N_surfs_fine, 
-                                                                        N_vols_fine, RayCountTotal, Nx_fine, Ny_fine, N_subs)    
+                FGS[volumeEmitter, :], FGG[volumeEmitter, :] = coefs_FGS_FGG(Wall_absorbX_sum, Wall_absorbY_sum, N_abs_gas_sum, N_surfs_fine, 
+                                                                        N_vols_fine, RayCountTotal_sum, Nx_fine, Ny_fine, N_subs)    
             end
         end
         println("Volume sampling finished, the elapsed time for volume sampling was:")

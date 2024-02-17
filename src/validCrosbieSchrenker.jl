@@ -58,18 +58,11 @@ function validCrosbieSchrenker(N_rays_tot,Ndim,Tw_hot)
         nthreads = Threads.nthreads()
     end
 
-    ### SAMPLE SURFACES
     @time begin
         println("Starting ray tracing of $N_rays_tot ray bundles in total ($N_rays per emitter):")
-        FSS, FSG = sampleSurfaces(point1_coarse,point2_coarse,point3_coarse,point4_coarse,Ny_coarse,Nx_coarse,
-                                        N_surfs_fine,N_vols_fine,point1_fine,point2_fine,point3_fine,point4_fine,Ny_fine,Nx_fine,
-                                        beta,omega,N_rays,displayWhileTracing,nthreads,N_subs,NeighborIndices_coarse);
-
-        ### SAMPLE VOLUMES
-        FGS, FGG = sampleVolumes(point1_coarse,point2_coarse,point3_coarse,point4_coarse,Ny_coarse,Nx_coarse,N_surfs_fine,
-                                    N_vols_fine,point1_fine,point2_fine,point3_fine,point4_fine,Ny_fine,Nx_fine,
-                                    beta,omega,N_rays,displayWhileTracing,nthreads,N_subs,
-                                    NeighborIndices_coarse);
+        FSS, FSG, FGS, FGG = sampleDomain(point1_coarse,point2_coarse,point3_coarse,point4_coarse,Ny_coarse,Nx_coarse,
+                                            N_surfs_fine,N_vols_fine,point1_fine,point2_fine,point3_fine,point4_fine,Ny_fine,Nx_fine,
+                                            beta,omega,N_rays,displayWhileTracing,nthreads,N_subs,NeighborIndices_coarse)
         println("Ray tracing finished, the total time elapsed was:")
     end;
 
