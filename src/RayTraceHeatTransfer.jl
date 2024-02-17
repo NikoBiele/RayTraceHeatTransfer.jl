@@ -47,19 +47,4 @@ include("distToNearestSurfAlongDir.jl")
 include("doesRayAbsorbOrScatter.jl")
 include("doesRayHitSolidWall.jl")
 
-# # example code within this function call
-# # this function call uses all of the above functions
-# # except the ones related to CSV-files
-# # N_rays_tot is the total number of rays traced in the enclosure
-# N_rays_tot = 10_000_000
-# # Ndim is the number of divisions of each side of the square enclosure
-# Ndim = 21
-# # this function call returns nothing,
-# # however it prints to the REPL and plots
-# # it performs a validation of the code against an analytical solution
-# validCrosbieSchrenker(N_rays_tot,Ndim)
-# # it is recommenended to save matrices as CSV-files
-# # especially if they were expensive to obtain
-# # so that they are not lost if the computer crashes
-
 end

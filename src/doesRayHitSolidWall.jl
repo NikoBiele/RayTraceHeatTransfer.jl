@@ -2,8 +2,10 @@ function doesRayHitSolidWall(point::SVector{2,Float64}, S::Float64, u_real::Floa
                             alphaWalls::Float64, Nx_coarse::Int64, Ny_coarse::Int64, xCount_coarse::Int64, yCount_coarse::Int64,
                             N_subs::Int64, point1_fine::Matrix{SVector{2,Float64}}, point2_fine::Matrix{SVector{2,Float64}},
                             point3_fine::Matrix{SVector{2,Float64}}, point4_fine::Matrix{SVector{2,Float64}},
-                            Nx_fine::Int64, Ny_fine::Int64, logicalCores::Int64, NeighborIndices::Array{SVector{2,Float64}},
-                            Wall_absorbX::Array{Int64}, Wall_absorbY::Array{Int64})
+                            Nx_fine::Int64, Ny_fine::Int64, logicalCores::Int64, NeighborIndices::Vector{SVector{2,Int64}},
+                            Wall_absorbX::Array{Int64}, Wall_absorbY::Array{Int64},displayWhileTracing::Bool,
+                            point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse::Matrix{SVector{2,Float64}},
+                            point3_coarse::Matrix{SVector{2,Float64}}, point4_coarse::Matrix{SVector{2,Float64}})
 
     # find out if any of the boundaries of the current cell are not allowed to be crossed (solid walls)
     solidWallx, solidWally = solidWall(Nx_coarse, Ny_coarse, xCount_coarse, yCount_coarse, N_subs)

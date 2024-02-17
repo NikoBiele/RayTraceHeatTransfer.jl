@@ -47,13 +47,12 @@ function validCrosbieSchrenker(N_rays_tot,Ndim,Tw_hot)
     
     ### START THE RAY TRACING
 
-    displayWhileTracing = false # false
+    displayWhileTracing = false
     # number of rays to trace from each zone
     N_rays = trunc(Int, N_rays_tot/(Nx_fine*Ny_fine*N_subs+2*Nx_fine+2*Ny_fine))
-    # N_rays_tot = N_rays*Nx_fine*Ny_fine*N_subs
     # Here I make the calculation run in parallel on all available threads
     if displayWhileTracing
-        nthreads = 1 # 
+        nthreads = 1
     else
         nthreads = Threads.nthreads()
     end

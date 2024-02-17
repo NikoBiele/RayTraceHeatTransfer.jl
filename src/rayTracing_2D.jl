@@ -103,7 +103,7 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
 
                     # means we hit the gas and either absorp or scatters
                     rayWasAbsorbed, dir, S = doesRayAbsorbOrScatter(point, pointOld, point1_fine, point2_fine, point3_fine, point4_fine,
-                                                                    N_subs, Nx_fine, Ny_fine, logicalCores,omega,N_abs_gas)
+                                                                    N_subs, Nx_fine, Ny_fine, logicalCores,omega,N_abs_gas,displayWhileTracing)
                     if rayWasAbsorbed
                         @goto emitNewRay
                     else
@@ -120,7 +120,8 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                                                                                     xCount_coarse, yCount_coarse, N_subs, point1_fine, point2_fine,
                                                                                     point3_fine, point4_fine, Nx_fine, Ny_fine, logicalCores,
                                                                                     NeighborIndices_coarse[xCount_coarse,yCount_coarse],
-                                                                                    Wall_absorbX, Wall_absorbY)
+                                                                                    Wall_absorbX, Wall_absorbY,displayWhileTracing,
+                                                                                    point1_coarse, point2_coarse, point3_coarse, point4_coarse)
                 if rayWasAbsorbed
                     @goto emitNewRay
                 elseif willRayHitWall
@@ -135,7 +136,8 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                                                                                     xCount_coarse, yCount_coarse, N_subs, point1_fine, point2_fine,
                                                                                     point3_fine, point4_fine, Nx_fine, Ny_fine, logicalCores,
                                                                                     NeighborIndices_coarse[xCount_coarse,yCount_coarse],
-                                                                                    Wall_absorbX, Wall_absorbY)
+                                                                                    Wall_absorbX, Wall_absorbY,displayWhileTracing,
+                                                                                    point1_coarse, point2_coarse, point3_coarse, point4_coarse)
                 if rayWasAbsorbed
                     @goto emitNewRay
                 elseif willRayHitWall

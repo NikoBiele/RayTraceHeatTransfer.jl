@@ -1,7 +1,7 @@
 function doesRayAbsorbOrScatter(point::SVector{2,Float64}, pointOld::SVector{2,Float64}, point1_fine::Matrix{SVector{2,Float64}},
                                 point2_fine::Matrix{SVector{2,Float64}}, point3_fine::Matrix{SVector{2,Float64}},
                                 point4_fine::Matrix{SVector{2,Float64}}, N_subs::Int64, Nx_fine::Int64, Ny_fine::Int64,
-                                logicalCores::Int64, omega::Float64, N_abs_gas::Array{Int64})
+                                logicalCores::Int64, omega::Float64, N_abs_gas::Array{Int64},displayWhileTracing::Bool)
     # initialize outputs
     dir = SVector(0.0, 0.0)
     S = 0.0
