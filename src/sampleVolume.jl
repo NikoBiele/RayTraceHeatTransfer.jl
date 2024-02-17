@@ -41,7 +41,7 @@ function sampleVolume(Nx, Ny, N_subs, volumeEmitter::Int, point1::Matrix{SVector
     xdir = r*sin(theta)*cos(phi)
     # ydir = r*sin(theta)*sin(phi) # this one is projected onto plane (set to zero) 
     zdir = r*cos(theta)
-    i1 = SVector(xdir, zdir)
+    dir = SVector(xdir, zdir)
 
-    return point, i1
+    return point, dir
 end

@@ -10,7 +10,7 @@ function lambertSample3D()
     psi = 2*pi*R_angle2
     zdir = cosTheta # vertical direction (local)
     xdir = sinTheta*cos(psi) # horisontal direction (local)
-    i1 = SVector(xdir, zdir)
+    dir = SVector(xdir, zdir)
 
-    return i1
+    return dir
 end

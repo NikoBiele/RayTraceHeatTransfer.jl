@@ -37,12 +37,15 @@ include("geometry.jl")
 include("sampleSurfaces.jl")
 include("sampleVolumes.jl")
 include("writeMatricesToCSV.jl")
-include("validCrosbieSchrenker.jl")
+# include("validCrosbieSchrenker.jl")
 include("steadyStateRigorous.jl")
 include("calculateAreaVolume.jl")
 include("rayTracing_2D.jl")
 include("readMatricesFromCSV.jl")
 include("plotTrapezoids.jl")
+include("distToNearestSurfAlongDir.jl")
+include("doesRayAbsorbOrScatter.jl")
+include("doesRayHitSolidWall.jl")
 
 # # example code within this function call
 # # this function call uses all of the above functions

@@ -1,6 +1,6 @@
-function coefs_FSS_FSG(Wall_absorbX::Matrix{Float64}, Wall_absorbY::Matrix{Float64},
-                        N_abs_gas::Matrix{Float64}, N_surfs::Int64, N_vols::Int64,
-                        RayCountTotal::Float64, Nx::Int, Ny::Int, N_subs::Int)
+function coefs_FSS_FSG(Wall_absorbX::Array{Int64}, Wall_absorbY::Array{Int64},
+                        N_abs_gas::Array{Int64}, N_surfs::Int64, N_vols::Int64,
+                        RayCountTotal::Int64, Nx::Int64, Ny::Int64, N_subs::Int64)
     # This function calculates one row of the FSS matrix and one row of the FSG-matrix
     # this calculation is based on the ray tracing results of one wall emitter
     

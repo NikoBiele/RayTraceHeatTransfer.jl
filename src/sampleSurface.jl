@@ -38,8 +38,8 @@ function sampleSurface(Nx::Int64, Ny::Int64, xCountSample::Int64, yCountSample::
             x = x0 + dx*R_posx
             y = firstPoint[2]
             point = SVector(x, y+1e-9) # sampled position (slightly above wall)
-            i1_loc = lambertSample3D() # sample direction of ray
-            i1 = SVector{2}(i1_loc)
+            dir_loc = lambertSample3D() # sample direction of ray
+            dir = SVector{2}(dir_loc)
 
         elseif solidWally == 3 # top wall
 
@@ -54,8 +54,8 @@ function sampleSurface(Nx::Int64, Ny::Int64, xCountSample::Int64, yCountSample::
             x = x0 + dx*R_posx
             y = firstPoint[2]
             point = SVector(x, y-1e-9) # sampled position (slightly below wall)
-            i1_loc = lambertSample3D() # sample direction of ray
-            i1 = SVector{2}(-i1_loc)
+            dir_loc = lambertSample3D() # sample direction of ray
+            dir = SVector{2}(-dir_loc)
 
         end
     end
@@ -79,14 +79,14 @@ function sampleSurface(Nx::Int64, Ny::Int64, xCountSample::Int64, yCountSample::
                 x = minimum([firstPoint[1], secondPoint[1]]) # must be minimum since we're at wall right (to ensure we're inside domain)
                 point = SVector(x-1e-9, y)
                 # sample direction of ray (local coordinate system)
-                i1_loc = lambertSample3D()
+                dir_loc = lambertSample3D()
                 # unit vectors in local coordinate system
                 xVecLocal = SVector{2}([0.0, 1.0])
                 yVecLocal = SVector{2}([-1.0, 0.0])
                 # rotate according to rotation matrix 
                 RotationMatrix = SMatrix{2,2}([dot(xVecGlobal, xVecLocal) dot(xVecGlobal, yVecLocal);
                                                 dot(yVecGlobal, xVecLocal) dot(yVecGlobal, yVecLocal)])
-                i1 = SVector{2}(RotationMatrix*i1_loc) # emission direction (global coordinate system)
+                dir = SVector{2}(RotationMatrix*dir_loc) # emission direction (global coordinate system)
 
             else # the line is not vertical so we construct the line and sample it
 
@@ -113,11 +113,11 @@ function sampleSurface(Nx::Int64, Ny::Int64, xCountSample::Int64, yCountSample::
                     yVecLocal = SVector{2}([-dy, dx]./norm(secondPoint-firstPoint)) # works
                 end
                 # sample direction of ray (local coordinate system)
-                i1_loc = lambertSample3D()
+                dir_loc = lambertSample3D()
                 # rotate according to rotation matrix 
                 RotationMatrix = SMatrix{2,2}([dot(xVecGlobal, xVecLocal) dot(xVecGlobal, yVecLocal);
                                                 dot(yVecGlobal, xVecLocal) dot(yVecGlobal, yVecLocal)])
-                i1 = SVector{2}(RotationMatrix*i1_loc)
+                dir = SVector{2}(RotationMatrix*dir_loc)
             end
 
         elseif solidWallx == 4 # then sample the left wall
@@ -135,14 +135,14 @@ function sampleSurface(Nx::Int64, Ny::Int64, xCountSample::Int64, yCountSample::
                 x = maximum([firstPoint[1], secondPoint[1]]) # must be maximum since we're at wall left (to ensure we're inside domain)
                 point = SVector(x+1e-9, y)
                 # sample direction of ray (local coordinate system)
-                i1_loc = lambertSample3D()
+                dir_loc = lambertSample3D()
                 # unit vectors in local coordinate system
                 xVecLocal = SVector{2}([0.0, -1.0])
                 yVecLocal = SVector{2}([1.0, 0.0])
                 # rotate according to rotation matrix 
                 RotationMatrix = SMatrix{2,2}([dot(xVecGlobal, xVecLocal) dot(xVecGlobal, yVecLocal);
                                                 dot(yVecGlobal, xVecLocal) dot(yVecGlobal, yVecLocal)])
-                i1 = SVector{2}(RotationMatrix*i1_loc)
+                dir = SVector{2}(RotationMatrix*dir_loc)
 
             else # the line is not vertical so we construct the line and sample it
 
@@ -168,11 +168,11 @@ function sampleSurface(Nx::Int64, Ny::Int64, xCountSample::Int64, yCountSample::
                     yVecLocal = [dy, -dx]./norm(secondPoint-firstPoint) # works
                 end
                 # sample direction of ray (local coordinate system)
-                i1_loc = lambertSample3D()
+                dir_loc = lambertSample3D()
                 # rotate according to rotation matrix
                 RotationMatrix = SMatrix{2,2}([dot(xVecGlobal, xVecLocal) dot(xVecGlobal, yVecLocal);
                                                 dot(yVecGlobal, xVecLocal) dot(yVecGlobal, yVecLocal)])
-                i1 = SVector{2}(RotationMatrix*i1_loc)
+                dir = SVector{2}(RotationMatrix*dir_loc)
 
             end
         
@@ -180,6 +180,6 @@ function sampleSurface(Nx::Int64, Ny::Int64, xCountSample::Int64, yCountSample::
     
     end
 
-    return point, i1
+    return point, dir
     
 end
