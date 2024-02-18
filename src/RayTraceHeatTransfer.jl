@@ -10,7 +10,7 @@ export coefs_FGS_FGG
 export sampleVolume
 export lambertSample3D
 export sampleSurface
-export geometry
+export meshGeometry
 export sampleSurfaces
 export sampleVolumes
 export writeMatricesToCSV
@@ -34,7 +34,7 @@ include("coefs_FGS_FGG.jl")
 include("sampleVolume.jl")
 include("lambertSample3D.jl")
 include("sampleSurface.jl")
-include("geometry.jl")
+include("meshGeometry.jl")
 include("sampleSurfaces.jl")
 include("sampleVolumes.jl")
 include("writeMatricesToCSV.jl")

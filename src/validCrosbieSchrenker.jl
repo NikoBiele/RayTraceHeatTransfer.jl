@@ -23,13 +23,13 @@ function validCrosbieSchrenker(N_rays_tot,Ndim,Tw_hot)
     Nx_coarse = 3; # must be minimum 3
     Ny_coarse = 2; # must be minimum 2
     point1_coarse, point2_coarse, point3_coarse, point4_coarse, N_surfs_coarse, N_vols_coarse, NeighborIndices_coarse =
-                            geometry(yLayersHeight,xLayersWidth,Ny_coarse,Nx_coarse,displayGeometry);
+                            meshGeometry(yLayersHeight,xLayersWidth,Ny_coarse,Nx_coarse,displayGeometry);
 
     # define the number of fine splits in each enclosure
     Nx_fine = Ndim # must be minimum 3
     Ny_fine = Ndim # must be minimum 2
     point1_fine, point2_fine, point3_fine, point4_fine, N_surfs_fine, N_vols_fine, NeighborIndices_fine =
-                            geometry(yLayersHeight,xLayersWidth,Ny_fine,Nx_fine,displayGeometry);
+                            meshGeometry(yLayersHeight,xLayersWidth,Ny_fine,Nx_fine,displayGeometry);
 
     ### CALCULATE AREA AND VOLUME OF EACH ZONE
 

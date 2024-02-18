@@ -17,15 +17,15 @@ function whichEnclosure(point::SVector{2,Float64}, point1::Matrix{SVector{2,Floa
     # if neighbors is given as an input we only need to check those neighbors
     # else we check all cells
     if isnothing(NeighborIndices_coarse)
-        @inbounds for m = 1:Nx 
-            @inbounds for n = 1:Ny*N_subs 
+        for m = 1:Nx 
+            for n = 1:Ny*N_subs 
                 Dcount = 0 # reset counters
                 # get the four bounding points of this control volume 
-                pointOne = point1[m,n] 
-                pointTwo = point2[m,n] 
-                pointThree = point3[m,n] 
-                pointFour = point4[m,n] 
-                @inbounds for p = 1:4 
+                @inbounds pointOne = point1[m,n] 
+                @inbounds pointTwo = point2[m,n] 
+                @inbounds pointThree = point3[m,n] 
+                @inbounds pointFour = point4[m,n] 
+                for p = 1:4 
                     if p == 1 
                         x1 = pointOne[1] 
                         y1 = pointOne[2] 
@@ -64,14 +64,14 @@ function whichEnclosure(point::SVector{2,Float64}, point1::Matrix{SVector{2,Floa
             end
         end
     else
-        @inbounds for (m,n) in NeighborIndices_coarse
+        for (m,n) in NeighborIndices_coarse
             Dcount = 0 # reset counters
             # get the four bounding points of this control volume 
-            pointOne = point1[m,n] 
-            pointTwo = point2[m,n] 
-            pointThree = point3[m,n] 
-            pointFour = point4[m,n] 
-            @inbounds for p = 1:4 
+            @inbounds pointOne = point1[m,n] 
+            @inbounds pointTwo = point2[m,n] 
+            @inbounds pointThree = point3[m,n] 
+            @inbounds pointFour = point4[m,n] 
+            for p = 1:4 
                 if p == 1 
                     x1 = pointOne[1] 
                     y1 = pointOne[2] 
