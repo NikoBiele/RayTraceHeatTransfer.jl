@@ -30,6 +30,7 @@ Pkg.add("RayTraceHeatTransfer")
 ```
 
 To load the package, use the command
+
 ```julia
 using RayTraceHeatTransfer
 ```
@@ -39,23 +40,28 @@ using RayTraceHeatTransfer
 ### Generate geometry
 
 <p>We start by loading the package.<br>
+
 ```julia
 using RayTraceHeatTransfer
 ```
+
 <p>The geometry is built by a number of connected non-overlapping sub-enclosures stacked on top of each other.<br>
 <p>The sub-enclosures are specified in a way so that the meshing can be done in a general way.<br>
 <p>Here we define a 1x1 square (a single sub-enclosure), but the code should work for many different user defined geometries.<br>
 <p>Next, we define the bounding geometry by specifying a number of heights (yLayersHeight) and two width coordinates per height (xLayersWidth).<br>
 <p>This way of specifying the geometry is necessary for the meshing algorithm to work.<br>
+
 ```julia
 yLayersHeight = [0.0, 1.0]; # create the y-positions or height-layers
 xLayersWidth = zeros(2, length(yLayersHeight)); # define the x-positions for each height layer
 xLayersWidth[:,1] = [0.0, 1.0]; # bottom
 xLayersWidth[:,2] = [0.0, 1.0]; # top
 ```
+
 <p>Now that our bounding geometry has been defined, it is time to mesh it.<br>
 <p>We mesh it by specifying the number of splits in the x- and y-direction.<br>
 <p>Then we generate the meshing automatically and plot it.<br>
+
 ```julia
 # define the number of fine splits in each enclosure
 Nx = 51
@@ -65,18 +71,22 @@ mesh1 = TracingMesh(Nx,Ny,xLayersWidth,yLayersHeight);
 # plot the geometry
 displayGeometry(mesh1)
 ```
+
 <p>Viewing the result:<br>
 ![plot](./meshedGeometry.png)
 <p>Now our geometry is defined by the 'mesh1' struct.<br>
 
 ### Monte Carlo ray tracing
+
 <p>Now that our geometry is in place, it is time to ray trace the domain.<br>
 <p>First we define the properties of our participating medium and store them in 'gas1':<br>
+
 ```julia
 sigma_s = 0.0 # scattering coefficient
 kappa = 1.0 # absorption coefficient
 gas1 = GasProperties(sigma_s,kappa)
 ```
+
 <p>Then we ray trace and save the results in exchange factor matrices:<br>
 
 ```julia
@@ -128,6 +138,7 @@ Tw, Tg, Gw, Gg, iter_count, Grelabs = steadyStateRigorous(mesh1,FSS,FSG,FGS,FGG,
                                                         fixWalls,epsw_vec,kappa,maxIter,relTol,
                                                         Tw_init,Tg_init);
 ```
+
 <p>Below is a plot of how our calculation has converged (plotting relative change in total heat flux as a function of iterations):<br>
 
 ![plot](./convergencehistory.png)
@@ -140,13 +151,18 @@ Tg_matrix = plotTemperatureField(mesh1,Tg) #,Tw); # optional wall temperatures
 
 Giving:
 ![plot](./temperaturedistribution.png)
+
 <p>As the last step, we also validate the code against the analytical solution of Crosbie and Schrenker (1982).<br>
 <p>Plotting the $(Tg/Tw_hot)^4$ for the centerline perpendicular to the incident radiation and comparing it to the analytical solution gives:<br>
+
 ![plot](./validation.png)
+
 <p>Which is not perfect, but still quite close considering that we only traced 10 million rays in total.<br>
 <p>Increasing the number of rays to 1 billion and repeating gives:<br>
+
 ![plot](./temperaturedistribution_oneBillion.png)
 ![plot](./validation_oneBillion.png)
+
 Decreasing the number of subdivisions would further increase the accuracy.
 
 ## Defining a custom geometry
@@ -173,6 +189,7 @@ mesh1 = TracingMesh(Nx,Ny,xLayersWidth,yLayersHeight);
 displayGeometry(mesh1)
 
 ```
+
 Which gives the geometry:
 ![plot](./customGeometry.png)
 
