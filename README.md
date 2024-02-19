@@ -73,7 +73,9 @@ displayGeometry(mesh1)
 ```
 
 <p>Viewing the result:<br>
+
 ![plot](./meshedGeometry.png)
+
 <p>Now our geometry is defined by the 'mesh1' struct.<br>
 
 ### Monte Carlo ray tracing
@@ -150,6 +152,7 @@ Tg_matrix = plotTemperatureField(mesh1,Tg) #,Tw); # optional wall temperatures
 ```
 
 Giving:
+
 ![plot](./temperaturedistribution.png)
 
 <p>As the last step, we also validate the code against the analytical solution of Crosbie and Schrenker (1982).<br>
@@ -161,6 +164,7 @@ Giving:
 <p>Increasing the number of rays to 1 billion and repeating gives:<br>
 
 ![plot](./temperaturedistribution_oneBillion.png)
+
 ![plot](./validation_oneBillion.png)
 
 Decreasing the number of subdivisions would further increase the accuracy.
@@ -191,6 +195,7 @@ displayGeometry(mesh1)
 ```
 
 Which gives the geometry:
+
 ![plot](./customGeometry.png)
 
 In general the numbering of the walls and volumes are defined as below.
