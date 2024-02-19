@@ -1,15 +1,13 @@
-function localWalls(xCount::Int64, yCount::Int64, point1::Matrix{SVector{2,Float64}},
-                        point2::Matrix{SVector{2,Float64}}, point3::Matrix{SVector{2,Float64}},
-                        point4::Matrix{SVector{2,Float64}})
+function localWalls(mesh::TracingMesh, N_subs_count::Int64)
     # this function determines a point on each wall of the current cell
     # as well as normal vectors of each wall
     # this information fully describe the walls of the current cell
     
     # calculate points on each wall    
-    pointOne = point1[xCount, yCount]
-    pointTwo = point2[xCount, yCount]
-    pointThree = point3[xCount, yCount]
-    pointFour = point4[xCount, yCount]
+    pointOne = mesh.point1_coarse[1,N_subs_count]
+    pointTwo = mesh.point2_coarse[1,N_subs_count]
+    pointThree = mesh.point3_coarse[1,N_subs_count]
+    pointFour = mesh.point4_coarse[1,N_subs_count]
     
     # for output readability
     wallPointBottom = pointOne
@@ -22,8 +20,8 @@ function localWalls(xCount::Int64, yCount::Int64, point1::Matrix{SVector{2,Float
     topWallNormal = SVector(0.0, -1.0)
     
     # the right-hand wall
-    firstPoint = point2[xCount, yCount]
-    secondPoint = point3[xCount, yCount]
+    firstPoint = pointTwo
+    secondPoint = pointThree
     if abs(firstPoint[1]-secondPoint[1]) < 1e-3 # if the change in x is less than one mm then we say it's a vertical line
 
         # normal vector
@@ -43,8 +41,8 @@ function localWalls(xCount::Int64, yCount::Int64, point1::Matrix{SVector{2,Float
     end
 
     # left-hand wall
-    firstPoint = point4[xCount, yCount]
-    secondPoint = point1[xCount, yCount]
+    firstPoint = pointFour
+    secondPoint = pointOne
     if abs(firstPoint[1]-secondPoint[1]) < 1e-3 # if the change in x is less than one mm then we say it's a vertical line
 
         leftWallNormal = SVector(1.0, 0.0)              

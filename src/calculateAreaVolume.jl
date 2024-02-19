@@ -1,9 +1,12 @@
 function calculateAreaVolume(Nx::Int64,Ny::Int64,N_subs::Int64,
-                            width::Float64,point1,point2,point3,point4)
+                            point1::Matrix{SVector{2,Float64}},point2::Matrix{SVector{2,Float64}},
+                            point3::Matrix{SVector{2,Float64}},point4::Matrix{SVector{2,Float64}})
 
     # this function calculates the area of walls and the volume of volumes
     # First calculate the area of walls
     # calculate the length of lines and multiply by a width
+
+    width = 1.0 # width of domain, third dimension (not important in 2D)
 
     A_count = 0
     Area = zeros(2*Nx+2*Ny*N_subs)
