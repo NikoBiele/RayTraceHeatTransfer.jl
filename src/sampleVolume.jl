@@ -1,16 +1,14 @@
-function sampleVolume(Nx, Ny, N_subs, volumeEmitter::Int, point1::Matrix{SVector{2,Float64}},
-                        point2::Matrix{SVector{2,Float64}}, point3::Matrix{SVector{2,Float64}}, point4::Matrix{SVector{2,Float64}},
-                        xCount::Int64,yCount::Int64)
+function sampleVolume(mesh::TracingMesh, xCount::Int64, yCount::Int64)
     
     # This function samples an emission point and direction in a volume (a surface in 2D), by separating it in
     # two triangles and sampling according to their area.
     # This operation requires knowledge of the mesh, which is why the point matrices are also inputs.
     
     # get the vertices of the cell
-    A = point1[xCount, yCount]
-    B = point2[xCount, yCount]
-    C = point3[xCount, yCount]
-    D = point4[xCount, yCount]
+    A = mesh.point1[xCount, yCount]
+    B = mesh.point2[xCount, yCount]
+    C = mesh.point3[xCount, yCount]
+    D = mesh.point4[xCount, yCount]
 
     # split into two triangles
     # calculate the area of the triangles

@@ -19,12 +19,22 @@ export steadyStateRigorous
 export calculateAreaVolume
 export rayTracing_2D
 export readMatricesFromCSV
-export plotTrapezoids
+export plotTemperatureField
 export sampleDomain
+export displayGeometry
+# export structs
+export TracingMesh
+export GasProperties
 
-using Plots, LinearAlgebra, CSV, DataFrames, StaticArrays
+# include dependencies
+using Plots
+using LinearAlgebra
+using CSV
+using DataFrames
+using StaticArrays
 
 # include functions
+include("Structs.jl")
 include("whichEnclosure.jl")
 include("solidWall.jl")
 include("localWalls.jl")
@@ -43,7 +53,9 @@ include("steadyStateRigorous.jl")
 include("calculateAreaVolume.jl")
 include("rayTracing_2D.jl")
 include("readMatricesFromCSV.jl")
-include("plotTrapezoids.jl")
+include("plotTemperatureField.jl")
 include("sampleDomain.jl")
+include("displayGeometry.jl")
+include("defineSolidWalls.jl")
 
 end

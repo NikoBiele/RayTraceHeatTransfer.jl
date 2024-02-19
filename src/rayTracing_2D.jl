@@ -1,12 +1,7 @@
-function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse::Matrix{SVector{2,Float64}}, point3_coarse::Matrix{SVector{2,Float64}}, 
-                        point4_coarse::Matrix{SVector{2,Float64}}, Ny_coarse::Int, Nx_coarse::Int,
-                        point1_fine::Matrix{SVector{2,Float64}}, point2_fine::Matrix{SVector{2,Float64}}, point3_fine::Matrix{SVector{2,Float64}},
-                        point4_fine::Matrix{SVector{2,Float64}}, Ny_fine::Int, Nx_fine::Int,
-                        beta::Float64, omega::Float64, N_rays::Int64,
+function rayTracing_2D(mesh::TracingMesh, gas::GasProperties, N_rays::Int64,
                         displayWhileTracing::Bool, nthreads::Int64,
-                        wallEmitter::Int, volumeEmitter::Int, N_subs::Int, xCountSample::Int, yCountSample::Int,
-                        sampleLeftRight::Bool, sampleTopBottom::Bool,
-                        NeighborIndices_coarse::Matrix{Array{SVector{2, Int64}}})
+                        wallEmitter::Int64, volumeEmitter::Int64, xCountSample::Int64, yCountSample::Int64,
+                        sampleLeftRight::Bool, sampleTopBottom::Bool)
 
     # This function ray traces a single ray in a 2D domain (or a number of rays in parallel).
     # The ray (or rays) is emitted from a specified emitter (wall or volume) and
@@ -18,9 +13,9 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
     # This approach greatly improves the efficiency as opposed to tracing on a fine grid.
     
     # set counters to zero for each logical core
-    N_abs_gas = zeros(Nx_fine, Ny_fine*N_subs, nthreads) # set gas absorption counters to zero
-    Wall_absorbX = zeros(Nx_fine, Ny_fine*N_subs, nthreads) # set wall absorption counters to zero
-    Wall_absorbY = zeros(Nx_fine, Ny_fine*N_subs, nthreads) # set wall absorption counters to zero
+    N_abs_gas = zeros(mesh.Nx, mesh.Ny*mesh.N_subs, nthreads) # set gas absorption counters to zero
+    Wall_absorbX = zeros(mesh.Nx, mesh.Ny*mesh.N_subs, nthreads) # set wall absorption counters to zero
+    Wall_absorbY = zeros(mesh.Nx, mesh.Ny*mesh.N_subs, nthreads) # set wall absorption counters to zero
     RayCountTotal = zeros(nthreads)  # counters for how many rays have been emitted from emissive power
     rays_per_thread = trunc(Int, round(N_rays/nthreads)) # total number of rays to emit
 
@@ -30,10 +25,6 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
     # enter the multi-threaded loop
     Threads.@threads for logicalCores = 1:nthreads
  
-        # @label emitNewRay # emit a new ray
-        # point = [] # reset the emission point
-        # RayCountTotal[logicalCores] += 1 # increment emission counter
-
         # first check if all of the rays have been emitted
         # if RayCountTotal[logicalCores] <= rays_per_thread
         while RayCountTotal[logicalCores] <= rays_per_thread
@@ -46,12 +37,10 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                 # empty on purpose, set to zero for no emission
                 # to be explicit about when we are sampling a volume
 
-            elseif wallEmitter >= 1 && wallEmitter <= 2*Nx_fine+2*Ny_fine*N_subs
+            elseif wallEmitter >= 1 && wallEmitter <= mesh.N_surfs
 
                 # sample surface
-                point, i1 = sampleSurface(Nx_fine, Ny_fine, xCountSample, yCountSample, N_subs,
-                                            sampleLeftRight, sampleTopBottom, point1_fine, point2_fine,
-                                            point3_fine, point4_fine)
+                point, i1 = sampleSurface(mesh, xCountSample, yCountSample, sampleLeftRight, sampleTopBottom)
 
             else
                 println("Unknown surface emitter.")
@@ -62,11 +51,10 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                 # left empty on purpose, set to zero for no emission
                 # to be explicit about when we are sampling a surface
 
-            elseif volumeEmitter >= 1 && volumeEmitter <= Nx_fine*Ny_fine*N_subs 
+            elseif volumeEmitter >= 1 && volumeEmitter <= mesh.N_vols
 
                 # sample volume
-                point, i1 = sampleVolume(Nx_fine, Ny_fine, N_subs, volumeEmitter,
-                                            point1_fine, point2_fine, point3_fine, point4_fine,xCountSample,yCountSample)
+                point, i1 = sampleVolume(mesh, xCountSample, yCountSample)
 
             else
                 println("Unknown volume emitter.")
@@ -79,11 +67,11 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
             end
 
             # here we find out which (coarse) enclosure we are in
-            xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
-                                                               N_subs, Nx_coarse, Ny_coarse)
+            fineMesh = false
+            N_subs_count = whichEnclosure(point, mesh, fineMesh)
 
             R_S = rand() # sample for finding ray distance
-            S = -(1/beta)*log(R_S) # get the ray distance travelled before absorption or scattering
+            S = -(1/gas.beta)*log(R_S) # get the ray distance travelled before absorption or scattering
             
             # now we ray trace the first ray in the enclosure in which the emission happens
             # we do this by calculating the distance to all walls of this enclosure
@@ -92,7 +80,7 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
             
             # we calculate the point on each wall based on the control volume we are currently in
             wallPointBottom, wallPointRight, wallPointTop, wallPointLeft, bottomWallNormal, rightWallNormal, topWallNormal, leftWallNormal =
-                                            localWalls(xCount_coarse, yCount_coarse, point1_coarse, point2_coarse, point3_coarse, point4_coarse)
+                                            localWalls(mesh, N_subs_count)
 
             # get distance to the surface along this direction
             u_real, u_index = distToSurface(point, i1, wallPointTop, wallPointBottom, wallPointLeft, wallPointRight,
@@ -118,20 +106,20 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                         # if we absorp, we increase counter and emit a new ray
                         # if we scatter we sample a new direction from a scattering phase function
                         R_omega = rand()
-                        if R_omega > omega
+                        if R_omega > gas.omega
                             # ray is absorbed, increase counter and emit a new ray
 
                             # here we find out which (fine) enclosure we are in
-                            xCount_fine, yCount_fine = whichEnclosure(point, point1_fine, point2_fine, point3_fine, point4_fine, N_subs, Nx_fine, Ny_fine)
+                            fineMesh = true
+                            xCount, yCount = whichEnclosure(point, mesh, fineMesh)
 
-                            N_abs_gas[xCount_fine, yCount_fine, logicalCores] += 1 # increase counter (on fine grid)
+                            N_abs_gas[xCount, yCount, logicalCores] += 1 # increase counter (on fine grid)
 
                             if displayWhileTracing # green for absorption
                                 display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
                                 display(scatter!((point[1], point[2]), color = "green", label = "", markersize = 2))
                             end
 
-                            # @goto emitNewRay
                             emitNewRay = true
                             break
 
@@ -155,15 +143,15 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
 
                             # now we emit a new ray from the scatter point
                             R_S = rand() # sample for finding distance travelled by ray
-                            S = -(1/beta)*log(R_S) # distance travelled by ray
+                            S = -(1/gas.beta)*log(R_S) # distance travelled by ray
                             
                             # here we find out which (coarse) enclosure we are
-                            xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
-                                                                                N_subs, Nx_coarse, Ny_coarse, NeighborIndices_coarse[xCount_coarse,yCount_coarse])
+                            fineMesh = false
+                            N_subs_count = whichEnclosure(point, mesh, fineMesh)
 
                             # we calculate the point on each wall based on the control volume we are currently in
                             wallPointBottom, wallPointRight, wallPointTop, wallPointLeft, bottomWallNormal, rightWallNormal, topWallNormal, leftWallNormal =
-                                                                localWalls(xCount_coarse, yCount_coarse, point1_coarse, point2_coarse, point3_coarse, point4_coarse)
+                                                                localWalls(mesh, N_subs_count)
 
                             # get distances to (coarse) surfaces
                             u_real, u_index = distToSurface(point, i1, wallPointTop, wallPointBottom, wallPointLeft, wallPointRight, topWallNormal, bottomWallNormal, leftWallNormal, rightWallNormal)
@@ -180,10 +168,20 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                     # therefore we break out of the loop above when we hit a wall!
 
                     # find out if any of the boundaries of the current cell are not allowed to be crossed (solid walls)
-                    solidWallx, solidWally = solidWall(Nx_coarse, Ny_coarse, xCount_coarse, yCount_coarse, N_subs)
+                    solidWall_1, solidWall_2, solidWall_3, solidWall_4 = solidWall(mesh, N_subs_count)             
+                    wallCount_1 = 0
+                    wallCount_2 = 2
+                    wallCount_3 = 0
+                    wallCount_4 = 4
+                    if solidWall_1
+                        wallCount_1 = 1
+                    end
+                    if solidWall_3
+                        wallCount_3 = 3
+                    end               
 
                     # then we found out if our ray hit a solid wall
-                    if u_index == solidWallx || u_index == solidWally # ray hits a solid wall
+                    if u_index == wallCount_1 || u_index == wallCount_2 || u_index == wallCount_3 || u_index == wallCount_4 # ray hits a solid wall
 
                         pointOld = point # save old point before update (for plotting)
                         S = S - u_real # update the travelled distance
@@ -204,19 +202,19 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                             end
 
                             # Here we get the position in the fine grid
-                            xCount_fine, yCount_fine = whichEnclosure(point, point1_fine, point2_fine, point3_fine, point4_fine, N_subs, Nx_fine, Ny_fine)
+                            fineMesh = true
+                            xCount, yCount = whichEnclosure(point, mesh, fineMesh)
 
                             # increase a counter for the wall which was hit in order to measure the factors
-                            if u_index == solidWallx # necessary to discern between x and y for enclosures with 2 walls
-                                Wall_absorbX[xCount_fine,yCount_fine,logicalCores] += 1 # increase counter for the given wall
-                            elseif u_index == solidWally
-                                Wall_absorbY[xCount_fine,yCount_fine,logicalCores] += 1 # increase counter for the given wall
+                            if u_index == wallCount_2 || u_index == wallCount_4 # necessary to discern between x and y for enclosures with 2 walls
+                                Wall_absorbX[xCount,yCount,logicalCores] += 1 # increase counter for the given wall
+                            elseif u_index == wallCount_1 || u_index == wallCount_3
+                                Wall_absorbY[xCount,yCount,logicalCores] += 1 # increase counter for the given wall
                             else
                                 println("Unknown wall error in absorption.")
                             end
 
                             # then emit a new ray
-                            # @goto emitNewRay
                             emitNewRay = true
                             break
 
@@ -233,19 +231,18 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                         S -= u_real # update the remaining distance
 
                         # here we find out which (coarse) enclosure we ended up in
-                        xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
-                                                                N_subs, Nx_coarse, Ny_coarse,NeighborIndices_coarse[xCount_coarse,yCount_coarse])
+                        fineMesh = false
+                        N_subs_count = whichEnclosure(point, mesh, fineMesh)
 
                         # we calculate the point on each wall based on the control volume we are currently in
                         wallPointBottom, wallPointRight, wallPointTop, wallPointLeft, bottomWallNormal, rightWallNormal, topWallNormal, leftWallNormal =
-                                                        localWalls(xCount_coarse, yCount_coarse, point1_coarse, point2_coarse, point3_coarse, point4_coarse)
+                                                        localWalls(mesh, N_subs_count)
 
                         # get distance to surfaces
                         u_real, u_index = distToSurface(point, i1, wallPointTop, wallPointBottom, wallPointLeft, 
                                                         wallPointRight, topWallNormal, bottomWallNormal, leftWallNormal, rightWallNormal)
                 
                         # check if ray hits wall
-                        # @goto doesRayHitWall
                         doesRayHitWall = true
 
                     end
@@ -254,11 +251,22 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                     # u_real < S, so bundle hits a wall! (real or imaginary)
 
                     # find out if any of the boundaries of the current cell are not allowed to be crossed (solid walls)
-                    solidWallx, solidWally = solidWall(Nx_coarse, Ny_coarse, xCount_coarse, yCount_coarse, N_subs)
+                    # solidWallx, solidWally
+                    solidWall_1, solidWall_2, solidWall_3, solidWall_4 = solidWall(mesh, N_subs_count)
+                    wallCount_1 = 0
+                    wallCount_2 = 2
+                    wallCount_3 = 0
+                    wallCount_4 = 4
+                    if solidWall_1
+                        wallCount_1 = 1
+                    end
+                    if solidWall_3
+                        wallCount_3 = 3
+                    end         
 
                     # then we found out if our ray hit a solid wall
-                    if u_index == solidWallx || u_index == solidWally # ray hits a solid wall
-
+                    if u_index == wallCount_1 || u_index == wallCount_2 || u_index == wallCount_3 || u_index == wallCount_4 # ray hits a solid wall
+                        
                         pointOld = point # save old point before update (for plotting)
                         S = S - u_real # update the travelled distance
                         point = point + (u_real-1e-9)*i1 # go almost into the wall (for plotting)
@@ -278,19 +286,19 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                             end
 
                             # Here we get the position in the fine grid
-                            xCount_fine, yCount_fine = whichEnclosure(point, point1_fine, point2_fine, point3_fine, point4_fine, N_subs, Nx_fine, Ny_fine)
+                            fineMesh = true
+                            xCount, yCount = whichEnclosure(point, mesh, fineMesh)
 
                             # increase a counter for the wall which was hit in order to measure the factors
-                            if u_index == solidWallx # necessary to discern between x and y for enclosures with 2 walls
-                                Wall_absorbX[xCount_fine,yCount_fine,logicalCores] += 1 # increase counter for the given wall
-                            elseif u_index == solidWally
-                                Wall_absorbY[xCount_fine,yCount_fine,logicalCores] += 1 # increase counter for the given wall
+                            if u_index == wallCount_2 || u_index == wallCount_4 # necessary to discern between x and y for enclosures with 2 walls
+                                Wall_absorbX[xCount,yCount,logicalCores] += 1 # increase counter for the given wall
+                            elseif u_index == wallCount_1 || u_index == wallCount_3
+                                Wall_absorbY[xCount,yCount,logicalCores] += 1 # increase counter for the given wall
                             else
                                 println("Unknown wall error in absorption.")
                             end
 
                             # then emit a new ray
-                            # @goto emitNewRay
                             emitNewRay = true
                             break
 
@@ -299,7 +307,7 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
 
                         pointOld = point # save old point before update
                         point = point + (u_real+1e-10).*i1 # transfer ray to next enclosure
-                        
+
                         if displayWhileTracing
                             display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
                         end
@@ -307,19 +315,18 @@ function rayTracing_2D(point1_coarse::Matrix{SVector{2,Float64}}, point2_coarse:
                         S -= u_real # update the remaining distance
 
                         # here we find out which (coarse) enclosure we ended up in
-                        xCount_coarse, yCount_coarse = whichEnclosure(point, point1_coarse, point2_coarse, point3_coarse, point4_coarse,
-                                                                N_subs, Nx_coarse, Ny_coarse,NeighborIndices_coarse[xCount_coarse,yCount_coarse])
-
+                        fineMesh = false
+                        N_subs_count = whichEnclosure(point, mesh, fineMesh)
+                        
                         # we calculate the point on each wall based on the control volume we are currently in
                         wallPointBottom, wallPointRight, wallPointTop, wallPointLeft, bottomWallNormal, rightWallNormal, topWallNormal, leftWallNormal =
-                                                        localWalls(xCount_coarse, yCount_coarse, point1_coarse, point2_coarse, point3_coarse, point4_coarse)
+                                                        localWalls(mesh, N_subs_count)
 
                         # get distance to surfaces
                         u_real, u_index = distToSurface(point, i1, wallPointTop, wallPointBottom, wallPointLeft, 
                                                         wallPointRight, topWallNormal, bottomWallNormal, leftWallNormal, rightWallNormal)
                 
                         # check if ray hits wall
-                        # @goto doesRayHitWall
                         doesRayHitWall = true
                     end
                 end

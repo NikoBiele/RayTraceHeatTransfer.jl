@@ -1,6 +1,4 @@
-function whichEnclosure(point::SVector{2,Float64}, point1::Matrix{SVector{2,Float64}}, point2::Matrix{SVector{2,Float64}},
-        point3::Matrix{SVector{2,Float64}}, point4::Matrix{SVector{2,Float64}}, N_subs::Int, Nx::Int, Ny::Int,
-        NeighborIndices_coarse=nothing)
+function whichEnclosure(point::SVector{2,Float64}, mesh::TracingMesh, fineMesh::Bool)
     # this function finds out which enclosure we are in
 
     # rewrite the current location point
@@ -9,22 +7,23 @@ function whichEnclosure(point::SVector{2,Float64}, point1::Matrix{SVector{2,Floa
     xp = xPoint[1]
     yp = yPoint[1]
 
-    # reset outputs
+    # initiate outputs
     xCount = 0
     yCount = 0
+    N_subs_count = 0.0
 
     # loop over all control volumes to find the one we are in
     # if neighbors is given as an input we only need to check those neighbors
     # else we check all cells
-    if isnothing(NeighborIndices_coarse)
-        for m = 1:Nx 
-            for n = 1:Ny*N_subs 
+    if fineMesh
+        for m = 1:mesh.Nx
+            for n = 1:mesh.Ny*mesh.N_subs 
                 Dcount = 0 # reset counters
-                # get the four bounding points of this control volume 
-                @inbounds pointOne = point1[m,n] 
-                @inbounds pointTwo = point2[m,n] 
-                @inbounds pointThree = point3[m,n] 
-                @inbounds pointFour = point4[m,n] 
+                # get the four bounding points of this control volume
+                @inbounds pointOne = mesh.point1[m,n] 
+                @inbounds pointTwo = mesh.point2[m,n] 
+                @inbounds pointThree = mesh.point3[m,n] 
+                @inbounds pointFour = mesh.point4[m,n] 
                 for p = 1:4 
                     if p == 1 
                         x1 = pointOne[1] 
@@ -63,14 +62,14 @@ function whichEnclosure(point::SVector{2,Float64}, point1::Matrix{SVector{2,Floa
                 end
             end
         end
-    else
-        for (m,n) in NeighborIndices_coarse
+    else # if coarse 
+        for j = 1:mesh.N_subs
             Dcount = 0 # reset counters
-            # get the four bounding points of this control volume 
-            @inbounds pointOne = point1[m,n] 
-            @inbounds pointTwo = point2[m,n] 
-            @inbounds pointThree = point3[m,n] 
-            @inbounds pointFour = point4[m,n] 
+            # get the four bounding points of this control volume
+            pointOne = mesh.point1_coarse[1,j] 
+            pointTwo = mesh.point2_coarse[1,j] 
+            pointThree = mesh.point3_coarse[1,j] 
+            pointFour = mesh.point4_coarse[1,j] 
             for p = 1:4 
                 if p == 1 
                     x1 = pointOne[1] 
@@ -102,12 +101,10 @@ function whichEnclosure(point::SVector{2,Float64}, point1::Matrix{SVector{2,Floa
                     break   
                 end 
                 if Dcount == 4 # if point is to the left of all points 
-                    xCount = m 
-                    yCount = n
-                    return xCount, yCount
+                    N_subs_count = j
+                    return N_subs_count
                 end
             end
-        end     
+        end
     end
-
 end

@@ -1,12 +1,12 @@
 function meshGeometry(yLayersHeight::Vector{Float64},xLayersWidth::Matrix{Float64},
-                    Ny::Int64,Nx::Int64,displayGeometry::Bool)
+                        Ny::Int64,Nx::Int64)
     # This function divides the geometry into a 2D computational mesh
     # over which the ray tracing is performed.    
                     
     # function to plot geometry
-    function trapezoid(point1, point2, point3, point4)
-        Shape([point1[1], point2[1], point3[1], point4[1]],[point1[2], point2[2], point3[2], point4[2]])
-    end
+    # function trapezoid(point1, point2, point3, point4)
+        # Shape([point1[1], point2[1], point3[1], point4[1]],[point1[2], point2[2], point3[2], point4[2]])
+    # end
 
     # The number of sub-enclosures (height layers minus one).
     N_subs = length(yLayersHeight)-1
@@ -96,11 +96,11 @@ function meshGeometry(yLayersHeight::Vector{Float64},xLayersWidth::Matrix{Float6
         end
     end
     
-    # Option to view geometry.
-    if displayGeometry
-        display(plot!([trapezoid(point1[i,j], point2[i,j], point3[i,j], point4[i,j]) for i in 1:Nx for j in 1:Ny*N_subs],
-                        legend=false,color=:white,aspect_ratio=1.0))
-    end
+    # # Option to view geometry.
+    # if displayGeometry
+    #     display(plot!([trapezoid(point1[i,j], point2[i,j], point3[i,j], point4[i,j]) for i in 1:Nx for j in 1:Ny*N_subs],
+    #                     legend=false,color=:white,aspect_ratio=1.0))
+    # end
 
     # miscellaneous useful numbers related to geometry
     N_surfs = 2*Nx+2*Ny*N_subs
