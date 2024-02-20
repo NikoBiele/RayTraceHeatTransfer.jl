@@ -106,12 +106,6 @@ end
 FSS, FSG, FGS, FGG = sampleDomain(mesh1,gas1,N_rays,nthreads,displayWhileTracing)
 ```
 
-<p>Now that we have our matrices we calculate the area and volume of all zones in the fine domain:<br>
-
-```julia
-Area, Volume = calculateAreaVolume(Nx,Ny,N_subs,width,point1,point2,point3,point4)
-```
-
 ### Solve heat transfer problem for steady state temperature distribution
 
 <p>Now it is time to solve heat transfer problems on the domain defined by our geometry.<br>
