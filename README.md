@@ -95,7 +95,7 @@ gas1 = GasProperties(sigma_s,kappa)
 displayWhileTracing = false # option to view the rays while they are traced (warning: very demanding)
 N_rays_tot = 10_000_000; # total number of rays
 # number of rays to trace from each zone
-N_rays = trunc(Int, N_rays_tot/(Nx*Ny*N_subs+2*Nx+2*Ny))
+N_rays = trunc(Int, N_rays_tot/(mesh1.N_surfs+mesh1.N_vols))
 # We execute the calculation in parallel on all available threads
 if displayWhileTracing
     nthreads = 1
@@ -124,10 +124,10 @@ fixWalls .= true # all are fixed
 # define temperature boundary conditions
 Tw_hot = 1000.0
 Tw_init = zeros(mesh1.N_surfs)
-Tw_init[1:11] .= 0.0 # left wall
-Tw_init[11+1:2*11] .= 0.0 # right wall
-Tw_init[2*11+1:3*11] .= Tw_hot # bottom wall
-Tw_init[3*11+1:end] .= 0.0 # top wall
+Tw_init[1:51] .= 0.0 # left wall
+Tw_init[51+1:2*51] .= 0.0 # right wall
+Tw_init[2*51+1:3*51] .= Tw_hot # bottom wall
+Tw_init[3*51+1:end] .= 0.0 # top wall
 # gas initial temperatures
 Tg_init = zeros(mesh1.N_vols) .+ 100.0 # not fixed
 # set the emissivities
@@ -198,8 +198,8 @@ Which gives the geometry:
 
 ![plot](./customGeometry.png)
 
-In general the numbering of the walls and volumes are defined as below.
-This is important for defining wall properties and boundary conditions.
+<p>In general the numbering of the walls and volumes are defined as below.<br>
+<p>This is important for defining wall properties and boundary conditions.<br>
 
 Walls are numbered:
 - First the left wall from bottom to top.
