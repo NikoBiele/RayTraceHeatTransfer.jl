@@ -47,7 +47,7 @@ If using VSCode, enable CPU multithreading by setting the following in settings.
 
 Instead of 16, choose the number you prefer.
 
-In Jupyter notebook run
+If you're using Jupyter notebook run
 
 ```julia
 using IJulia
