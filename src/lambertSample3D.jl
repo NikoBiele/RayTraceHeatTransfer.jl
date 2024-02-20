@@ -1,7 +1,9 @@
 function lambertSample3D()
-    # This function generates a diffuse (Lambertian) emission sample.
+    # This function generates a local diffuse (Lambertian) emission sample from a wall.
     # The generated sample is 3D but is converted to 2D
     # by projecting it onto the 2D plane (by setting third component to zero).
+    # This sample correspond to the local coordinates of the given wall.
+    # It is later rotated to global coordinates.
 
     R_angle1 = rand() # sample for finding angle
     sinTheta = sqrt(R_angle1)

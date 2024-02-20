@@ -35,6 +35,33 @@ To load the package, use the command
 using RayTraceHeatTransfer
 ```
 
+## Enabling multithreading on the CPU
+
+<p>When performing Monte Ray tracing it is advantageous to use multithreading.<br>
+
+If using VSCode, enable CPU multithreading by setting the following in settings.json:
+
+```julia
+  "julia.NumThreads": 16,
+```
+
+Instead of 16, choose the number you prefer.
+
+In Jupyter notebook run
+
+```julia
+using IJulia
+IJulia.installkernel("Julia 16 Threads", env=Dict(
+    "JULIA_NUM_THREADS" => "16",
+))
+```
+
+To check that the number of available threads correspond to the desired number run:
+
+```
+julia> Threads.nthreads()
+```
+
 ## Usage
 
 ### Generate geometry
@@ -69,7 +96,7 @@ Ny = 51
 # generate geometry
 mesh1 = TracingMesh(Nx,Ny,xLayersWidth,yLayersHeight);
 # plot the geometry
-displayGeometry(mesh1)
+displayMesh(mesh1)
 ```
 
 <p>Viewing the result:<br>
@@ -183,7 +210,7 @@ Ny = 5
 # generate geometry
 mesh1 = TracingMesh(Nx,Ny,xLayersWidth,yLayersHeight);
 # plot the geometry
-displayGeometry(mesh1)
+displayMesh(mesh1)
 
 ```
 

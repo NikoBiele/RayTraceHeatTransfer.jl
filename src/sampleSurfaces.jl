@@ -27,7 +27,7 @@ function sampleSurfaces(mesh::TracingMesh,gas::GasProperties,N_rays::Int64,nthre
                 yCountSample = n
 
                 # sample left-right walls one by one
-                Wall_absorbX_sum, Wall_absorbY_sum, N_abs_gas_sum, RayCountTotal_sum = rayTracing_2D(
+                Wall_absorbX_sum, Wall_absorbY_sum, N_abs_gas_sum, RayCountTotal_sum = rayTracing_CPU(
                                                                                 mesh, gas, N_rays,
                                                                                 displayWhileTracing, nthreads,
                                                                                 wallEmitter, volumeEmitter,
@@ -53,7 +53,7 @@ function sampleSurfaces(mesh::TracingMesh,gas::GasProperties,N_rays::Int64,nthre
                 yCountSample = n
 
                 # sample top-bottom walls one by one
-                Wall_absorbX_sum, Wall_absorbY_sum, N_abs_gas_sum, RayCountTotal_sum = rayTracing_2D( 
+                Wall_absorbX_sum, Wall_absorbY_sum, N_abs_gas_sum, RayCountTotal_sum = rayTracing_CPU( 
                                                                         mesh, gas, N_rays,
                                                                         displayWhileTracing, nthreads,
                                                                         wallEmitter, volumeEmitter,

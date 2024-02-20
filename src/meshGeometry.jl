@@ -3,11 +3,6 @@ function meshGeometry(yLayersHeight::Vector{Float64},xLayersWidth::Matrix{Float6
     # This function divides the geometry into a 2D computational mesh
     # over which the ray tracing is performed.    
                     
-    # function to plot geometry
-    # function trapezoid(point1, point2, point3, point4)
-        # Shape([point1[1], point2[1], point3[1], point4[1]],[point1[2], point2[2], point3[2], point4[2]])
-    # end
-
     # The number of sub-enclosures (height layers minus one).
     N_subs = length(yLayersHeight)-1
 
@@ -95,47 +90,43 @@ function meshGeometry(yLayersHeight::Vector{Float64},xLayersWidth::Matrix{Float6
             end
         end
     end
-    
-    # # Option to view geometry.
-    # if displayGeometry
-    #     display(plot!([trapezoid(point1[i,j], point2[i,j], point3[i,j], point4[i,j]) for i in 1:Nx for j in 1:Ny*N_subs],
-    #                     legend=false,color=:white,aspect_ratio=1.0))
-    # end
 
     # miscellaneous useful numbers related to geometry
     N_surfs = 2*Nx+2*Ny*N_subs
     N_vols = Nx*Ny*N_subs
 
-    # find the neighbor cells to each cells (to improve the search speed when ray tracing)
-    NeighborIndices = Array{Array{SVector{2, Int64}}}(undef, Nx, Ny*N_subs)
-    for i in 1:Nx
-        for j in 1:Ny*N_subs
-            Indices = []
-            for k = 1:9
-                if k == 1 && i > 1 && j > 1 # lower left corner neighbor
-                    push!(Indices, SVector(i-1,j-1))
-                elseif k == 2 && i > 1 # left neighbor
-                    push!(Indices, SVector(i-1,j))
-                elseif k == 3 && i > 1 && j < Ny*N_subs # upper left neighbor
-                    push!(Indices, SVector(i-1,j+1))
-                elseif k == 4 && j > 1 # bottom below
-                    push!(Indices, SVector(i,j-1))
-                elseif k == 5 # this is the previous cell itself (always included)
-                    push!(Indices, SVector(i,j))
-                elseif k == 6 && j < Ny*N_subs # the cell above
-                    push!(Indices, SVector(i,j+1))
-                elseif k == 7 && i < Nx && j > 1 # lower right neighbor
-                    push!(Indices, SVector(i+1,j-1))
-                elseif k == 8 && i < Nx # right side neighbor
-                    push!(Indices, SVector(i+1,j))
-                elseif k == 9 && i < Nx && j < Ny*N_subs # top right corner
-                    push!(Indices, SVector(i+1,j+1))
-                end
-            end
-            NeighborIndices[i,j] = Indices
-        end
-    end
+    """ This code snippet is commented out for now since it is not used currently, but it works and will be useful later
+    # # find the neighbor cells to each cells (to improve the search speed when ray tracing)
+    # NeighborIndices = Array{Array{SVector{2, Int64}}}(undef, Nx, Ny*N_subs)
+    # for i in 1:Nx
+    #     for j in 1:Ny*N_subs
+    #         Indices = []
+    #         for k = 1:9
+    #             if k == 1 && i > 1 && j > 1 # lower left corner neighbor
+    #                 push!(Indices, SVector(i-1,j-1))
+    #             elseif k == 2 && i > 1 # left neighbor
+    #                 push!(Indices, SVector(i-1,j))
+    #             elseif k == 3 && i > 1 && j < Ny*N_subs # upper left neighbor
+    #                 push!(Indices, SVector(i-1,j+1))
+    #             elseif k == 4 && j > 1 # bottom below
+    #                 push!(Indices, SVector(i,j-1))
+    #             elseif k == 5 # this is the previous cell itself (always included)
+    #                 push!(Indices, SVector(i,j))
+    #             elseif k == 6 && j < Ny*N_subs # the cell above
+    #                 push!(Indices, SVector(i,j+1))
+    #             elseif k == 7 && i < Nx && j > 1 # lower right neighbor
+    #                 push!(Indices, SVector(i+1,j-1))
+    #             elseif k == 8 && i < Nx # right side neighbor
+    #                 push!(Indices, SVector(i+1,j))
+    #             elseif k == 9 && i < Nx && j < Ny*N_subs # top right corner
+    #                 push!(Indices, SVector(i+1,j+1))
+    #             end
+    #         end
+    #         NeighborIndices[i,j] = Indices
+    #     end
+    # end
+    """
 
-    return point1, point2, point3, point4, N_surfs, N_vols, NeighborIndices
+    return point1, point2, point3, point4, N_surfs, N_vols #, NeighborIndices
 
 end

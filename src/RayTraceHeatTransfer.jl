@@ -16,12 +16,12 @@ export sampleVolumes
 export writeMatricesToCSV
 export validCrosbieSchrenker
 export steadyStateRigorous
-export calculateAreaVolume
-export rayTracing_2D
+export areaVolumeMesh
+export rayTracing_CPU
 export readMatricesFromCSV
 export plotTemperatureField
 export sampleDomain
-export displayGeometry
+export displayMesh
 # export structs
 export TracingMesh
 export GasProperties
@@ -33,8 +33,8 @@ using CSV
 using DataFrames
 using StaticArrays
 
-# include functions
-include("Structs.jl")
+# include code
+include("structs.jl")
 include("whichEnclosure.jl")
 include("solidWall.jl")
 include("localWalls.jl")
@@ -50,12 +50,12 @@ include("sampleVolumes.jl")
 include("writeMatricesToCSV.jl")
 include("validCrosbieSchrenker.jl")
 include("steadyStateRigorous.jl")
-include("calculateAreaVolume.jl")
-include("rayTracing_2D.jl")
+include("areaVolumeMesh.jl")
+include("rayTracing_CPU.jl")
 include("readMatricesFromCSV.jl")
 include("plotTemperatureField.jl")
 include("sampleDomain.jl")
-include("displayGeometry.jl")
+include("displayMesh.jl")
 include("defineSolidWalls.jl")
 
 end

@@ -29,7 +29,7 @@ function sampleVolumes(mesh::TracingMesh,gas::GasProperties,N_rays::Int64,nthrea
                 yCountSample = j
 
                 # Call ray tracing function and sample current volume.
-                Wall_absorbX_sum, Wall_absorbY_sum, N_abs_gas_sum, RayCountTotal_sum = rayTracing_2D(mesh, gas, N_rays,
+                Wall_absorbX_sum, Wall_absorbY_sum, N_abs_gas_sum, RayCountTotal_sum = rayTracing_CPU(mesh, gas, N_rays,
                                                                                     displayWhileTracing, nthreads,
                                                                                     wallEmitter, volumeEmitter, xCountSample, yCountSample,
                                                                                     sampleLeftRight, sampleTopBottom)

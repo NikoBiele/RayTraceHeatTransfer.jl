@@ -1,4 +1,5 @@
-function displayGeometry(mesh::TracingMesh)
+function displayMesh(mesh::TracingMesh)
+    # this function plots the mest stored in a TracingMesh struct
 
     # lookup mesh in struct
     N_subs = mesh.N_subs
@@ -15,8 +16,8 @@ function displayGeometry(mesh::TracingMesh)
     end
 
     # display entire mesh
-    plot([trapezoid(point1[i,j], point2[i,j],point3[i,j],point4[i,j]) for i in 1:Nx for j in 1:Ny*N_subs],
+    display(plot([trapezoid(point1[i,j], point2[i,j],point3[i,j],point4[i,j]) for i in 1:Nx for j in 1:Ny*N_subs],
                 legend=false,color=:white,aspect_ratio=1.0,
-                xlabel="Position / m",ylabel="Position / m",title="Meshed ray tracing geometry")
+                xlabel="Position / m",ylabel="Position / m",title="Meshed ray tracing geometry"))
     
 end

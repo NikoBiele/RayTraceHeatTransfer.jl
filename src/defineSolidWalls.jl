@@ -1,5 +1,6 @@
 function defineSolidWalls(yLayersHeight::Vector{Float64})
-
+    # This function defines the solid walls of the geometry
+    
     solidWalls = Vector{Vector{Bool}}(undef, length(yLayersHeight)-1)
 
     # below, the walls of each cell are ordered [bottom, right, top, left]

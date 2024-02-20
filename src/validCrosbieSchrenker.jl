@@ -1,7 +1,7 @@
 function validCrosbieSchrenker(N_rays_tot,Ndim,Tw_hot)
     # this function performs a comparison of the ray traced result
     # with the analytical 2D solution tabulated by Crosbie & Schrenker (1982)
-    
+
     # ensure that the dimension is an odd number (for comparison to analytical)
     if iseven(Ndim)
         error("Ndim should be an odd number to validate against the analytical result.")
@@ -17,14 +17,15 @@ function validCrosbieSchrenker(N_rays_tot,Ndim,Tw_hot)
     xLayersWidth[:,2] = [0.0, 1.0];
 
     # define the number of fine splits in each enclosure
-    Nx = 11 # Ndim # must be minimum 3
-    Ny = 11 #Ndim # must be minimum 2
+    Nx = Ndim
+    Ny = Ndim
 
     # generate geometry
     mesh1 = TracingMesh(Nx,Ny,xLayersWidth,yLayersHeight);
 
     # plot the geometry
-    displayGeometry(mesh1)
+    displayMesh(mesh1)
+    println("Waiting 5 seconds to view mesh...")
     sleep(5.0)
     
     ### DEFINE GAS PROPERTIES
@@ -80,11 +81,13 @@ function validCrosbieSchrenker(N_rays_tot,Ndim,Tw_hot)
     display(plot(Grelabs[3:end],title="Convergence history",legend=false))
     display(xlabel!("Iterations"))
     display(ylabel!("Relative change in heat flux"))
+    println("Waiting 5 seconds to view convergence history...")
     sleep(5.0)
 
     println("Plotting temperature distribution in the gas.")
     Tg_matrix = plotTemperatureField(mesh1,Tg); #,Tw); # optional wall temperatures
-    sleep(10.0)
+    println("Waiting 5 seconds to view temperature distribution...")
+    sleep(5.0)
 
     ### COMPARISON WITH ANALYTICAL SOLUTION (Crosbie & Schrenker, 1982)
     

@@ -1,4 +1,4 @@
-function rayTracing_2D(mesh::TracingMesh, gas::GasProperties, N_rays::Int64,
+function rayTracing_CPU(mesh::TracingMesh, gas::GasProperties, N_rays::Int64,
                         displayWhileTracing::Bool, nthreads::Int64,
                         wallEmitter::Int64, volumeEmitter::Int64, xCountSample::Int64, yCountSample::Int64,
                         sampleLeftRight::Bool, sampleTopBottom::Bool)

@@ -1,8 +1,7 @@
 function distToSurface(point::SVector{2,Float64}, i1::SVector{2,Float64}, wallPointTop::SVector{2,Float64},
                         wallPointBottom::SVector{2,Float64}, wallPointLeft::SVector{2,Float64},
                         wallPointRight::SVector{2,Float64}, topWallNormal::SVector{2,Float64},
-                        bottomWallNormal::SVector{2,Float64}, leftWallNormal::SVector{2,Float64}, rightWallNormal::SVector{2,Float64})
-                        
+                        bottomWallNormal::SVector{2,Float64}, leftWallNormal::SVector{2,Float64}, rightWallNormal::SVector{2,Float64})                       
     # This function determines the distance to a plane (a line in 2D) from a
     # given point along a given direction, as well as the index of the wall (bottom, right, top, left).
 
