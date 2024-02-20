@@ -150,7 +150,7 @@ Giving:
 ![plot](./temperaturedistribution.png)
 
 <p>As the last step, we also validate the code against the analytical solution of Crosbie and Schrenker (1982).<br>
-Plotting the $(T_\text{g}/T_\text_{w,hot})^4$ for the centerline perpendicular to the incident radiation and comparing it to the analytical solution gives:
+Plotting the (Tg/Tw)^4 for the centerline perpendicular to the incident radiation and comparing it to the analytical solution gives:
 
 ![plot](./validation.png)
 
