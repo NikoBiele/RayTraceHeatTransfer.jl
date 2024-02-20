@@ -10,7 +10,7 @@ function whichEnclosure(point::SVector{2,Float64}, mesh::TracingMesh, fineMesh::
     # initiate outputs
     xCount = 0
     yCount = 0
-    N_subs_count = 0.0
+    N_subs_count = 0
 
     # loop over all control volumes to find the one we are in
     # if neighbors is given as an input we only need to check those neighbors
@@ -49,11 +49,11 @@ function whichEnclosure(point::SVector{2,Float64}, mesh::TracingMesh, fineMesh::
                     # check if the point is inside this control volume 
                     # check that it is to the left of each boundary 
                     D = (x2[1] - x1[1]) * (yp[1] - y1[1]) - (xp[1] - x1[1]) * (y2[1] - y1[1]) 
-                    if D > 0 # then the point is on the right hand side 
-                        Dcount += 1 
-                    else # if point is on left hand side increment counter 
+                    if D > 0 # if point is on left hand side increment counter 
+                        Dcount += 1
+                    else
                         break   
-                    end 
+                    end
                     if Dcount == 4 # if point is to the left of all points 
                         xCount = m 
                         yCount = n
@@ -66,31 +66,21 @@ function whichEnclosure(point::SVector{2,Float64}, mesh::TracingMesh, fineMesh::
         for j = 1:mesh.N_subs
             Dcount = 0 # reset counters
             # get the four bounding points of this control volume
-            pointOne = mesh.point1_coarse[1,j] 
-            pointTwo = mesh.point2_coarse[1,j] 
-            pointThree = mesh.point3_coarse[1,j] 
-            pointFour = mesh.point4_coarse[1,j] 
-            for p = 1:4 
+            @inbounds pointOne = mesh.point1_coarse[1,j] 
+            @inbounds pointTwo = mesh.point2_coarse[1,j] 
+            @inbounds pointThree = mesh.point3_coarse[1,j] 
+            @inbounds pointFour = mesh.point4_coarse[1,j] 
+            for p in [1, 3] # only need to check top and bottom
                 if p == 1 
                     x1 = pointOne[1] 
                     y1 = pointOne[2] 
                     x2 = pointTwo[1] 
                     y2 = pointTwo[2] 
-                elseif p == 2 
-                    x1 = pointTwo[1] 
-                    y1 = pointTwo[2] 
-                    x2 = pointThree[1] 
-                    y2 = pointThree[2] 
                 elseif p == 3 
                     x1 = pointThree[1] 
                     y1 = pointThree[2] 
                     x2 = pointFour[1] 
                     y2 = pointFour[2] 
-                elseif p == 4 
-                    x1 = pointFour[1] 
-                    y1 = pointFour[2] 
-                    x2 = pointOne[1] 
-                    y2 = pointOne[2] 
                 end 
                 # check if the point is inside this control volume 
                 # check that it is to the left of each boundary 
@@ -100,7 +90,7 @@ function whichEnclosure(point::SVector{2,Float64}, mesh::TracingMesh, fineMesh::
                 else # if point is on left hand side increment counter 
                     break   
                 end 
-                if Dcount == 4 # if point is to the left of all points 
+                if Dcount == 2 # if point is to the left of all points 
                     N_subs_count = j
                     return N_subs_count
                 end

@@ -37,7 +37,7 @@ using RayTraceHeatTransfer
 
 ## Enabling multithreading on the CPU
 
-<p>When performing Monte Ray tracing it is advantageous to use multithreading.<br>
+<p>When performing Monte Carlo ray tracing it is advantageous to use multithreading.<br>
 
 If using VSCode, enable CPU multithreading by setting the following in settings.json:
 
@@ -47,7 +47,7 @@ If using VSCode, enable CPU multithreading by setting the following in settings.
 
 Instead of 16, choose the number you prefer.
 
-If you're using Jupyter notebook run
+If you're using Jupyter notebook run:
 
 ```julia
 using IJulia
