@@ -56,7 +56,7 @@ IJulia.installkernel("Julia 16 Threads", env=Dict(
 ))
 ```
 
-To check that the number of available threads correspond to the desired number run:
+To confirm that the number of available threads correspond to the desired number run:
 
 ```
 julia> Threads.nthreads()
@@ -90,7 +90,7 @@ xLayersWidth[:,2] = [0.0, 1.0]; # top
 <p>Then we generate the meshing automatically and plot it.<br>
 
 ```julia
-# define the number of fine splits in each enclosure
+# define the number of splits in each enclosure
 Nx = 51
 Ny = 51
 # generate geometry
@@ -157,6 +157,8 @@ epsw_vec = ones(mesh1.N_surfs)
 maxIter = 100
 relTol = 1e-3
 # the outputs are the steady state temperature and flux distribution
+# Tw and Tg are the wall and gas temperatures respectively.
+# Gw and Gg are the wall and gas incident fluxes respectively, per unit area or unit volume
 Tw, Tg, Gw, Gg, iter_count, Grelabs = steadyStateRigorous(mesh1,FSS,FSG,FGS,FGG,
                                                         fixWalls,epsw_vec,kappa,maxIter,relTol,
                                                         Tw_init,Tg_init);
@@ -188,7 +190,7 @@ Plotting the (Tg/Tw)^4 for the centerline perpendicular to the incident radiatio
 
 ![plot](./validation_oneBillion.png)
 
-Decreasing the number of subdivisions would further increase the accuracy.
+Decreasing the number of subdivisions (Nx and Ny) would further increase the accuracy.
 
 ## Defining a custom geometry
 
