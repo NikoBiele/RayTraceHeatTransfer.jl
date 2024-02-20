@@ -171,7 +171,6 @@ To define a custom geometry, use different values in yLayersHeight and xLayersWi
 # now we need to know the coordinates of all the points in the enclosure
 # set the height of the outer points (the y-coordinates)
 yLayersHeight = [0.0, 1.0, 2.0, 3.0, 4.0, 5.0];
-N_subs = length(yLayersHeight)-1; # number of sub-enclosures
 xLayersWidth = zeros(2, length(yLayersHeight));
 xLayersWidth[:,1] = [0.0, 1.0];
 xLayersWidth[:,2] = [0.0, 1.0];
