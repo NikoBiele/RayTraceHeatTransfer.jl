@@ -5,8 +5,20 @@
 
 ## Description
 
-This repository can be used for radiation heat transfer calculations in an enclosure containing an absorbing-emitting-scattering participating medium.
-It contains a number of functions which collectively enables the user to mesh and ray trace a user defined geometry.
+This Julia package can be used for radiation heat transfer calculations in an enclosure containing an absorbing-emitting-scattering participating medium.
+This phenomenon is governed by the **Radiative Transfer Equation** (RTE):
+
+$$ \begin{split}
+\frac{\partial I_{\lambda}(S,\Omega)}{\partial S} = \; &
+\kappa_{\lambda} I_{\lambda \mathrm{b}}(S) 
+- \kappa_{\lambda} I_{\lambda}(S,\Omega)
+- \sigma_{\mathrm{s},\lambda} I_{\lambda}(S,\Omega) \\
+& + \frac{\sigma_{\mathrm{s},\lambda}}{4 \pi} \int_{\Omega_i=4 \pi}
+I_{\lambda}(S,\Omega_i) \Phi_{\lambda}(\Omega_i,\Omega) d\Omega_i
+\end{split} $$
+
+Solution of the RTE in an analytical manner is only possible in simple cases.
+This repository contains a number of functions which collectively enables the user to mesh and ray trace a user defined geometry to solve the RTE.
 The result of the ray tracing are four 'Exchange Factor' matrices which together describe how the enclosure is radiatively connected.
 Using the exchange factor matrices it is possible to quickly perform a heat transfer calculation on the entire enclosure, which would otherwise be computationally expensive to ray trace.
 This package is limited to a uniformly distributed participating medium.
