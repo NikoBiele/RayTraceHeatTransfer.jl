@@ -8,12 +8,7 @@
 This Julia package can be used for radiation heat transfer calculations in an enclosure containing an absorbing-emitting-scattering participating medium.
 This phenomenon is governed by the **Radiative Transfer Equation** (RTE):
 
-$$
-\frac{\partial I_{\lambda}(S,\Omega)}{\partial S} =
-\kappa_{\lambda} I_{\lambda \mathrm{b}}(S) 
-- \kappa_{\lambda} I_{\lambda}(S,\Omega)
-- \sigma_{\mathrm{s},\lambda} I_{\lambda}(S,\Omega) + \frac{\sigma_{\mathrm{s},\lambda}}{4 \pi} \int_{\Omega_i=4 \pi}
-I_{\lambda}(S,\Omega_i) \Phi_{\lambda}(\Omega_i,\Omega) d\Omega_i
+$$ \frac{\partial I_{\lambda}(S,\Omega)}{\partial S} = \kappa_{\lambda} I_{\lambda \mathrm{b}}(S) - \kappa_{\lambda} I_{\lambda}(S,\Omega) - \sigma_{\mathrm{s},\lambda} I_{\lambda}(S,\Omega) + \frac{\sigma_{\mathrm{s},\lambda}}{4 \pi} \int_{\Omega_i=4 \pi} I_{\lambda}(S,\Omega_i) \Phi_{\lambda}(\Omega_i,\Omega) d\Omega_i
 $$
 
 Solution of the RTE in an analytical manner is only possible in simple cases.
