@@ -1,61 +1,44 @@
 module RayTraceHeatTransfer
 
-# export functions
-export whichEnclosure
-export solidWall
-export localWalls
-export distToSurface
-export coefs_FSS_FSG
-export coefs_FGS_FGG
-export sampleVolume
-export lambertSample3D
-export sampleSurface
-export meshGeometry
-export sampleSurfaces
-export sampleVolumes
-export writeMatricesToCSV
-export validCrosbieSchrenker
-export steadyStateRigorous
-export areaVolumeMesh
-export rayTracing_CPU
-export readMatricesFromCSV
-export plotTemperatureField
-export sampleDomain
-export displayMesh
-# export structs
-export TracingMesh
-export GasProperties
+# export functions and structs for geometry creation
+export SubEnclosure # struct
+export displayGeometry # function
+export meshGeometry # function
+export RayTracingMesh # struct
+export displayMesh # function
+export GasProperties # struct
 
-# include dependencies
-using Plots
-using LinearAlgebra
-using CSV
-using DataFrames
-using StaticArrays
+# export functions for ray tracing
+export sampleDomain # function
+export writeMatricesToCSV # function
+
+# export functions for heat transfer calculation
+export readMatricesFromCSV # function
+export steadyStateApprox # function
+export steadyStateRigorous # function
+export plotTemperatureField # function
+export validCrosbieSchrenker # function
+
+# export viewFactor function
+export viewFactor
 
 # include code
-include("structs.jl")
-include("whichEnclosure.jl")
-include("solidWall.jl")
-include("localWalls.jl")
-include("distToSurface.jl")
-include("coefs_FSS_FSG.jl")
-include("coefs_FGS_FGG.jl")
-include("sampleVolume.jl")
-include("lambertSample3D.jl")
-include("sampleSurface.jl")
-include("meshGeometry.jl")
-include("sampleSurfaces.jl")
-include("sampleVolumes.jl")
-include("writeMatricesToCSV.jl")
-include("validCrosbieSchrenker.jl")
-include("steadyStateRigorous.jl")
-include("areaVolumeMesh.jl")
-include("rayTracing_CPU.jl")
-include("readMatricesFromCSV.jl")
-include("plotTemperatureField.jl")
-include("sampleDomain.jl")
-include("displayMesh.jl")
-include("defineSolidWalls.jl")
+include("Geometry/Geometry.jl")
+include("RayTracing/RayTracing.jl")
+include("HeatTransfer/HeatTransfer.jl")
+include("ViewFactor3D/ViewFactor3D.jl")
+
+# internal dependencies
+using .Geometry
+using .RayTracing
+using .HeatTransfer
+using .ViewFactor3D
+
+# external dependencies
+using StaticArrays
+using LinearAlgebra
+using Plots
+using CSV
+using DataFrames
 
 end

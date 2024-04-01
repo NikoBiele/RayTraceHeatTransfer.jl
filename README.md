@@ -5,6 +5,8 @@
 
 ## Description
 
+Note: This readme corresponds to the registered package (version 0.1.1), it is not up to date with the main branch of this repo. The documentation is being moved to its own webpage.
+
 This Julia package can be used for radiation heat transfer calculations in an enclosure containing an absorbing-emitting-scattering participating medium.
 This phenomenon is governed by the **Radiative Transfer Equation** (RTE):
 
@@ -100,7 +102,7 @@ xLayersWidth[:,2] = [0.0, 1.0]; # top
 Nx = 51
 Ny = 51
 # generate geometry
-mesh1 = TracingMesh(Nx,Ny,xLayersWidth,yLayersHeight);
+mesh1 = RayTracingMesh(Nx,Ny,xLayersWidth,yLayersHeight);
 # plot the geometry
 displayMesh(mesh1)
 ```
@@ -216,7 +218,7 @@ xLayersWidth[:,6] = [0.0, 1.0];
 Nx = 5
 Ny = 5
 # generate geometry
-mesh1 = TracingMesh(Nx,Ny,xLayersWidth,yLayersHeight);
+mesh1 = RayTracingMesh(Nx,Ny,xLayersWidth,yLayersHeight);
 # plot the geometry
 displayMesh(mesh1)
 
