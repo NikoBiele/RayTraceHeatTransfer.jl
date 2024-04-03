@@ -5,7 +5,7 @@
                         maxIter::Int64,relTol::Float64,Tw_in::Matrix{Float64},
                         Tg_in::Vector{Float64},qw_in::Matrix{Float64},qg_in::Vector{Float64})
 
-This function obtains the steady state temperature distribution in a rigorous way.
+This function obtains the steady state temperature and source term distribution in a fast approximate iterative way.
 """
 function steadyStateApprox(mesh::RayTracingMesh,FSS::Matrix{Float64},FSG::Matrix{Float64},
                                 FGS::Matrix{Float64},FGG::Matrix{Float64},

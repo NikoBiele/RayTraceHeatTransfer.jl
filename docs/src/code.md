@@ -52,11 +52,19 @@ HeatTransfer.readMatricesFromCSV(N_subs::Int64,Ndim::Int64,kappa::Float64,
 ```
 
 ```@docs
-HeatTransfer.steadyStateRigorous(mesh::RayTracingMesh,FSS::Matrix{Float64},FSG::Matrix{Float64},
+HeatTransfer.steadyStateApprox(mesh::RayTracingMesh,FSS::Matrix{Float64},FSG::Matrix{Float64},
                     FGS::Matrix{Float64},FGG::Matrix{Float64},
                     epsw_in::Matrix{Float64},gas::GasProperties,
                     maxIter::Int64,relTol::Float64,Tw_in::Matrix{Float64},
                     Tg_in::Vector{Float64},qw_in::Matrix{Float64},qg_in::Vector{Float64})
+```
+
+```@docs
+HeatTransfer.steadyStateRigorous(mesh::RayTracingMesh,FSS::Matrix{Float64},FSG::Matrix{Float64},
+                    FGS::Matrix{Float64},FGG::Matrix{Float64},
+                    epsw_in::Matrix{Float64},gas::GasProperties,
+                    Tw_in::Matrix{Float64},Tg_in::Vector{Float64},
+                    qw_in::Matrix{Float64},qg_in::Vector{Float64})
 ```
 
 ```@docs
