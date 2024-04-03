@@ -9,7 +9,7 @@ using RayTraceHeatTransfer
 ```
 
 The geometry is built by a number of non-overlapping convex "SubEnclosures".
-The "SubEnclosures" always consist of four bounding points and they should always be convex.
+The "SubEnclosures" always consist of four bounding points and they should always be convex (no internal angles above 180°).
 Non-convex shapes should be split into smaller convex "SubEnclosures".
 The reason that the "SubEnclosures" should be convex is that it makes the ray tracing more efficient.
 Here we define a 1x1 square (a single sub-enclosure).
@@ -27,7 +27,7 @@ The next four inputs specifies whether the walls are solid or empty, which is im
 The first wall is between point1 and point2 and so on, and the last wall is between point4 and point1.
 
 ```julia
-sub1 = SubEnclosure([0.0, 0.0],[1.0, 0.0],[2.0, 1.0],[0.0, 1.0],true,true,false,true)
+sub1 = SubEnclosure([0.0, 0.0],[1.0, 0.0],[1.0, 1.0],[0.0, 1.0],true,true,true,true)
 push!(subs, sub1)
 ```
 
@@ -38,15 +38,22 @@ This can be done using the 'displayGeometry' function, which plots any number of
 displayGeometry(subs)
 ```
 
+![plot](./oneSubEnclosure.png)
+
 If the last added SubEnclosure is not satisfactory we can remove it and try again.
 
 ```julia
 pop!(subs)
 ```
 
-Otherwise we can keep adding SubEnclosures to our geometry.
+Then we can keep adding SubEnclosures to our geometry (and popping if we're not satisfied).
+It is recommended to display the geometry after each added subEnclosure.
 
 ```julia
+sub1 = SubEnclosure([0.0, 0.0],[1.0, 0.0],[2.0, 1.0],[0.0, 1.0],true,true,false,true)
+push!(subs, sub1)
+displayGeometry(subs)
+
 sub2 = SubEnclosure([0.0, 1.0],[2.0, 1.0],[1.0, 2.0],[-0.5, 1.5],false,true,false,true)
 push!(subs, sub2)
 displayGeometry(subs)
@@ -60,11 +67,16 @@ push!(subs, sub4)
 displayGeometry(subs)
 ```
 
+Viewing the final result.
+Notice that the subEnclosures are numbered incrementally and internal faces are shown as 'empty' while the outer surfaces are 'solid'.
+This will be important for defining boundary conditions when calculating heat transfer.
+
+![plot](./fourSubEnclosures.png)
+
 When we are finally satisfied with our geometry we can move on to meshing it.
 The fineness of the meshing decides the resolution of or our heat transfer calculations.
-
 We specifiy the number of splits in each SubEnclosure.
-Each SubEnclosure will be split into 11x11 cells.
+In this case each SubEnclosure will be split into 11x11 cells.
 
 ```julia
 Ndim = 11
@@ -78,5 +90,7 @@ The function which generates this type takes as input a vector of SubEnclosures 
 mesh1 = RayTracingMesh(subs,Ndim);
 displayMesh(mesh1)
 ```
+
+![plot](./fourSubEnclosuresMesh.png)
 
 Now that the geometry has been meshed we're ready to ray trace it.
