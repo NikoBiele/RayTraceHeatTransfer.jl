@@ -35,6 +35,7 @@ makedocs(
             "Generate and mesh geometry" => "geometry.md",
             "Ray trace the geometry" => "raytracing.md",
             "Calculate heat transfer" => "heattransfer.md"
+            "View Factors in 3D" => "viewfactor.md"
         ],
         "Code Validation" => "validation.md",
         "Code" => "code.md"
