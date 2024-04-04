@@ -37,4 +37,6 @@ makedocs(
 
 deploydocs(
     repo = "github.com/NikoBiele/RayTraceHeatTransfer.jl.git",
+    target = "site",
+    branch = "gh-pages",
 )
