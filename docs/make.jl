@@ -40,5 +40,5 @@ deploydocs(
     target = "site",
     branch = "gh-pages",
     # julia = "1.x",
-    # deploy_config = Dict("GITHUB_TOKEN" => ENV["GITHUB_TOKEN"]),
+    deploy_config = Dict("GITHUB_TOKEN" => ENV["GITHUB_TOKEN"]),
 )
