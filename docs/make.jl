@@ -39,5 +39,4 @@ deploydocs(
     repo = "github.com/NikoBiele/RayTraceHeatTransfer.jl.git",
     target = "site",
     branch = "gh-pages",
-    deploy_config = Dict("GITHUB_TOKEN" => ENV["GITHUB_TOKEN"]),
 )
