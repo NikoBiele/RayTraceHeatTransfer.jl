@@ -1,5 +1,5 @@
 """
-    steadyStateRigorous(mesh::RayTracingMesh,FSS::Matrix{Float64},FSG::Matrix{Float64},
+    steadyState(mesh::RayTracingMesh,FSS::Matrix{Float64},FSG::Matrix{Float64},
                         FGS::Matrix{Float64},FGG::Matrix{Float64},
                         epsw_in::Matrix{Float64},gas::GasProperties,
                         maxIter::Int64,relTol::Float64,Tw_in::Matrix{Float64},
@@ -7,11 +7,12 @@
 
 This function obtains the steady state temperature and source term distribution in a fast approximate iterative way.
 """
-function steadyStateApprox(mesh::RayTracingMesh,FSS::Matrix{Float64},FSG::Matrix{Float64},
+function steadyState(mesh::RayTracingMesh,FSS::Matrix{Float64},FSG::Matrix{Float64},
                                 FGS::Matrix{Float64},FGG::Matrix{Float64},
                                 epsw_in::Matrix{Float64},gas::GasProperties,
-                                maxIter::Int64,relTol::Float64,Tw_in::Matrix{Float64},
-                                Tg_in::Vector{Float64},qw_in::Matrix{Float64},qg_in::Vector{Float64})
+                                Tw_in::Matrix{Float64},Tg_in::Vector{Float64},
+                                qw_in::Matrix{Float64},qg_in::Vector{Float64},
+                                maxIter::Int64,relTol::Float64)
 
     # first check if the length of input vectors are equal (they should be)
     # give an error if this is true
@@ -173,7 +174,10 @@ function steadyStateApprox(mesh::RayTracingMesh,FSS::Matrix{Float64},FSG::Matrix
         end
     end
 
-    # return temperatures, fluxes and iteration information
-    return Tw, Tg, Gw, Gg, iter_count, Grelabs
+    qw = (Area.*epsw.*sigma.*Tw.^4 .- epsw.*Gw)./Area
+    qg = (4*gas.kappa.*Volume.*sigma.*Tg.^4 .- Gg)./Volume
+
+    # return temperatures, sources and iteration information
+    return Tw, Tg, qw, qg, iter_count, Grelabs
         
 end

@@ -24,6 +24,7 @@ Now we can make one SubEnclosure at a time and push it into the vector.
 When specifying a SubEnclosure the inputs are as follows:
 The first four inputs are the bounding points, going in the counter clockwise direction.
 The next four inputs specifies whether the walls are solid or empty, which is important when connecting more SubEnclosures.
+The outer wall should always be solid for the ray tracing to work.
 The first wall is between point1 and point2 and so on, and the last wall is between point4 and point1.
 
 ```julia

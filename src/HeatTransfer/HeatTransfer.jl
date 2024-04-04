@@ -2,8 +2,7 @@ module HeatTransfer
 
 # export user functions
 export readMatricesFromCSV
-export steadyStateApprox
-export steadyStateRigorous
+export steadyState
 export plotTemperatureField
 export validCrosbieSchrenker
 
@@ -20,7 +19,7 @@ using ..RayTracing
 
 # include code
 include("readMatricesFromCSV.jl")
-include("steadyStateApprox.jl")
+# include("steadyStateApprox.jl")
 include("steadyStateRigorous.jl")
 include("plotTemperatureField.jl")
 include("validCrosbieSchrenker.jl")

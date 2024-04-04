@@ -3,7 +3,7 @@
 
 This function enables contour-like plots of custom geometries.
 It plots the gas temperature distribution and optionally also wall temperatures.
-The two temperature input vectors are returned by the function 'steadyStateRigorous'.
+The two temperature input vectors are returned by the function 'steadyState'.
 The wall temperature vector 'Tw' is optional.
 """
 function plotTemperatureField(mesh::RayTracingMesh,Tg::Vector{Float64},Tw=nothing)

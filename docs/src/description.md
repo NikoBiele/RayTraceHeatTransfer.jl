@@ -1,6 +1,10 @@
+# RayTraceHeatTransfer.jl Documentation
+
+Radiative heat transfer in participating media
+
 ## Description
 
-This Julia package can be used for radiation heat transfer calculations in an enclosure containing an absorbing-emitting-scattering participating medium.
+This Julia package can be used for radiation heat transfer calculations in an enclosure with partly or fully reflecting walls containing an absorbing-emitting-scattering participating medium.
 This phenomenon is governed by the **Radiative Transfer Equation** (RTE), which is a integro-differential equation:
 
 ```math
