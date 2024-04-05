@@ -1,6 +1,7 @@
 name: Documentation
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - dev # update to match your development branch (master, main, dev, trunk, ...)
@@ -18,7 +19,7 @@ jobs:
       - uses: julia-actions/setup-julia@v1
         with:
           version: '1.10'
-      - uses: julia-actions/cache@v1
+      - uses: julia-actions/cache@v1 # changed to v2
       - name: Install dependencies
         run: julia --project=docs/ -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - name: Build and deploy
