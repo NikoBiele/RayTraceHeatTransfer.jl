@@ -66,7 +66,7 @@ Apart from the plot it also returns the gas temperatures in the form of an array
 - The next dimensions are the x- and y-splits of each subenclosure.
 
 ```julia
-Tg_array = plotTemperatureField(mesh1,Tg_rig) #,Tw_rig); # optional wall temperatures
+Tg_array = plotTemperatureField(mesh1,Tg) #,Tw); # optional wall temperatures
 ```
 
 Even though there is no flow in the domain and the gas is strongly cooled be the cold walls the radiation from the hot wall heats the entire domain due to the absorption and reradiation in the gas.
