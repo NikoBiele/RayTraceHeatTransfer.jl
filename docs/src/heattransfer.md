@@ -3,6 +3,19 @@
 In this section we will solve a radiation heat transfer problem using the geometry which was generated and sampled in the previous sections.
 The most important thing when solving radiation heat transfer problems is to correctly define all of the boundary conditions and known information.
 The properties of the participating medium was specified before the ray tracing so this is already fixed.
+
+First we load the exchange factor matrices back into memory from the csv-files stored on disk.
+The values given should correspond to the values in the name of the csv-files.
+
+```julia
+N_subs = 4
+Ndim = 11
+kappa = 1.0
+sigma_s = 0.0
+N_rays = 16835
+FSS, FSG, FGS, FGG = readMatricesFromCSV(N_subs,Ndim,kappa,sigma_s,N_rays)
+```
+
 The remaining properties which need to be fixed are:
 
 - Emissivities of all solid walls
@@ -52,11 +65,9 @@ Now we are ready to solve the heat transfer problem!
 We will use the function 'steadyState' to calculate the equilibrium temperatures and source terms.
 
 ```julia
-@time begin
 Tw, Tg, qw, qg = steadyState(mesh1,FSS,FSG,FGS,FGG, 
                                 epsw_in,gas1,
                                 Tw_in,Tg_in,qw_in,qg_in);
-end
 ```
 
 And lastly, let's plot the temperature field.

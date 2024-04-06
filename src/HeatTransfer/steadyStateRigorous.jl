@@ -47,36 +47,6 @@ function steadyState(mesh::RayTracingMesh,FSS::Matrix{Float64},FSG::Matrix{Float
         end
     end
 
-    # walls: set the emissivities, temperatures and sources from the input
-    # Area = zeros(sum(sum(mesh.solidWalls))*mesh.Nx) # put the right areas into a vector
-    # epsw = zeros(mesh.N_surfs)
-    # Tw = zeros(mesh.N_surfs)
-    # qw = zeros(mesh.N_surfs)
-    # bin_Qw_known = zeros(mesh.N_surfs)
-    # for k = 1:mesh.N_subs
-    #     wallCount = 0
-    #     for j = 1:4 # for each wall
-    #         if mesh.solidWalls[k][j] # if wall is solid
-    #             # if both a temperature and a source term was specified give a warning
-    #             if Tw_in[k,j] >= 0.0 && qw_in[k,j] != 0.0
-    #                 println("Both a temperature and a source term was specified for sub-enclosure $k, wall $j, only the temperature will be used.
-    #                         To specify the source term, set the temperature negative.")
-    #             end
-    #             for i = 1:mesh.Nx
-    #                 wallCount += 1
-    #                 # unpack the area of each wall
-    #                 Area[wallCount] = mesh.Area[k,wallCount]
-    #                 epsw[wallCount] = epsw_in[k,j]
-    #                 Tw[wallCount] = Tw_in[k,j]
-    #                 qw[wallCount] = qw_in[k,j]
-    #                 if Tw_in[k,j] < 0.0
-    #                     bin_Qw_known[wallCount] = 1
-    #                 end
-    #             end
-    #         end
-    #     end
-    # end
-
     Area = zeros(sum(sum(mesh.solidWalls))*mesh.Nx) # put the right areas into a vector
     wallCount = 0
     for i = 1:mesh.N_subs # for each sub enclosure
@@ -96,6 +66,7 @@ function steadyState(mesh::RayTracingMesh,FSS::Matrix{Float64},FSG::Matrix{Float
             end
         end
     end
+    
     # set the emissivities, temperatures and sources from the input
     wallCount = 0
     epsw = zeros(mesh.N_surfs)
@@ -117,55 +88,6 @@ function steadyState(mesh::RayTracingMesh,FSS::Matrix{Float64},FSG::Matrix{Float
             end
         end
     end
-
-    ##### OLD NEW STUFF
-    
-    # Area = zeros(sum(sum(mesh.solidWalls))*mesh.Nx) # put the right areas into a vector
-    # wallCount = 0
-    # for i = 1:mesh.N_subs # for each sub enclosure
-    #     for j = 1:4 # for each wall
-    #         if mesh.solidWalls[i][j] # if wall is solid
-    #             # now found out if everything was specified correctly
-    #             wallCount += 1
-
-    #             # if both a temperature and a source term was specified give a warning
-    #             if Tw_in[i,j] >= 0.0 && qw_in[i,j] != 0.0
-    #                 println("Both a temperature and a source term was specified for sub-enclosure $i, wall $j, only the temperature will be used.
-    #                         To specify the source term, set the temperature negative.")
-    #             end
-
-    #             # unpack the area of each wall
-    #             Area[mesh.Nx*(wallCount-1)+1:mesh.Nx*wallCount] = mesh.Area[i,(j-1)*mesh.Nx+1:j*mesh.Nx]
-    #         end
-    #     end
-    # end
-
-    # # found out which gas temperatures and source terms are fixed by the user
-    # for k = 1:mesh.N_subs # for each sub enclosure
-    #     # if both a temperature and a source term was specified give warning
-    #     if Tg_in[k] >= 0.0 && qg_in[k] != 0.0
-    #         println("Both a temperature and a source term was specified for the gas in sub-enclosure $k, only the temperature will be used.
-    #                 To specify the source term, set the temperature negative.")
-    #     end
-    # end
-
-    # # loop to unpack the volumes, temperatures and sources
-    # V_count = 0
-    # Volume = zeros(mesh.N_subs*mesh.Nx*mesh.Ny)
-    # Tg = zeros(mesh.N_subs*mesh.Nx*mesh.Ny)
-    # qg = zeros(mesh.N_subs*mesh.Nx*mesh.Ny)
-    # for k = 1:mesh.N_subs
-    #     for m = 1:mesh.Nx
-    #         for n = 1:mesh.Ny
-    #             V_count += 1
-    #             Volume[V_count] = mesh.Volume[k,m,n]
-    #             Tg[V_count] = Tg_in[k]
-    #             qg[V_count] = qg_in[k]
-    #         end
-    #     end
-    # end
-
-    #####
 
     sigma = 5.670374419e-08 # [W/m^2-K^4] Stefan-Boltzmann constant
 

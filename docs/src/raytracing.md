@@ -63,4 +63,11 @@ The sampling function prints its progress to the Julia REPL.
 end;
 ```
 
+It is recommended (but not mandatory) to save the exchange factor matrices to disk before continuing, to prevent loss of the data from a computer crash.
+This can be achieved in the following way (matrices are written to csv-files in the current working directory):
+
+```julia
+writeMatricesToCSV(FSS,FSG,FGS,FGG,mesh1,gas1,N_rays)
+```
+
 Now that the domain has been sampled and the exchange factors has been statistically measured the next step is to solve heat transfer problems.
