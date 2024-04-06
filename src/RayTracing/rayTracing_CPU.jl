@@ -32,8 +32,7 @@ function rayTracing_CPU(subNumber::Int64,wallNumber::Int64,
     alphaWalls = 1.0 # must be = 1
 
     # enter the multi-threaded loop
-    # Threads.@threads
-    for logicalCores = 1:nthreads
+    Threads.@threads for logicalCores = 1:nthreads
  
         # first check if all of the rays have been emitted
         while RayCountTotal[logicalCores] <= rays_per_thread

@@ -14,7 +14,7 @@ export writeMatricesToCSV # function
 
 # export functions for heat transfer calculation
 export readMatricesFromCSV # function
-export steadyState # function (2 methods)
+export steadyState # function
 export plotTemperatureField # function
 export validCrosbieSchrenker # function
 

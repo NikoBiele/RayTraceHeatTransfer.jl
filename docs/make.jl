@@ -7,7 +7,7 @@ using DataFrames
 include("../src/RayTraceHeatTransfer.jl")
 using .RayTraceHeatTransfer
 
-# Ensure the Documenter knows where to find the source files for documentation. hej
+# Ensure the Documenter knows where to find the source files for documentation.
 docroot = joinpath(@__DIR__, "src")
 
 makedocs(
@@ -33,10 +33,4 @@ makedocs(
         "Code Validation" => "validation.md",
         "Code" => "code.md"
         ]
-)
-
-deploydocs(
-    repo = "github.com/NikoBiele/RayTraceHeatTransfer.jl.git",
-    # target = "site",
-    # branch = "gh-pages",
 )

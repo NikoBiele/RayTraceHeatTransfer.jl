@@ -72,7 +72,7 @@ using Interpolations
     Tw_in = zeros(mesh1.N_subs,4)
     Tw_in[1,1] = Tw_hot # bottom wall
     println("Calculating steady state temperature distribution (bottom wall emitter).")
-    Tw, Tg, qw, qg = steadyStateRigorous(mesh1,FSS,FSG,FGS,FGG,
+    Tw, Tg, qw, qg = steadyState(mesh1,FSS,FSG,FGS,FGG,
                                         epsw_in,gas1,Tw_in,Tg_in,qw_in,qg_in);
     Tg_matrix = plotTemperatureField(mesh1,Tg); #,Tw); # optional wall temperatures
     Tg_bottom_1 = dropdims(Tg_matrix, dims=1)
@@ -81,7 +81,7 @@ using Interpolations
     Tw_in = zeros(mesh1.N_subs,4)
     Tw_in[1,2] = Tw_hot # right wall
     println("Calculating steady state temperature distribution (right wall emitter).")
-    Tw, Tg, qw, qg = steadyStateRigorous(mesh1,FSS,FSG,FGS,FGG,
+    Tw, Tg, qw, qg = steadyState(mesh1,FSS,FSG,FGS,FGG,
                                         epsw_in,gas1,Tw_in,Tg_in,qw_in,qg_in);
     Tg_matrix = plotTemperatureField(mesh1,Tg); #,Tw); # optional wall temperatures
     Tg_right_1 = dropdims(Tg_matrix, dims=1)
@@ -90,7 +90,7 @@ using Interpolations
     Tw_in = zeros(mesh1.N_subs,4)
     Tw_in[1,3] = Tw_hot # top wall
     println("Calculating steady state temperature distribution (top wall emitter).")
-    Tw, Tg, qw, qg = steadyStateRigorous(mesh1,FSS,FSG,FGS,FGG,
+    Tw, Tg, qw, qg = steadyState(mesh1,FSS,FSG,FGS,FGG,
                                         epsw_in,gas1,Tw_in,Tg_in,qw_in,qg_in);
     Tg_matrix = plotTemperatureField(mesh1,Tg); #,Tw); # optional wall temperatures
     Tg_top_1 = dropdims(Tg_matrix, dims=1)
@@ -99,7 +99,7 @@ using Interpolations
     Tw_in = zeros(mesh1.N_subs,4)
     Tw_in[1,4] = Tw_hot # left wall
     println("Calculating steady state temperature distribution (left wall emitter).")
-    Tw, Tg, qw, qg = steadyStateRigorous(mesh1,FSS,FSG,FGS,FGG,
+    Tw, Tg, qw, qg = steadyState(mesh1,FSS,FSG,FGS,FGG,
                                         epsw_in,gas1,Tw_in,Tg_in,qw_in,qg_in);
     Tg_matrix = plotTemperatureField(mesh1,Tg); #,Tw); # optional wall temperatures
     Tg_left_1 = dropdims(Tg_matrix, dims=1)
@@ -160,7 +160,7 @@ using Interpolations
     Tw_in = zeros(mesh1.N_subs,4)
     Tw_in[1,1] = Tw_hot # bottom wall
     println("Calculating steady state temperature distribution (bottom wall emitter).")
-    Tw, Tg, qw, qg = steadyStateRigorous(mesh1,FSS,FSG,FGS,FGG,
+    Tw, Tg, qw, qg = steadyState(mesh1,FSS,FSG,FGS,FGG,
                                         epsw_in,gas1,Tw_in,Tg_in,qw_in,qg_in);
     Tg_matrix = plotTemperatureField(mesh1,Tg); #,Tw); # optional wall temperatures
     Tg_bottom_2 = dropdims(Tg_matrix, dims=1)
@@ -169,7 +169,7 @@ using Interpolations
     Tw_in = zeros(mesh1.N_subs,4)
     Tw_in[1,2] = Tw_hot # right wall
     println("Calculating steady state temperature distribution (right wall emitter).")
-    Tw, Tg, qw, qg = steadyStateRigorous(mesh1,FSS,FSG,FGS,FGG,
+    Tw, Tg, qw, qg = steadyState(mesh1,FSS,FSG,FGS,FGG,
                                         epsw_in,gas1,Tw_in,Tg_in,qw_in,qg_in);
     Tg_matrix = plotTemperatureField(mesh1,Tg); #,Tw); # optional wall temperatures
     Tg_right_2 = dropdims(Tg_matrix, dims=1)
@@ -178,7 +178,7 @@ using Interpolations
     Tw_in = zeros(mesh1.N_subs,4)
     Tw_in[1,3] = Tw_hot # top wall
     println("Calculating steady state temperature distribution (top wall emitter).")
-    Tw, Tg, qw, qg = steadyStateRigorous(mesh1,FSS,FSG,FGS,FGG,
+    Tw, Tg, qw, qg = steadyState(mesh1,FSS,FSG,FGS,FGG,
                                         epsw_in,gas1,Tw_in,Tg_in,qw_in,qg_in);
     Tg_matrix = plotTemperatureField(mesh1,Tg); #,Tw); # optional wall temperatures
     Tg_top_2 = dropdims(Tg_matrix, dims=1)
@@ -187,7 +187,7 @@ using Interpolations
     Tw_in = zeros(mesh1.N_subs,4)
     Tw_in[1,4] = Tw_hot # left wall
     println("Calculating steady state temperature distribution (left wall emitter).")
-    Tw, Tg, qw, qg = steadyStateRigorous(mesh1,FSS,FSG,FGS,FGG,
+    Tw, Tg, qw, qg = steadyState(mesh1,FSS,FSG,FGS,FGG,
                                         epsw_in,gas1,Tw_in,Tg_in,qw_in,qg_in);
     Tg_matrix = plotTemperatureField(mesh1,Tg); #,Tw); # optional wall temperatures
     Tg_left_2 = dropdims(Tg_matrix, dims=1)
