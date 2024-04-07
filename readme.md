@@ -6,7 +6,7 @@ Notice: This repository is still under development and breaking changes may occu
 
 ## Documentation
 
-The documentation of this package can be found [here](https://nikobiele.github.io/RayTraceHeatTransfer.jl/heattransfer/).
+The documentation of this package can be found [here](https://nikobiele.github.io/RayTraceHeatTransfer.jl/).
 
 ## References
 
