@@ -45,7 +45,7 @@ function validCrosbieSchrenker(N_rays_tot::Int64,Ndim::Int64,Tw_hot::Float64)
 
     # Here I make the calculation run in parallel on all available threads
     if displayWhileTracing
-        nthreads = 1 # 
+        nthreads = 1
     else
         nthreads = Threads.nthreads()
     end
@@ -78,21 +78,9 @@ function validCrosbieSchrenker(N_rays_tot::Int64,Ndim::Int64,Tw_hot::Float64)
     Tg_in = zeros(mesh1.N_subs) .- 1 # unknown gas temperature
     qg_in = zeros(mesh1.N_subs) #  radiative equilibrium
 
-    # set the emissivities
-    # convergence criteria (which ever happens first)
-    maxIter = 50
-    relTol = 1e-3
-
     println("Calculating steady state temperature distribution.")
-    Tw, Tg, Gw, Gg, iter_count, Grelabs = steadyStateRigorous(mesh1,FSS,FSG,FGS,FGG,
-                                                        epsw_in,gas1,maxIter,relTol,
-                                                        Tw_in,Tg_in,qw_in,qg_in);
-
-    display(plot(Grelabs[3:end],title="Convergence history",legend=false))
-    display(xlabel!("Iterations"))
-    display(ylabel!("Relative change in heat flux"))
-    println("Waiting 5 seconds to view convergence history...")
-    sleep(5.0)
+    Tw, Tg, qw, qg = steadyState(mesh1,FSS,FSG,FGS,FGG,
+                                epsw_in,gas1,Tw_in,Tg_in,qw_in,qg_in);
 
     println("Plotting temperature distribution in the gas.")
     Tg_matrix = plotTemperatureField(mesh1,Tg); #,Tw); # optional wall temperatures
