@@ -82,7 +82,7 @@ function rayTracing_CPU(subNumber::Int64,wallNumber::Int64,
 
                         # update position and save old point for plotting
                         pointOld = point
-                        point = point + (S-1e-9)*i1
+                        point = point + (S-1e-12)*i1
 
                         # means we hit the gas and either absorp or scatters
                         # if we absorp, we increase counter and emit a new ray
@@ -163,7 +163,7 @@ function rayTracing_CPU(subNumber::Int64,wallNumber::Int64,
 
                         pointOld = point # save old point before update (for plotting)
                         S = S - u_real # update the travelled distance
-                        point = point + (u_real-1e-9)*i1 # go almost into the wall (for plotting)
+                        point = point + (u_real-1e-12)*i1 # go almost into the wall (for plotting)
 
                         # then go to reflect or absorp
                         R_alpha = rand() # sample surface
@@ -201,7 +201,7 @@ function rayTracing_CPU(subNumber::Int64,wallNumber::Int64,
                     else # ray hits an imaginary boundary
 
                         pointOld = point # save old point before update
-                        point = point + (u_real+1e-10).*i1 # transfer ray to next enclosure
+                        point = point + (u_real+1e-12).*i1 # transfer ray to next enclosure
                         
                         if displayWhileTracing
                             display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
@@ -211,6 +211,28 @@ function rayTracing_CPU(subNumber::Int64,wallNumber::Int64,
 
                         # here we find out which (coarse) enclosure we ended up in
                         @inline N_subs_count = whichSubEnclosure(point, mesh)
+
+                        if N_subs_count === nothing
+                            # ray has escaped the domain (should be very rare)
+                            # go back one small step and absorb the ray
+                            # then break to emit new ray
+                            point = point - 2*1e-12.*i1 # go back one small step (into nearby cell)
+
+                            # here we find out which (fine) enclosure we are in
+                            @inline N_subs_count = whichSubEnclosure(point, mesh)
+                            @inline xCount, yCount = whichCell(point, mesh)
+                            yCount = yCount - mesh.Ny*(N_subs_count-1)
+
+                            N_abs_gas[N_subs_count, xCount, yCount, logicalCores] += 1 # increase counter (on fine grid)
+
+                            if displayWhileTracing # green for absorption
+                                display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
+                                display(scatter!((point[1], point[2]), color = "green", label = "", markersize = 2))
+                            end
+
+                            emitNewRay = true
+                            break
+                        end
 
                         # get distance to surfaces
                         @inline u_real, u_index = distToSurface(point, i1, mesh, N_subs_count)
@@ -247,7 +269,7 @@ function rayTracing_CPU(subNumber::Int64,wallNumber::Int64,
                         
                         pointOld = point # save old point before update (for plotting)
                         S = S - u_real # update the travelled distance
-                        point = point + (u_real-1e-9)*i1 # go almost into the wall (for plotting)
+                        point = point + (u_real-1e-12)*i1 # go almost into the wall (for plotting)
 
                         # then go to reflect or absorp
                         R_alpha = rand() # sample surface
@@ -286,7 +308,7 @@ function rayTracing_CPU(subNumber::Int64,wallNumber::Int64,
                     else # ray hits an imaginary boundary
 
                         pointOld = point # save old point before update
-                        point = point + (u_real+1e-10).*i1 # transfer ray to next enclosure
+                        point = point + (u_real+1e-12).*i1 # transfer ray to next enclosure
 
                         if displayWhileTracing
                             display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
@@ -297,6 +319,28 @@ function rayTracing_CPU(subNumber::Int64,wallNumber::Int64,
                         # here we find out which (coarse) enclosure we ended up in
                         # fineMesh = false
                         @inline N_subs_count = whichSubEnclosure(point, mesh)
+
+                        if N_subs_count === nothing
+                            # ray has escaped the domain (should be very rare)
+                            # go back one small step and absorb the ray
+                            # then break to emit new ray
+                            point = point - 2*1e-12.*i1 # go back one small step (into nearby cell)
+
+                            # here we find out which (fine) enclosure we are in
+                            @inline N_subs_count = whichSubEnclosure(point, mesh)
+                            @inline xCount, yCount = whichCell(point, mesh)
+                            yCount = yCount - mesh.Ny*(N_subs_count-1)
+
+                            N_abs_gas[N_subs_count, xCount, yCount, logicalCores] += 1 # increase counter (on fine grid)
+
+                            if displayWhileTracing # green for absorption
+                                display(plot!([pointOld[1], point[1]], [pointOld[2], point[2]], label = ""))
+                                display(scatter!((point[1], point[2]), color = "green", label = "", markersize = 2))
+                            end
+
+                            emitNewRay = true
+                            break
+                        end
                         
                         # get distance to surfaces
                         @inline u_real, u_index = distToSurface(point, i1, mesh, N_subs_count)  

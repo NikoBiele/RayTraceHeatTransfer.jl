@@ -57,4 +57,6 @@ function whichSubEnclosure(point::SVector{2,Float64},mesh::RayTracingMesh)
             end
         end
     end
+
+    return nothing
 end
