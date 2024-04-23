@@ -1,5 +1,7 @@
 # RayTraceHeatTransfer.jl
 
+[![Build Status](https://github.com/NikoBiele/RayTraceHeatTransfer.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/NikoBiele/RayTraceHeatTransfer.jl/actions/workflows/CI.yml?query=branch%3Amain)
+
 2D enclosure radiative heat transfer with participating media in Julia.
 
 Notice: This repository is still under development and breaking changes may occur.
