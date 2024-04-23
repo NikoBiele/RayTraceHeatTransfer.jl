@@ -10,7 +10,7 @@ SubEnclosure(point1::Vector{Float64},point2::Vector{Float64},
 The first four inputs are the bounding points.
 The next four inputs state whether the walls are solid or empty.
 """
-mutable struct SubEnclosure
+struct SubEnclosure
     # this struct is used when generating the mesh in a modular way
 
     point1::SVector{2,Float64} # bottom left vertex
