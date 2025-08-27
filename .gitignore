@@ -1,3 +1,5 @@
-src/privateTesting.jl
-src/makie3dTesting.jl
-docs/build/
+_old/
+_docs/
+_.github/
+test3d.jl
+tester.jl

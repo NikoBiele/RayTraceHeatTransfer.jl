@@ -1,35 +1,40 @@
-module RayTracing
+# direct ray tracing 2D
+include("./RayTracing2D/DirectTracing/Emitter.jl")
+include("./RayTracing2D/DirectTracing/directRayTracing.jl")
+include("./RayTracing2D/DirectTracing/isotropicScatter.jl")
+include("./RayTracing2D/DirectTracing/prepareEmitters.jl")
+include("./RayTracing2D/DirectTracing/sampleReflectionDirection.jl")
+include("./RayTracing2D/DirectTracing/traceSingleRay.jl")
+include("./RayTracing2D/DirectTracing/updateHeatSource.jl")
 
-# import dependencies
-using Plots
+# exchange factors
+include("./RayTracing2D/ExchangeFactors/checkEnergyConservation.jl")
+include("./RayTracing2D/ExchangeFactors/exchangeRayTracing.jl")
+include("./RayTracing2D/ExchangeFactors/parallelRayTracing.jl")
+include("./RayTracing2D/ExchangeFactors/smoothExchangeFactors.jl")
+include("./RayTracing2D/ExchangeFactors/checkReciprocity.jl")
 
-# export functions
-export sampleDomain
-export writeMatricesToCSV
+# shared functions
+include("./RayTracing2D/Shared/traceRay.jl")
+include("./RayTracing2D/Shared/createIndexMapping.jl")
+include("./RayTracing2D/Shared/distToSurface.jl")
+include("./RayTracing2D/Shared/emitSurfaceRay.jl")
+include("./RayTracing2D/Shared/emitVolumeRay.jl")
+include("./RayTracing2D/Shared/findFace.jl")
+include("./RayTracing2D/Shared/findNearestFace.jl")
+include("./RayTracing2D/Shared/getGlobalIndex.jl")
+include("./RayTracing2D/Shared/getMappings.jl")
+include("./RayTracing2D/Shared/lambertSample3D.jl")
+include("./RayTracing2D/Shared/multiDispatchRayTrace.jl")
 
-# external dependencies
-using StaticArrays
-using LinearAlgebra
-using CSV
-using DataFrames
+# ray tracing 3D
+# empty for now
 
-# internal dependencies
-using ..Geometry
-
-# include code
-include("coefs_exchange.jl")
-include("lambertSample3D.jl")
-include("rayTracing_CPU.jl")
-include("sampleDomain.jl")
-include("sampleSurface.jl")
-include("sampleSurfaces.jl")
-include("sampleVolume.jl")
-include("sampleVolumes.jl")
-include("solidWalls.jl")
-include("distToSurface.jl")
-include("whichCell.jl")
-include("whichSubEnclosure.jl")
-include("isotropicScatter.jl")
-include("writeMatricesToCSV.jl")
-
-end
+# view factors 3D
+include("./ViewFactor3D/Cl.jl")
+include("./ViewFactor3D/edgePairParameters.jl")
+include("./ViewFactor3D/f.jl")
+include("./ViewFactor3D/fparallel.jl")
+include("./ViewFactor3D/imagLi_2.jl")
+include("./ViewFactor3D/viewFactor.jl")
+include("./ViewFactor3D/exchangeFactors3D.jl")

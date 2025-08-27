@@ -1,43 +1,30 @@
 module RayTraceHeatTransfer
 
-# export functions and structs for geometry creation
-export SubEnclosure # struct
-export displayGeometry # function
-export meshGeometry # function
-export RayTracingMesh # struct
-export displayMesh # function
-export GasProperties # struct
-
-# export functions for ray tracing
-export sampleDomain # function
-export writeMatricesToCSV # function
-
-# export functions for heat transfer calculation
-export readMatricesFromCSV # function
-export steadyState # function
-export plotTemperatureField # function
-export validCrosbieSchrenker # function
-
-# export viewFactor function
-export viewFactor
-
-# include code
-include("Geometry/Geometry.jl")
-include("RayTracing/RayTracing.jl")
-include("HeatTransfer/HeatTransfer.jl")
-include("ViewFactor3D/ViewFactor3D.jl")
-
-# internal dependencies
-using .Geometry
-using .RayTracing
-using .HeatTransfer
-using .ViewFactor3D
+const STEFAN_BOLTZMANN = 5.670374419e-8
 
 # external dependencies
+using GLMakie
+using GeometryBasics
 using StaticArrays
 using LinearAlgebra
 using Plots
-using CSV
-using DataFrames
+using Random
+using ProgressMeter
+using Measurements
+using Base.Threads
+using StatsBase
+
+# export
+# 2D participating media
+export PolyFace2D, RayTracingMeshOptim, plotMesh2D,
+        GasProperties, steadyState2D!, plotField2D,
+# 3D transparent medium
+        Domain3D_faces, plotMesh3D, steadyState3D!,
+        plotField3D
+
+# include code
+include("./Domains/domains.jl")
+include("./HeatTransfer/heatTransfer.jl")
+include("./RayTracing/rayTracing.jl")
 
 end

@@ -1,27 +1,7 @@
-module HeatTransfer
-
-# export user functions
-export readMatricesFromCSV
-export steadyState
-export plotTemperatureField
-export validCrosbieSchrenker
-
-# external dependencies
-using CSV
-using DataFrames
-using Plots
-using StaticArrays
-using LinearAlgebra
-
-# internal dependencies
-using ..Geometry
-using ..RayTracing
-
-# include code
-include("readMatricesFromCSV.jl")
-# include("steadyStateApprox.jl")
-include("steadyStateRigorous.jl")
-include("plotTemperatureField.jl")
-include("validCrosbieSchrenker.jl")
-
-end
+# 2D
+include("./heatTransfer2D/Gasproperties.jl")
+include("./heatTransfer2D/steadyState2D.jl")
+include("./heatTransfer2D/plotField2D.jl")
+# 3D
+include("./heatTransfer3D/steadyState3D.jl")
+include("./heatTransfer3D/plotField3D.jl")
