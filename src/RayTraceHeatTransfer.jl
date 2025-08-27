@@ -23,8 +23,8 @@ export PolyFace2D, RayTracingMeshOptim, plotMesh2D,
         plotField3D
 
 # include code
-include("./Domains/domains.jl")
-include("./HeatTransfer/heatTransfer.jl")
-include("./RayTracing/rayTracing.jl")
+include("Domains/domains.jl")
+include("HeatTransfer/heatTransfer.jl")
+include("RayTracing/rayTracing.jl")
 
 end
