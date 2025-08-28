@@ -1,4 +1,5 @@
-function plotMesh2D(ax, faces::RayTracingMeshOptim; superfaces=false, wallNumbers=[], volumeNumbers=[], color=:lightblue, strokecolor=:black, strokewidth=1)
+function RayTraceHeatTransfer.plotMesh2D(ax, faces::RayTracingMeshOptim; superfaces=false,
+                wallNumbers=[], volumeNumbers=[], color=:lightblue, strokecolor=:black, strokewidth=1)
 
     function plot_volume(ax, face::PolyFace2D, index=nothing)
         Makie.poly!(ax, Point2f[face.vertices...], color=(color, 0.5), strokecolor=strokecolor, strokewidth=strokewidth)

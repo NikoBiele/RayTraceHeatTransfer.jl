@@ -1,4 +1,6 @@
-function plotField2D(mesh::RayTracingMeshOptim; field::Symbol=:T, include_walls::Bool=false, minmax::Union{Nothing, Tuple{Float64, Float64}}=nothing) # where {G<:AbstractFloat, T} # Vector{PolyFace2D{G,T}}
+function RayTraceHeatTransfer.plotField2D(mesh::RayTracingMeshOptim; field::Symbol=:T,
+                            include_walls::Bool=false, minmax::Union{Nothing, Tuple{Float64, Float64}}=nothing)
+    
     # Function to create a shape for plotting
     function shape(vertices)
         Plots.Shape([vert[1] for vert in vertices], [vert[2] for vert in vertices])
@@ -66,18 +68,13 @@ function plotField2D(mesh::RayTracingMeshOptim; field::Symbol=:T, include_walls:
 
     # Add colorbar
     if minmax !== nothing
-        # vmin, vmax = minmax
-        vmin, vmax = (500.0, 900.0)
+        vmin, vmax = minmax
     end
-    Plots.plot!(p, colorbar=true, clims=(vmin, vmax), color=:thermal, dpi=1000) #, colorbar_title="Temperature / K")
+    Plots.plot!(p, colorbar=true, clims=(vmin, vmax), color=:thermal, dpi=1000)
 
-    # Set labels and title
-    # Plots.xlabel!(p, "position (m)")
-    # Plots.ylabel!(p, "position (m)")
-    # Plots.title!(p, "Distribution of $field" * (include_walls ? " (Gas and Walls)" : " (Gas)"))
-    Plots.plot!(p, xlabel=L"\mathrm{position\;(m)}", 
-                    ylabel=L"\mathrm{position\;(m)}",
-                    # colorbar_title=L"Temperature\;(K)",
+    Plots.plot!(p, xlabel="Position (m)", 
+                    ylabel="Position (m)",
+                    title="Distribution of $field",
                     guidefontsize=20,
                     tickfontsize=18,
                     colorbar_titlefontsize=20,
@@ -86,19 +83,10 @@ function plotField2D(mesh::RayTracingMeshOptim; field::Symbol=:T, include_walls:
                     xtickfont=font(18, "Computer Modern"),
       ytickfont=font(18, "Computer Modern"),
       colorbar_tickfont=font(18, "Computer Modern"),
-      colorbar_title_margin=10)    # More space between colorbar and title)
+      colorbar_title_margin=10)
 
       Plots.xlims!(p, 0.0, 1.0)
       Plots.ylims!(p, 0.0, 1.0)
-    #   # Get plot dimensions for annotation positioning
-    #     xrange = [0.0, 1.0]  # Your position range
-    #     yrange = [0.0, 1.0]  # Your position range
-    #     plot_width = 1.0
-    #     plot_height = 1.0
-
-# # Add custom colorbar title annotation
-# annotate!(p, [(xrange[2] + plot_width*0.6, yrange[1] + plot_height*0.5, 
-#                Plots.text(L"\mathrm{Temperature\;(K)}", 20, :center, rotation=90))])
 
     display(p)
     return p
