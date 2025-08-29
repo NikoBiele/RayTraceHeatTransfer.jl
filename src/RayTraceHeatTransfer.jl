@@ -12,14 +12,6 @@ using Measurements
 using Base.Threads
 using StatsBase
 
-# export
-# 2D participating media
-export PolyFace2D, RayTracingMeshOptim, plotMesh2D,
-        GasProperties, steadyState2D!, plotField2D,
-# 3D transparent medium
-        Domain3D_faces, plotMesh3D, steadyState3D!,
-        plotField3D
-
 # Declare plotting function names so they can be extended by an extension:
 function plotMesh2D end
 function plotField2D end
@@ -39,4 +31,12 @@ include(joinpath(@__DIR__, "Domains",    "domains.jl"))
 include(joinpath(@__DIR__, "HeatTransfer","heatTransfer.jl"))
 include(joinpath(@__DIR__, "RayTracing", "rayTracing.jl"))
 
+# export
+# 2D participating media
+export PolyFace2D, RayTracingMeshOptim, plotMesh2D,
+        GasProperties, steadyState2D!, plotField2D,
+# 3D transparent medium
+        Domain3D_faces, plotMesh3D, steadyState3D!,
+        plotField3D
+        
 end
