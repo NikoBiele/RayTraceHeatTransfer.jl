@@ -1,4 +1,4 @@
-module RayTraceHeatTransferMakieExt
+module RayTraceHeatTransfer_GLMakieExt
 
 using GLMakie
 using RayTraceHeatTransfer
