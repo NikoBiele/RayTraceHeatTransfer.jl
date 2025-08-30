@@ -1,6 +1,6 @@
-module RayTraceHeatTransfer_GLMakieExt
+module RayTraceHeatTransfer_MakieExt
 
-using GLMakie
+using Makie
 using RayTraceHeatTransfer
 import RayTraceHeatTransfer: plotMesh2D, plotMesh3D, plotField3D
 
