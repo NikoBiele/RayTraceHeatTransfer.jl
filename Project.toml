@@ -1,7 +1,7 @@
 name = "RayTraceHeatTransfer"
 uuid = "7cf1493d-886e-405c-b582-53b49fa147b6"
 authors = ["Nikolaj Maack Bielefeld"]
-version = "0.3.3"
+version = "0.3.4"
 
 [deps]
 GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
