@@ -1,4 +1,4 @@
-module RayTraceHeatTransfer_MakieExt
+module RayTraceHeatTransferMakieExt
 
 using Makie
 using RayTraceHeatTransfer
