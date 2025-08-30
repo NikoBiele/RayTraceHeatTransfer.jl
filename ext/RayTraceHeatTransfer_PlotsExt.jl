@@ -1,4 +1,4 @@
-module RayTraceHeatTransferPlotsExt
+module RayTraceHeatTransfer_PlotsExt
 
 using Plots
 using RayTraceHeatTransfer
