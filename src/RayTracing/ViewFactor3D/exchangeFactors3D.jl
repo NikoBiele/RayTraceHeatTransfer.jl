@@ -58,7 +58,15 @@ function exchangeFactors3D!(superFaces::Vector{Face3D})
         end
     end
 
-    F, _ = smooth_exchange_factors_ultimate!(F, areas_linear, nothing, GasProperties(1.0, 1.0), 1, false; max_iterations=200, tolerance=eps(Float64))
+    # F, _ = smooth_exchange_factors_ultimate!(F, areas_linear, nothing, GasProperties(1.0, 1.0), 1, false; max_iterations=200, tolerance=eps(Float64))
+
+    # For 3D case with only surface elements (no participating media)
+    surface_areas = areas_linear
+    volumes = Float64[]  # Empty vector since no volume elements
+    volume_betas = Float64[]  # Empty vector since no volume elements
+
+    F, _ = smooth_exchange_factors_ultimate!(F, surface_areas, volumes, volume_betas, 
+                                        1, false; max_iterations=200, tolerance=eps(Float64))
 
     return F
     
