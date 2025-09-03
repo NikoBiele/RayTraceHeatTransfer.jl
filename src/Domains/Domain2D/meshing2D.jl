@@ -200,6 +200,10 @@ function addSubFace!(superFace::PolyFace2D{G,P}, subFace::PolyFace2D{G,P}) where
     # next, update the properties of the added subface
     # the subface inherits the properties of the superface
 
+    # inherit extinction properties
+    subFace.kappa_g = superFace.kappa_g
+    subFace.sigma_s_g = superFace.sigma_s_g
+
     # state variables (volume)
     subFace.j_g = superFace.j_g # outgoing power [W]
     subFace.g_a_g = superFace.g_a_g # incident absorbed power [W]
@@ -290,6 +294,7 @@ function addSubFace!(superFace::PolyFace2D{G,P}, subFace::PolyFace2D{G,P}) where
 
 end
 
+# inheritSurfaceProperties! function remains exactly the same - no changes needed
 function inheritSurfaceProperties!(superFace::PolyFace2D{G,T}, subFace::PolyFace2D{G,T}; from=i, to=j) where {G,T}
     # the subFace inherits the properties of the superFace
     # boundary properties
@@ -305,26 +310,4 @@ function inheritSurfaceProperties!(superFace::PolyFace2D{G,T}, subFace::PolyFace
     subFace.q_w[to] = superFace.q_w[from] # vector of source terms [W]
     subFace.T_in_w[to] = superFace.T_in_w[from] # vector of input temperatures [K]
     subFace.T_w[to] = superFace.T_w[from] # vector of temperatures [K]
-end
-
-function meshGeometry(faces::Vector{PolyFace2D{T}}, Ndim::Int) where T
-
-    # First generate information describing the overall sub-enclosures.
-    faceNew = PolyFace2D{T}[]
-
-    for face in faces
-        if length(face.vertices) == 3
-            # if face is a triangle
-
-            push!(faceNew, meshTriangle(face, Ndim))
-            
-        elseif length(face.vertices) == 4
-            # if face is a quadrilateral
-            
-            push!(faceNew, meshQuad(face, Ndim))
-        end
-    end
-
-    return faceNew
-
 end

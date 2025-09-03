@@ -1,6 +1,3 @@
-# Ultra memory-efficient implementation using ONLY ONE matrix
-# Convergence measured by d = ||E*F - F^T*E||_F (no need to store previous F)
-
 # Step 1: F = E * F (row scaling by diagonal E)
 function step1_scale_rows_inplace!(F::Matrix{T}, scaling_factors::Vector{T}) where T
     n = size(F, 1)
@@ -150,13 +147,48 @@ function compute_convergence_metric_parallel(F::Matrix{T}, scaling_factors::Vect
     return sqrt(d_squared[])
 end
 
-# ULTIMATE memory-efficient algorithm - single matrix only!
-function smooth_exchange_factors_ultimate!(F::Matrix{T}, surface_areas::Vector{P}, volumes, 
-    gas::GasProperties, rays_per_emitter::Int, uncertain::Bool; 
-    max_iterations::Int=100, tolerance::P=eps(Float32)) where {T, P}
+# Updated smoothing algorithm - reads extinction directly from faces
+function smooth_exchange_factors!(F::Matrix{T}, rtm::RayTracingMeshOptim, 
+                                 surface_mapping::Dict, volume_mapping::Dict,
+                                 rays_per_emitter::Int, uncertain::Bool; 
+                                 max_iterations::Int=100, tolerance=nothing) where {T}
+    
+    num_surfaces = length(surface_mapping)
+    num_volumes = length(volume_mapping)
+    
+    # Extract surface areas, volumes, and local extinction - read directly from faces
+    surface_areas = Vector{T}()
+    volumes = Vector{T}() 
+    volume_betas = Vector{T}()  # Local extinction coefficients
+    
+    for (coarse_index, coarse_face) in enumerate(rtm.coarse_mesh)
+        for (fine_index, fine_face) in enumerate(rtm.fine_mesh[coarse_index])
+            for (wall_index, is_solid) in enumerate(fine_face.solidWalls)
+                if is_solid
+                    push!(surface_areas, fine_face.area[wall_index])
+                end
+            end
+            push!(volumes, fine_face.volume)
+            # Always read local extinction directly from face
+            local_beta = fine_face.kappa_g + fine_face.sigma_s_g
+            push!(volume_betas, local_beta)
+        end
+    end
+    
+    # Call ultimate smoothing with local extinction
+    return smooth_exchange_factors_ultimate!(F, surface_areas, volumes, volume_betas, 
+                                           rays_per_emitter, uncertain; 
+                                           max_iterations=max_iterations, 
+                                           tolerance=tolerance)
+end
+
+function smooth_exchange_factors_ultimate!(F::Matrix{T}, surface_areas::Vector{P}, 
+                                         volumes::Vector{P}, volume_betas::Vector{P},
+                                         rays_per_emitter::Int, uncertain::Bool; 
+                                         max_iterations::Int=100, tolerance=nothing) where {T, P}
     
     num_surfaces = length(surface_areas)
-    num_volumes = volumes === nothing ? 0 : length(volumes)
+    num_volumes = length(volumes)
     num_elements = num_surfaces + num_volumes
     
     # Determine underlying numeric types
@@ -172,14 +204,18 @@ function smooth_exchange_factors_ultimate!(F::Matrix{T}, surface_areas::Vector{P
         P
     end
     
-    # Convert tolerance to numeric type
-    numeric_tolerance = if P <: Measurement
-        Measurements.value(tolerance)
+    # Adaptive tolerance based on input type
+    numeric_tolerance = if tolerance === nothing
+        eps(NumericT)
     else
-        tolerance
+        if typeof(tolerance) <: Measurement
+            Measurements.value(tolerance)
+        else
+            tolerance
+        end
     end
     
-    # Extract numeric values from input matrix (this becomes our ONLY working matrix)
+    # Extract numeric values from input matrix
     F_work = Matrix{NumericT}(undef, size(F))
     for i in 1:size(F, 1), j in 1:size(F, 2)
         F_work[i, j] = if T <: Measurement
@@ -193,11 +229,10 @@ function smooth_exchange_factors_ultimate!(F::Matrix{T}, surface_areas::Vector{P
     use_parallel = num_elements > 1000 && Threads.nthreads() > 1
     
     println("Matrix size: $(num_elements)×$(num_elements)")
-    println("Available threads: $(Threads.nthreads())")
     println("Strategy: $(use_parallel ? "Parallel" : "Serial")")
-    println("Memory usage: ONLY 1 matrix + 1 vector (ultimate efficiency!)")
+    println("Tolerance: $numeric_tolerance")
 
-    # Pre-compute scaling factors (only vector needed)
+    # Pre-compute scaling factors with local extinction
     scaling_factors = Vector{NumericT}(undef, num_elements)
     for i in 1:num_elements
         if i <= num_surfaces
@@ -208,13 +243,15 @@ function smooth_exchange_factors_ultimate!(F::Matrix{T}, surface_areas::Vector{P
                 area_val
             end
         else
-            vol_val = volumes[i - num_surfaces]
+            vol_idx = i - num_surfaces
+            vol_val = volumes[vol_idx]
+            beta_val = volume_betas[vol_idx]  # Use local extinction
+            
             vol_numeric = if vol_val isa Measurement
                 Measurements.value(vol_val)
             else
                 vol_val
             end
-            beta_val = gas.beta
             beta_numeric = if beta_val isa Measurement
                 Measurements.value(beta_val)
             else
@@ -256,13 +293,13 @@ function smooth_exchange_factors_ultimate!(F::Matrix{T}, surface_areas::Vector{P
         d = convergence_metric(F_work, scaling_factors)
 
         if d < numeric_tolerance
-            println("Converged after $iteration iterations. d = ||E*F - F^T*E||_F = $d")
+            println("Converged after $iteration iterations. d = $d")
             break
         end
 
         # Progress reporting
         if iteration == 1 || iteration % 10 == 0
-            println("Iteration $iteration: d = ||E*F - F^T*E||_F = $d")
+            println("Iteration $iteration: d = $d")
         end
 
         if iteration == max_iterations
@@ -283,84 +320,4 @@ function smooth_exchange_factors_ultimate!(F::Matrix{T}, surface_areas::Vector{P
     else
         return F_work, zeros(NumericT, size(F_work))
     end
-end
-
-# Version that modifies input matrix directly (absolute minimal memory)
-function smooth_exchange_factors_modify_input!(F::Matrix{T}, surface_areas::Vector{P}, volumes::Vector{P}, 
-    gas::GasProperties; max_iterations::Int=100, tolerance::P=1e-14) where {T, P}
-    
-    num_surfaces = length(surface_areas)
-    num_volumes = length(volumes)
-    num_elements = num_surfaces + num_volumes
-    
-    # Convert tolerance 
-    numeric_tolerance = if P <: Measurement
-        Measurements.value(tolerance)
-    else
-        tolerance
-    end
-    
-    use_parallel = num_elements > 1000 && Threads.nthreads() > 1
-    
-    println("Matrix size: $(num_elements)×$(num_elements)")
-    println("Memory usage: ZERO additional matrices - modifying input F directly!")
-
-    # Pre-compute scaling factors (minimal memory - just one vector)
-    scaling_factors = Vector{T}(undef, num_elements)
-    for i in 1:num_elements
-        if i <= num_surfaces
-            scaling_factors[i] = surface_areas[i]
-        else
-            vol_val = volumes[i - num_surfaces]
-            scaling_factors[i] = 4 * gas.beta * vol_val
-        end
-    end
-    
-    for iteration in 1:max_iterations
-        # Step 1: F = E * F
-        if use_parallel
-            step1_scale_rows_inplace_parallel!(F, scaling_factors)
-        else
-            step1_scale_rows_inplace!(F, scaling_factors)
-        end
-        
-        # Step 2: F = 0.5 * (F + F^T)
-        if use_parallel
-            step2_symmetrize_inplace_parallel!(F)
-        else
-            step2_symmetrize_inplace!(F)
-        end
-        
-        # Step 3: F = E^(-1) * F
-        if use_parallel
-            step3_scale_rows_inverse_inplace_parallel!(F, scaling_factors)
-        else
-            step3_scale_rows_inverse_inplace!(F, scaling_factors)
-        end
-        
-        # Step 4: F = row_normalize(F)
-        if use_parallel
-            step4_normalize_rows_inplace_parallel!(F)
-        else
-            step4_normalize_rows_inplace!(F)
-        end
-
-        # Convergence check: d = ||E*F - F^T*E||_F (uses only scalars)
-        d = if use_parallel
-            compute_convergence_metric_parallel(F, scaling_factors)
-        else
-            compute_convergence_metric(F, scaling_factors)
-        end
-
-        if d < numeric_tolerance
-            println("Converged after $iteration iterations. d = $d")
-            break
-        end
-
-        if iteration % 10 == 0
-            println("Iteration $iteration: d = $d")
-        end
-    end
-    
-    return F  # F has been modified in-place
 end

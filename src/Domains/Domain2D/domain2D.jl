@@ -19,6 +19,10 @@ mutable struct PolyFace2D{G<:AbstractFloat, T}
     # boundary properties
     epsilon::Vector{T}
 
+    # local gas extinction properties
+    kappa_g::T # absorption coefficient [m^-1]
+    sigma_s_g::T # scattering coefficient [m^-1]
+
     # state variables (volume)
     j_g::T # outgoing power [W]
     g_a_g::T # incident absorbed power [W]
@@ -61,6 +65,7 @@ mutable struct RayTracingMesh{VPF,VVPF,MT,MTU,VT,DIII,DII,BOO,FLOA,GRID}
     max_reciprocity_error::FLOA
     conservation_satisfied::BOO
     max_conservation_error::FLOA
+    uniform_extinction::Bool
 end
 
 struct GridCell{G,P}
@@ -107,7 +112,7 @@ function RayTracingMesh(faces::Vector{PolyFace2D{G,T}}, Ndiv::Vector{Tuple{P,P}}
     z1 = zeros(T, 2, 2)
     z2 = zeros(T, 2, 2) # uncertainty possibility
     
-    RayTracingMesh(
+    rtm = RayTracingMesh(
         coarse_mesh, 
         fine_mesh,
         coarse_grid,
@@ -123,8 +128,13 @@ function RayTracingMesh(faces::Vector{PolyFace2D{G,T}}, Ndiv::Vector{Tuple{P,P}}
         false,
         -one(G), # Float32(-1.0),
         false,
-        -one(G) # Float32(-1.0)
+        -one(G), # Float32(-1.0)
+        false,
     )
+
+    rtm.uniform_extinction = validate_extinction_consistency!(rtm)
+
+    return rtm
 end
 
 # Bounding box for fast rejection tests
@@ -164,6 +174,7 @@ mutable struct RayTracingMeshOptim{VPF,VVPF,MT,MTU,VT,DIII,DII,BOO,FLOA,GRID}
     max_reciprocity_error::FLOA
     conservation_satisfied::BOO
     max_conservation_error::FLOA
+    uniform_extinction::Bool
     
     # Optimized cache structures
     coarse_face_cache::Vector{PolyFace2D}  # Flattened for direct indexing
@@ -252,12 +263,12 @@ function RayTracingMeshOptim(rtm::RayTracingMesh)
         rtm.F_raw, rtm.F_raw_uncertain, rtm.F_smooth, rtm.F_smooth_uncertain,
         rtm.surface_areas, rtm.volumes, rtm.surface_mapping, rtm.volume_mapping,
         rtm.reciprocity_satisfied, rtm.max_reciprocity_error,
-        rtm.conservation_satisfied, rtm.max_conservation_error,
+        rtm.conservation_satisfied, rtm.max_conservation_error, rtm.uniform_extinction,
         coarse_face_cache, fine_face_cache,
         coarse_wall_normals, coarse_wall_midpoints,
         fine_wall_normals, fine_wall_midpoints,
         coarse_bounding_boxes, fine_bounding_boxes,
-        # NEW: Initialize spatial acceleration as nothing (will build later)
+        # Initialize spatial acceleration as nothing (build later)
         nothing,  # coarse_grid_opt
         nothing,  # coarse_bboxes_opt  
         nothing,  # fine_grids_opt
@@ -279,31 +290,36 @@ function RayTracingMeshOptim(faces::Vector{PolyFace2D{G,T}}, Ndiv::Vector{Tuple{
     return optimMesh
 end
 
-# Triangle constructor
-function PolyFace2D{G,T}(p::SVector{3, Point2{G}}, b::SVector{3,Bool}) where {G<:AbstractFloat, T} # , type::Type
+# Triangle constructor with default extinction properties
+function PolyFace2D{G,T}(p::SVector{3, Point2{G}}, b::SVector{3,Bool}, 
+                         kappa_default::T=zero(T), sigma_s_default::T=zero(T)) where {G<:AbstractFloat, T}
     PolyFace2D(
         # geometric variables
         [p[1], p[2], p[3]], # vertices
         [b[1], b[2], b[3]], # solid walls
         convert(Point2{G}, (p[1]+p[2]+p[3])./3), # mid point
         [convert(Point2{G}, (p[1]+p[2])/2), convert(Point2{G}, (p[2]+p[3])/2), convert(Point2{G}, (p[3]+p[1])/2)], # wall mid points
+        
         # outward normals
-        # [Point2{P}((p[2]-p[1])[2],-(p[2]-p[1])[1]), Point2{P}((p[3]-p[2])[2],-(p[3]-p[2])[1]), Point2{P}((p[1]-p[3])[2],-(p[1]-p[3])[1])],
         [calculate_normal(p[1], p[2], (p[1]+p[2]+p[3])./3),
         calculate_normal(p[2], p[3], (p[1]+p[2]+p[3])./3),
         calculate_normal(p[3], p[1], (p[1]+p[2]+p[3])./3)],
+        
         # volume of triangle
         convert(G, 0.5)*(p[1][1]*(p[2][2]-p[3][2])+p[2][1]*(p[3][2]-p[1][2])+p[3][1]*(p[1][2]-p[2][2])),
+        
         # area of walls
         [convert(G, norm(p[i]-p[mod(i, 3)+1])) for i = 1:3],
         PolyFace2D{G,T}[], # subfaces
 
-        # initialize properties and state to zero
-
         # boundary properties
         zeros(T, 3),
 
-        # volume
+        # extinction properties
+        kappa_default, # kappa_g
+        sigma_s_default, # sigma_s_g
+
+        # volume properties
         zero(T), # j_g
         zero(T), # g_a_g
         zero(T), # e_g
@@ -315,8 +331,7 @@ function PolyFace2D{G,T}(p::SVector{3, Point2{G}}, b::SVector{3,Bool}) where {G<
         zero(T), # T_in_g
         zero(T), # T_g
 
-        # Initialize state variables
-        # walls
+        # walls properties
         zeros(T, 3), # j_w
         zeros(T, 3), # g_a_w
         zeros(T, 3), # e_w
@@ -327,11 +342,12 @@ function PolyFace2D{G,T}(p::SVector{3, Point2{G}}, b::SVector{3,Bool}) where {G<
         zeros(T, 3), # q_w
         zeros(T, 3), # T_in_w
         zeros(T, 3) # T_w
-
-        )
+    )
 end
 
-function PolyFace2D{G,T}(p::SVector{4,Point2{G}}, b::SVector{4,Bool}) where {G<:AbstractFloat, T}
+# Quadrilateral constructor with default extinction properties
+function PolyFace2D{G,T}(p::SVector{4,Point2{G}}, b::SVector{4,Bool}, 
+                         kappa_default::T=zero(T), sigma_s_default::T=zero(T)) where {G<:AbstractFloat, T}
     PolyFace2D(
         [p[1], p[2], p[3], p[4]], # vertices
         [b[1], b[2], b[3], b[4]], # solid walls
@@ -358,6 +374,10 @@ function PolyFace2D{G,T}(p::SVector{4,Point2{G}}, b::SVector{4,Bool}) where {G<:
 
         # boundary properties
         zeros(T, 4),
+
+        # extinction properties
+        kappa_default, # kappa_g
+        sigma_s_default, # sigma_s_g
 
         # volume properties
         zero(T), # j_g
@@ -562,4 +582,33 @@ function build_spatial_grid(mesh::Vector{PolyFace2D{G,T}}, ncells::P) where {G<:
     total_indices = sum(length(cell.face_indices) for cell in cells)
     
     SpatialGrid(cells, cell_size, min_point, max_point, (ncells, ncells))
+end
+
+function validate_extinction_consistency!(mesh::RayTracingMesh; rtol=1e-10)
+    """
+    Checks if extinction properties are uniform across all faces.
+    Returns true if all faces have approximately the same kappa_g and sigma_s_g values,
+    false otherwise. Used to set global uniform_extinction flag.
+    """
+    
+    first_beta = nothing
+    
+    for (coarse_idx, coarse_face) in enumerate(mesh.coarse_mesh)
+        for (fine_idx, fine_face) in enumerate(mesh.fine_mesh[coarse_idx])
+            
+            # Store first values for comparison
+            if first_beta === nothing
+                first_beta = fine_face.kappa_g + fine_face.sigma_s_g
+            else
+                # Check if current values are approximately equal to first values
+                if !isapprox(fine_face.kappa_g + fine_face.sigma_s_g, first_beta, rtol=rtol)
+                    println("Variable extinction detected - using variable ray tracing")
+                    return false
+                end
+            end
+        end
+    end
+    
+    println("Uniform extinction detected (beta_g=$(first_beta)) - using fast uniform ray tracing")
+    return true
 end

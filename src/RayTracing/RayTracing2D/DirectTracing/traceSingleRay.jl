@@ -1,4 +1,6 @@
-function trace_single_ray(hmesh::RayTracingMeshOptim, gas::GasProperties, origin::Point2{Float64}, direction::Point2{Float64}, nudge::Float64, current_coarse_index::Int, max_iterations::Int = 100000)
+function trace_single_ray(hmesh::RayTracingMeshOptim, origin::Point2{Float64},
+                        direction::Point2{Float64}, nudge::Float64,
+                        current_coarse_index::Int, max_iterations::Int = 100000)
     path = []
     iteration_count = 0
     
@@ -11,8 +13,8 @@ function trace_single_ray(hmesh::RayTracingMeshOptim, gas::GasProperties, origin
         end
         
         # Check if trace_ray returns nothing (ray escaped)
-        ray_result = trace_ray(hmesh, origin, direction, gas.beta, nudge, current_coarse_index)
-        
+        ray_result = trace_ray(hmesh, origin, direction, nudge, current_coarse_index)
+
         if ray_result === nothing
             return nothing
         end
@@ -20,15 +22,16 @@ function trace_single_ray(hmesh::RayTracingMeshOptim, gas::GasProperties, origin
         next_coarse_index, next_fine_index, next_wall_index, end_point = ray_result
 
         if next_wall_index != 0  # Surface interaction
-            fine_face = hmesh.coarse_mesh[next_coarse_index].subFaces[next_fine_index]
+            fine_face = hmesh.fine_mesh[next_coarse_index][next_fine_index]
             epsilon = fine_face.epsilon[next_wall_index]
             
             if rand() < epsilon
                 # Check if this wall element is in radiative equilibrium
                 if fine_face.T_in_w[next_wall_index] < 0.0
                     # Reemission
-                    direction = isotropicScatter()
-                    origin = end_point
+                    p_omit, direction = emit_surface_ray(fine_face, next_wall_index, nudge)
+                    # nudge the point a tiny bit towards the midpoint, to ensure we are inside cell
+                    origin = end_point + (fine_face.midPoint - end_point) * nudge
                     push!(path, (next_coarse_index, next_fine_index, next_wall_index, :reemission))
                 else
                     # True absorption
@@ -43,11 +46,13 @@ function trace_single_ray(hmesh::RayTracingMeshOptim, gas::GasProperties, origin
             end
             
         else  # Gas interaction
-            if rand() < gas.omega
+            fine_face = hmesh.fine_mesh[next_coarse_index][next_fine_index] ### coarse mesh or fine mesh lookup?
+
+            if rand() < fine_face.sigma_s_g / (fine_face.kappa_g + fine_face.sigma_s_g)
                 # Scattering
                 direction = isotropicScatter()
                 origin = end_point
-                push!(path, (next_coarse_index, next_fine_index, 0, :scattering))
+                push!(path, (next_coarse_index, next_fine_index, -1, :scattering))
             else
                 # Check if this gas element is in radiative equilibrium
                 fine_face = hmesh.fine_mesh[next_coarse_index][next_fine_index]

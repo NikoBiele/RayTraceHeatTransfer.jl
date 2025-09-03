@@ -1,7 +1,7 @@
 function update_heat_source!(rtm::RayTracingMeshOptim, absorbed_count::Vector{Vector{Int}},
                             gas_emitted_count::Vector{Vector{Int}}, wall_emitted_count::Vector{Vector{Vector{Int}}},
                             reflected_count::Vector{Vector{Vector{Int}}}, scattered_count::Vector{Vector{Int}},
-                            wall_absorbed_count::Vector{Vector{Vector{Int}}}, total_energy::Float64, num_rays::Int, gas::GasProperties)
+                            wall_absorbed_count::Vector{Vector{Vector{Int}}}, total_energy::Float64, num_rays::Int)
 
     energy_per_ray = total_energy / num_rays
 
@@ -48,27 +48,37 @@ function update_heat_source!(rtm::RayTracingMeshOptim, absorbed_count::Vector{Ve
                 sub_face.q_g = gas_emitted - gas_absorbed
             end
             
-            # Temperature calculation logic based on your convention (check input field)
+            # Temperature calculation logic using local absorption coefficient
             if sub_face.T_in_g < 0.0
                 equilibrium_elements += 1
                 # Radiative equilibrium element (negative T_in indicates unknown temperature)
                 # For equilibrium: absorbed = emitted, so calculate T from emitted power
-                if gas_emitted > 0.0 && sub_face.volume > 0.0 && gas.kappa > 0.0
-                    # T calculated from emitted power: e = 4*kappa*sigma*T^4*volume
-                    temp_calc = gas_emitted / (4 * gas.kappa * STEFAN_BOLTZMANN * sub_face.volume)
-                    if temp_calc > 0.0
-                        sub_face.T_g = temp_calc^(1/4)  # Calculate and store in T_g
-                        nonzero_temps += 1
-                        max_temp = max(max_temp, sub_face.T_g)
-                        
-                        # Print first few calculated temperatures
-                        if nonzero_temps <= 5
-                            println("Calculated T_g for equilibrium element ($coarse_index,$fine_index): $(sub_face.T_g) K, emitted = $gas_emitted W, absorbed = $gas_absorbed W")
+                if gas_emitted > 0.0 && sub_face.volume > 0.0
+                    # Get local absorption coefficient
+                    local_kappa = sub_face.kappa_g  # Always read directly from face
+                    
+                    if local_kappa > 0.0
+                        # T calculated from emitted power: e = 4*kappa*sigma*T^4*volume
+                        temp_calc = gas_emitted / (4 * local_kappa * STEFAN_BOLTZMANN * sub_face.volume)
+
+                        if temp_calc > 0.0
+                            sub_face.T_g = temp_calc^(1/4)  # Calculate and store in T_g
+                            nonzero_temps += 1
+                            max_temp = max(max_temp, sub_face.T_g)
+                            
+                            # Print first few calculated temperatures
+                            if nonzero_temps <= 5
+                                println("Calculated T_g for equilibrium element ($coarse_index,$fine_index): $(sub_face.T_g) K, emitted = $gas_emitted W, absorbed = $gas_absorbed W, kappa = $local_kappa")
+                            end
+                        else
+                            # No emission yet, keep T_g as is or set to small value
+                            if nonzero_temps <= 5
+                                println("Element ($coarse_index,$fine_index): No emission yet, T_in_g = $(sub_face.T_in_g)")
+                            end
                         end
                     else
-                        # No emission yet, keep T_g as is or set to small value
                         if nonzero_temps <= 5
-                            println("Element ($coarse_index,$fine_index): No emission yet, T_in_g = $(sub_face.T_in_g)")
+                            println("Element ($coarse_index,$fine_index): Zero absorption coefficient, cannot calculate temperature")
                         end
                     end
                 else
@@ -84,7 +94,7 @@ function update_heat_source!(rtm::RayTracingMeshOptim, absorbed_count::Vector{Ve
                 end
             end
             
-            # Update wall properties
+            # Update wall properties (unchanged - walls don't use gas extinction)
             for wall_index in 1:length(sub_face.solidWalls)
                 if sub_face.solidWalls[wall_index]
                     wall_absorbed = wall_absorbed_count[coarse_index][fine_index][wall_index] * energy_per_ray
@@ -143,5 +153,4 @@ function update_heat_source!(rtm::RayTracingMeshOptim, absorbed_count::Vector{Ve
     println("  Total gas absorbed power: $total_gas_absorbed_power W")
     println("  Total gas emitted power: $total_gas_emitted_power W")
     println("  Gas power balance: $(total_gas_emitted_power - total_gas_absorbed_power) W")
-    println("  gas.kappa = $(gas.kappa)")
 end

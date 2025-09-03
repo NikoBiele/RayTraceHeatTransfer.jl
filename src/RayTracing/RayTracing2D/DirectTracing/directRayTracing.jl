@@ -1,5 +1,6 @@
-function direct_ray_tracing!(rtm::RayTracingMeshOptim, gas::GasProperties, rays_tot::Int, nudge=Float64(eps(Float32)))
-    emitters, total_energy = prepare_emitters(rtm, gas)
+function direct_ray_tracing!(rtm::RayTracingMeshOptim, rays_tot::Int, nudge=Float64(eps(Float32)))
+
+    emitters, total_energy = prepare_emitters(rtm)
 
     # gas interaction counters
     absorbed_count = [zeros(Int, length(coarse_face.subFaces)) for coarse_face in rtm.coarse_mesh]
@@ -65,7 +66,8 @@ function direct_ray_tracing!(rtm::RayTracingMeshOptim, gas::GasProperties, rays_
                 end
             end
             
-            result = trace_single_ray(rtm, gas, origin, direction, nudge, emitter.coarse_index, 100000)
+            # Use new ray tracing interface
+            result = trace_single_ray(rtm, origin, direction, nudge, emitter.coarse_index, 100000)
             
             if result !== nothing
                 absorption_type, abs_coarse_index, abs_fine_index, abs_wall_index, path = result
@@ -123,5 +125,7 @@ function direct_ray_tracing!(rtm::RayTracingMeshOptim, gas::GasProperties, rays_
     finish!(progress)
     println("Direct ray tracing complete.")
 
-    update_heat_source!(rtm, absorbed_count, gas_emitted_count, wall_emitted_count, reflected_count, scattered_count, wall_absorbed_count, total_energy, rays_tot, gas)
+    update_heat_source!(rtm, absorbed_count, gas_emitted_count, wall_emitted_count, 
+                    reflected_count, scattered_count, wall_absorbed_count, 
+                    total_energy, rays_tot)
 end

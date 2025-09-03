@@ -1,5 +1,5 @@
-# Alternative version that combines results in-place to save even more memory
-function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P, gas::GasProperties{G}, uncertain::Bool, nudge=Float64(eps(Float32))) where {G<:AbstractFloat,P<:Integer}
+function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P, 
+                                         uncertain::Bool, nudge=Float64(eps(Float32))) where {P<:Integer}
 
     surface_mapping, volume_mapping, num_surfaces, num_volumes = create_index_mapping(rtm, rays_total)
     num_emitters = num_surfaces + num_volumes
@@ -65,7 +65,8 @@ function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P,
                 
                 for _ in 1:rays_per_emitter
                     p_emit, dir_emit = emit_surface_ray(face, wall_index, nudge)
-                    result = trace_ray(rtm, p_emit, dir_emit, gas.beta, nudge, coarse_index)
+                    # Updated: removed extinction parameters
+                    result = trace_ray(rtm, p_emit, dir_emit, nudge, coarse_index)
                     
                     if result !== nothing
                         absorber_index = get_global_index(surface_mapping, volume_mapping, num_surfaces, result...)
@@ -80,7 +81,8 @@ function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P,
                 
                 for _ in 1:rays_per_emitter
                     p_emit, dir_emit = emit_volume_ray(face, nudge)
-                    result = trace_ray(rtm, p_emit, dir_emit, gas.beta, nudge, coarse_index)
+                    # Updated: removed extinction parameters
+                    result = trace_ray(rtm, p_emit, dir_emit, nudge, coarse_index)
                     
                     if result !== nothing
                         absorber_index = get_global_index(surface_mapping, volume_mapping, num_surfaces, result...)
@@ -108,13 +110,20 @@ function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P,
     finish!(progress)
     println("In-place ray tracing complete.")
     
-    # Convert to exchange factors (same as before)
-    F_raw = zeros(G, num_emitters, num_emitters)
+    # Convert to exchange factors
+    # Determine the appropriate type for F_raw
+    if P <: Measurement
+        NumericType = P.parameters[1]  # Get underlying numeric type from Measurement
+    else
+        NumericType = Float64  # Default to Float64 for integer types
+    end
+    
+    F_raw = zeros(NumericType, num_emitters, num_emitters)
     
     if uncertain
-        F_raw_uncertain = zeros(Measurement{<:AbstractFloat}, num_emitters, num_emitters)
+        F_raw_uncertain = zeros(Measurement{NumericType}, num_emitters, num_emitters)
     else
-        F_raw_uncertain = zeros(G, num_emitters, num_emitters)
+        F_raw_uncertain = zeros(NumericType, num_emitters, num_emitters)
     end
 
     progress_f = Progress(num_emitters^2, 1, "Calculating F, progress: ")
@@ -139,7 +148,7 @@ function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P,
     return F_raw, F_raw_uncertain, rays_per_emitter
 end
 
-# Method 6: In-place accumulation (zero additional memory)
+# In-place accumulation (zero additional memory)
 function sum_thread_results_inplace!(thread_results::Vector{Matrix{T}}) where T
     nthreads = length(thread_results)
     if nthreads == 1
