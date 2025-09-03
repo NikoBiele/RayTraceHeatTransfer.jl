@@ -1,73 +1,70 @@
 function exchangeFactors3D!(superFaces::Vector{Face3D})
-
-    # calculate the view factors
+    # Calculate dimensions
     num_faces = length(superFaces)
     num_subFaces = length(superFaces[1].subFaces)
     elements = num_faces * num_subFaces
+    
+    # Pre-allocate results
     F = zeros(elements, elements)
     areas_linear = Vector{Float64}(undef, elements)
-
-    # emitter count
-    emitter_count = 0
-    for p in 1:num_faces # for each coarse face
-        for j in 1:num_subFaces
-
-            # increment the emitter count
-            emitter_count += 1
-
-            # set the emitting face
-            if length(superFaces[p].subFaces[j].vertices) == 3
-                face1 = Matrix{Float64}(undef, 3, 3)
-            else
-                face1 = Matrix{Float64}(undef, 4, 3)
-            end
-            for i = 1:size(face1,1)
-                face1[i, :] = superFaces[p].subFaces[j].vertices[i]
-            end
-
-            # absorber count
-            absorber_count = 0
-            # find the absorbing face
-            for k in 1:num_faces
-                for l in 1:num_subFaces
-
-                    # increment the absorber count
-                    absorber_count += 1
-
-                    # set the absorbing face
-                    if length(superFaces[k].subFaces[l].vertices) == 3
-                        face2 = Matrix{Float64}(undef, 3, 3)
-                    else
-                        face2 = Matrix{Float64}(undef, 4, 3)
-                    end
-                    for i = 1:size(face2,1)    
-                        face2[i, :] = superFaces[k].subFaces[l].vertices[i]
-                    end
-
-                    # viewFactor
-                    result = viewFactor(face1, face2)
-                    if emitter_count != absorber_count # should avoid the 'emitter == absorber' case
-                        F[emitter_count, absorber_count] = occursin("NaN", string(result[1])) ? 0.0 : result[1]
-                    else
-                        F[emitter_count, absorber_count] = 0.0
-                    end
-                    superFaces[p].subFaces[j].area = result[3]
-                    areas_linear[emitter_count] = result[3]
-                end
-            end
-        end
-    end
-
-    # F, _ = smooth_exchange_factors_ultimate!(F, areas_linear, nothing, GasProperties(1.0, 1.0), 1, false; max_iterations=200, tolerance=eps(Float64))
-
-    # For 3D case with only surface elements (no participating media)
-    surface_areas = areas_linear
-    volumes = Float64[]  # Empty vector since no volume elements
-    volume_betas = Float64[]  # Empty vector since no volume elements
-
-    F, _ = smooth_exchange_factors_ultimate!(F, surface_areas, volumes, volume_betas, 
-                                        1, false; max_iterations=200, tolerance=eps(Float64))
-
-    return F
     
+    # Convert 2D indices to linear index
+    @inline function to_linear(face_idx, subface_idx)
+        return (face_idx - 1) * num_subFaces + subface_idx
+    end
+    
+    # Convert linear index back to 2D indices  
+    @inline function from_linear(linear_idx)
+        face_idx = div(linear_idx - 1, num_subFaces) + 1
+        subface_idx = mod(linear_idx - 1, num_subFaces) + 1
+        return face_idx, subface_idx
+    end
+    
+    # Parallelize over emitters (outer loop)
+    @threads for emitter_linear in 1:elements
+        emitter_face, emitter_sub = from_linear(emitter_linear)
+        
+        # Set up emitting face geometry
+        vertices1 = superFaces[emitter_face].subFaces[emitter_sub].vertices
+        face1 = Matrix{Float64}(undef, length(vertices1), 3)
+        for i in 1:length(vertices1)
+            face1[i, :] = vertices1[i]
+        end
+        
+        # Loop over all absorbers for this emitter
+        for absorber_linear in 1:elements
+            if emitter_linear == absorber_linear
+                F[emitter_linear, absorber_linear] = 0.0
+                continue
+            end
+            
+            absorber_face, absorber_sub = from_linear(absorber_linear)
+            
+            # Set up absorbing face geometry
+            vertices2 = superFaces[absorber_face].subFaces[absorber_sub].vertices
+            face2 = Matrix{Float64}(undef, length(vertices2), 3)
+            for i in 1:length(vertices2)
+                face2[i, :] = vertices2[i]
+            end
+            
+            # Calculate view factor
+            result = viewFactor(face1, face2)
+            F[emitter_linear, absorber_linear] = occursin("NaN", string(result[1])) ? 0.0 : result[1]
+        end
+        
+        # Store area (only needs to be done once per emitter)
+        result = viewFactor(face1, face1)  # Get area from self-calculation
+        areas_linear[emitter_linear] = result[3]
+        superFaces[emitter_face].subFaces[emitter_sub].area = result[3]
+    end
+    
+    # Apply smoothing
+    surface_areas = areas_linear
+    volumes = Float64[]
+    volume_betas = Float64[]
+    
+    F, _ = smooth_exchange_factors_ultimate!(F, surface_areas, volumes, volume_betas, 
+                                           1, false; max_iterations=200, tolerance=eps(Float64))
+    
+    return F
 end
