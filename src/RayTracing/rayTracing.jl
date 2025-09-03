@@ -8,11 +8,9 @@ include(joinpath(@__DIR__, "RayTracing2D", "DirectTracing", "traceSingleRay.jl")
 include(joinpath(@__DIR__, "RayTracing2D", "DirectTracing", "updateHeatSource.jl"))
 
 # exchange factors
-include(joinpath(@__DIR__, "RayTracing2D", "ExchangeFactors", "checkEnergyConservation.jl"))
 include(joinpath(@__DIR__, "RayTracing2D", "ExchangeFactors", "exchangeRayTracing.jl"))
 include(joinpath(@__DIR__, "RayTracing2D", "ExchangeFactors", "parallelRayTracing.jl"))
 include(joinpath(@__DIR__, "RayTracing2D", "ExchangeFactors", "smoothExchangeFactors.jl"))
-include(joinpath(@__DIR__, "RayTracing2D", "ExchangeFactors", "checkReciprocity.jl"))
 
 # shared functions
 include(joinpath(@__DIR__, "RayTracing2D", "Shared", "traceRay.jl"))
