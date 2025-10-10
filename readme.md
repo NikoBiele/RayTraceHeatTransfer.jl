@@ -6,7 +6,7 @@ Notice: This repository is still under development and breaking changes may occu
 
 ## Documentation
 
-The documentation of this package will gradually be rolled out in an online book format [here](https://radiative-transfer.org/).
+The documentation of this package will gradually be rolled out in an online book format [here](https://gert.net/).
 
 ## References
 
