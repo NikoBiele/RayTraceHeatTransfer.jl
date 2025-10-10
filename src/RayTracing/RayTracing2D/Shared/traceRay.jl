@@ -1,18 +1,22 @@
 function trace_ray(hmesh::RayTracingMeshOptim, p_emit::Point2{G}, dir_emit::Point2{G}, 
-                   nudge, current_coarse_index::P) where {G, P<:Integer}
+                   nudge::G, current_coarse_index::P, spectral_bin::P=1) where {G, P<:Integer}
     
     if hmesh.uniform_extinction
-        # Use fast uniform ray tracing
-        first_face = hmesh.fine_mesh[1][1]  # All faces have same values due to validation
-        uniform_beta = first_face.kappa_g + first_face.sigma_s_g
+        # Use fast uniform ray tracing - extinction is same for all bins
+        first_face = hmesh.fine_mesh[1][1]
+        if isa(first_face.kappa_g, Vector)
+            uniform_beta = first_face.kappa_g[spectral_bin] + first_face.sigma_s_g[spectral_bin]
+        else
+            uniform_beta = first_face.kappa_g + first_face.sigma_s_g
+        end
         return trace_ray_uniform(hmesh, p_emit, dir_emit, uniform_beta, nudge, current_coarse_index)
     else
         # Use variable extinction ray tracing
-        return trace_ray_variable(hmesh, p_emit, dir_emit, nudge, current_coarse_index)
+        return trace_ray_variable(hmesh, p_emit, dir_emit, nudge, current_coarse_index, spectral_bin)
     end
 end
 
-# Uniform ray tracing for performance when all extinction is the same
+# Uniform ray tracing (unchanged - extinction is uniform across all bins)
 function trace_ray_uniform(hmesh::RayTracingMeshOptim, p_emit::Point2{G}, dir_emit::Point2{G}, 
                            beta::T, nudge, current_coarse_index::P) where {G, T, P<:Integer}
     point = p_emit
@@ -65,9 +69,9 @@ function trace_ray_uniform(hmesh::RayTracingMeshOptim, p_emit::Point2{G}, dir_em
     return nothing  # Maximum iterations reached
 end
 
-# Uniform ray tracing for performance when all extinction is the same
+# Updated variable ray tracing with spectral bin support
 function trace_ray_variable(hmesh::RayTracingMeshOptim, p_emit::Point2{G}, dir_emit::Point2{G}, 
-                           nudge, current_coarse_index::P) where {G, P<:Integer}
+                           nudge, current_coarse_index::P, spectral_bin::Int=1) where {G, P<:Integer}
     point = p_emit
     direction = dir_emit
 
@@ -79,7 +83,7 @@ function trace_ray_variable(hmesh::RayTracingMeshOptim, p_emit::Point2{G}, dir_e
         coarse_face = hmesh.coarse_face_cache[current_coarse_index]
         u_real, u_index = distToSurface(point, direction, coarse_face)
 
-        # Get local extinction coefficient directly from face
+        # Get local extinction coefficient for this spectral bin
         fine_index = find_face_optimized(hmesh.fine_mesh[current_coarse_index], point,
                                         hmesh.fine_grids_opt[current_coarse_index],
                                         hmesh.fine_bboxes_opt[current_coarse_index])
@@ -87,9 +91,15 @@ function trace_ray_variable(hmesh::RayTracingMeshOptim, p_emit::Point2{G}, dir_e
             return nothing  # Ray escaped
         end
         current_fine_face = hmesh.fine_mesh[current_coarse_index][fine_index]
-        local_beta = current_fine_face.kappa_g + current_fine_face.sigma_s_g
+        
+        # Extract extinction for specific spectral bin
+        if isa(current_fine_face.kappa_g, Vector)
+            local_beta = current_fine_face.kappa_g[spectral_bin] + current_fine_face.sigma_s_g[spectral_bin]
+        else
+            local_beta = current_fine_face.kappa_g + current_fine_face.sigma_s_g
+        end
 
-        # Calculate optical depth to boundary (only for non-zero extinction)
+        # Calculate optical depth to boundary
         tau_to_boundary = local_beta * u_real
 
         if accumulated_tau + tau_to_boundary >= target_tau

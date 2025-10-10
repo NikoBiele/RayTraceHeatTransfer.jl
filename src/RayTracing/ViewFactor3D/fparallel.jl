@@ -4,10 +4,10 @@
 
 Eq.(23) from the paper
 """
-function fParallel(s, l, d, almostZero)
+function fParallel(s, l, d, almostZero::G) where G
     
     if d == 0
-        d = Float32(almostZero)
+        d = G(almostZero)
     end
     
     sMinusl = s - l

@@ -63,8 +63,8 @@ function exchangeFactors3D!(superFaces::Vector{Face3D})
     volumes = Float64[]
     volume_betas = Float64[]
     
-    F, _ = smooth_exchange_factors_ultimate!(F, surface_areas, volumes, volume_betas, 
-                                           1, false; max_iterations=200, tolerance=eps(Float64))
+    F = smooth_exchange_factors_ultimate!(F, surface_areas, volumes, volume_betas, 
+                                           1; max_iterations=200, tolerance=eps(Float64))
     
     return F
 end

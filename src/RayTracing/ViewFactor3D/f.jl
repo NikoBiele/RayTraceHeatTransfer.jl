@@ -5,7 +5,7 @@
 
 Eq.(22b) from the paper.
 """
-function f(s, l, alpha, cosAlpha, sinAlpha, d, almostZero)
+function f(s, l, alpha, cosAlpha, sinAlpha, d, almostZero::G) where G
 
   s2 = s^2
   l2 = l^2
@@ -17,12 +17,12 @@ function f(s, l, alpha, cosAlpha, sinAlpha, d, almostZero)
   if abs(s + wsqrt) > 0
     wdim = s + wsqrt
   else 
-    wdim = Float32(almostZero)
+    wdim = G(almostZero)
   end    
   if abs(l + psqrt) > 0
     pdim = l + psqrt
   else 
-    pdim = Float32(almostZero)
+    pdim = G(almostZero)
   end
 
   F = ( (0.5*cosAlpha*(s2 + l2) - s*l)*log(s2 + l2 - 2*s*l*cosAlpha + d2) +
@@ -31,5 +31,5 @@ function f(s, l, alpha, cosAlpha, sinAlpha, d, almostZero)
        0.5*(d2/sinAlpha)*(imagLi_2((wdim/pdim), alpha, almostZero) +
        imagLi_2((pdim/wdim), alpha, almostZero) - 2*imagLi_2((wdim - 2*s)/pdim, (pi - alpha), almostZero))  )
 
-    return Float32(F)
+    return G(F)
 end

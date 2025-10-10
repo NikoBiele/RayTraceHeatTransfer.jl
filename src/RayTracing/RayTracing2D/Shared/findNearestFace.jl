@@ -1,4 +1,4 @@
-function find_nearest_face(faces::Vector{PolyFace2D{G,T}}, point::Point2{G}) where {G<:AbstractFloat, T}
+function find_nearest_face(faces::Vector{PolyFace2D{G}}, point::Point2{G}) where {G}
     nearest_index = 1
     min_distance = Inf
 

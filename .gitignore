@@ -3,3 +3,4 @@ _docs/
 _.github/
 test3d.jl
 tester.jl
+test_valid_write.jl

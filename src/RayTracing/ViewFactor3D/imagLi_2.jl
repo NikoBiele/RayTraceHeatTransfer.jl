@@ -4,7 +4,7 @@
 
 Eq.(24) from the paper.
 """
-function imagLi_2(mag, angle, almostZero)
+function imagLi_2(mag, angle, almostZero::G) where G
 
     if mag > almostZero
         omega = atan(mag*sin(angle),(1 - mag*cos(angle)))
@@ -14,5 +14,5 @@ function imagLi_2(mag, angle, almostZero)
         imaginaryPart = mag*sin(angle)
     end
 
-    return Float32(imaginaryPart)
+    return G(imaginaryPart)
 end

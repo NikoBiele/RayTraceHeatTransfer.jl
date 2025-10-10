@@ -1,5 +1,5 @@
 # Mesh a quadrilateral
-function meshQuad(face::Vector{Vector{G}}, Nx::Int, Ny::Int) where {G<:AbstractFloat}
+function meshQuad(face::Vector{Vector{G}}, Nx::Int, Ny::Int) where {G}
     faces = Vector{Vector{G}}[] # for output
 
     # Define points in enclosure.
@@ -71,7 +71,7 @@ function meshQuad(face::Vector{Vector{G}}, Nx::Int, Ny::Int) where {G<:AbstractF
     return point1, point2, point3, point4
 end
 
-function meshTriangle(face::Vector{Vector{G}}, Nx::Int, Ny::Int) where {G<:AbstractFloat}
+function meshTriangle(face::Vector{Vector{G}}, Nx::Int, Ny::Int) where {G}
     # save triangle midpoint
     triangle_midPoint = sum(face)/3
     

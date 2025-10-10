@@ -1,6 +1,6 @@
 # Replace your find_face_uniform_grid function with this more flexible version:
-@inline function find_face_uniform_grid(faces::Vector{PolyFace2D{G,T}}, point, 
-                                        grid) where {G,T}
+@inline function find_face_uniform_grid(faces::Vector{PolyFace2D{G}}, point, 
+                                        grid) where {G}
     # Convert point to the right type if needed
     pt = Point2{G}(point[1], point[2])
     
@@ -27,8 +27,8 @@
 end
 
 # Replace your find_face_with_bbox_prefilter function with this more flexible version:
-@inline function find_face_with_bbox_prefilter(faces::Vector{PolyFace2D{G,T}}, point, 
-                                              bboxes) where {G,T}
+@inline function find_face_with_bbox_prefilter(faces::Vector{PolyFace2D{G}}, point, 
+                                              bboxes) where {G}
     # Convert point to the right type if needed
     pt = Point2{G}(point[1], point[2])
     
@@ -45,8 +45,8 @@ end
 end
 
 # Replace your current find_face_optimized function with this more flexible version:
-@inline function find_face_optimized(faces::Vector{PolyFace2D{G,T}}, point, 
-                                    grid, bboxes) where {G,T}
+@inline function find_face_optimized(faces::Vector{PolyFace2D{G}}, point, 
+                                    grid, bboxes) where {G}
     # Convert point to the right type if needed
     pt = Point2{G}(point[1], point[2])
     
@@ -74,7 +74,7 @@ end
 end
 
 # Optimized point-in-polygon test
-@inline function point_in_polygon_fast(point::Point2{G}, face::PolyFace2D{G,T}) where {G,T}
+@inline function point_in_polygon_fast(point::Point2{G}, face::PolyFace2D{G}) where {G}
     vertices = face.vertices
     n = length(vertices)
     inside = false

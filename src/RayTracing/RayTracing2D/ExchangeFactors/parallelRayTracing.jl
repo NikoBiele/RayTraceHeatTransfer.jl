@@ -1,12 +1,56 @@
 function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P, 
-                                         uncertain::Bool, nudge=Float64(eps(Float32))) where {P<:Integer}
+                                        nudge::G) where {P<:Integer, G}
 
     surface_mapping, volume_mapping, num_surfaces, num_volumes = create_index_mapping(rtm, rays_total)
     num_emitters = num_surfaces + num_volumes
     rays_per_emitter = div(rays_total, num_emitters)
 
-    # Pre-allocate final result matrix
-    F_counts = zeros(P, num_emitters, num_emitters)
+    # Determine spectral configuration
+    n_bins = rtm.n_spectral_bins
+    is_spectral = rtm.spectral_mode != :grey
+    
+    if rtm.spectral_mode == :spectral_variable
+        # Variable spectral - need separate F matrix for each bin
+        println("Computing $n_bins separate F matrices for variable spectral extinction")
+        F_raw_vector = Matrix{G}[]
+        # F_raw_uncertain_vector = Matrix{Measurements.Measurement{G}}[]
+        
+        for bin in 1:n_bins
+            println("Computing F matrix for spectral bin $bin/$n_bins")
+            F_raw_bin = #, F_raw_uncertain_bin = 
+                compute_F_matrix_for_bin(
+                rtm, rays_per_emitter, nudge, bin,
+                surface_mapping, volume_mapping, num_surfaces, num_volumes, num_emitters
+            )
+            push!(F_raw_vector, F_raw_bin)
+            # push!(F_raw_uncertain_vector, F_raw_uncertain_bin)
+        end
+        
+        return F_raw_vector, rays_per_emitter # F_raw_uncertain_vector,
+        
+    else
+        # Grey or uniform spectral - single F matrix works for all bins
+        if is_spectral
+            println("Computing single F matrix for uniform spectral extinction ($n_bins bins)")
+        else
+            println("Computing single F matrix for grey extinction")
+        end
+        
+        F_raw = compute_F_matrix_for_bin(
+            rtm, rays_per_emitter, nudge, 1,  # Use bin 1 (doesn't matter for uniform)
+            surface_mapping, volume_mapping, num_surfaces, num_volumes, num_emitters
+        )
+        
+        return F_raw, rays_per_emitter # F_raw_uncertain,
+    end
+end
+
+function compute_F_matrix_for_bin(rtm::RayTracingMeshOptim, rays_per_emitter::P, 
+                                 nudge::G, spectral_bin::P,
+                                 surface_mapping, volume_mapping, num_surfaces, num_volumes, num_emitters) where {P<:Integer, G}
+    
+    # Pre-allocate result matrix
+    F_counts = zeros(Int, num_emitters, num_emitters)
     
     # Create combined emitter list
     all_emitters = Vector{Tuple{Any, Int}}()
@@ -21,7 +65,7 @@ function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P,
     sort!(all_emitters, by=x->x[2])
     
     nthreads = Threads.nthreads()
-    println("Using $nthreads threads for in-place ray tracing")
+    println("  Using $nthreads threads for spectral bin $spectral_bin")
     
     # Divide emitters among threads
     emitters_per_thread = div(num_emitters, nthreads)
@@ -36,17 +80,14 @@ function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P,
         start_idx = end_idx + 1
     end
     
-    println("Memory usage: $(sizeof(P) * num_emitters^2 / 1e9) GB (single matrix)")
-    
     # Progress tracking
-    progress = Progress(num_emitters, 1, "Ray tracing progress: ")
+    progress = Progress(num_emitters, 1, "  Bin $spectral_bin progress: ")
     completed_work = Threads.Atomic{Int}(0)
     
     # Thread-safe locks for writing to F_counts
     row_locks = [Threads.SpinLock() for _ in 1:num_emitters]
     
-    # Parallel ray tracing - write directly to final matrix
-    println("Starting in-place ray tracing...")
+    # Parallel ray tracing for this spectral bin
     @threads for tid in 1:nthreads
         emitter_range = thread_assignments[tid]
         
@@ -57,7 +98,7 @@ function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P,
             is_surface_emitter = global_idx <= num_surfaces
             
             # Temporary storage for this emitter's results
-            temp_row = zeros(P, num_emitters)
+            temp_row = zeros(Int, num_emitters)
             
             if is_surface_emitter
                 coarse_index, fine_index, wall_index = emitter_key
@@ -65,8 +106,8 @@ function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P,
                 
                 for _ in 1:rays_per_emitter
                     p_emit, dir_emit = emit_surface_ray(face, wall_index, nudge)
-                    # Updated: removed extinction parameters
-                    result = trace_ray(rtm, p_emit, dir_emit, nudge, coarse_index)
+                    # Pass spectral bin to trace_ray
+                    result = trace_ray(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin)
                     
                     if result !== nothing
                         absorber_index = get_global_index(surface_mapping, volume_mapping, num_surfaces, result...)
@@ -81,8 +122,8 @@ function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P,
                 
                 for _ in 1:rays_per_emitter
                     p_emit, dir_emit = emit_volume_ray(face, nudge)
-                    # Updated: removed extinction parameters
-                    result = trace_ray(rtm, p_emit, dir_emit, nudge, coarse_index)
+                    # Pass spectral bin to trace_ray
+                    result = trace_ray(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin)
                     
                     if result !== nothing
                         absorber_index = get_global_index(surface_mapping, volume_mapping, num_surfaces, result...)
@@ -108,34 +149,22 @@ function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P,
         end
     end
     finish!(progress)
-    println("In-place ray tracing complete.")
     
     # Convert to exchange factors
-    # Determine the appropriate type for F_raw
-    if P <: Measurement
-        NumericType = P.parameters[1]  # Get underlying numeric type from Measurement
-    else
-        NumericType = Float64  # Default to Float64 for integer types
-    end
-    
-    F_raw = zeros(NumericType, num_emitters, num_emitters)
-    
-    if uncertain
-        F_raw_uncertain = zeros(Measurement{NumericType}, num_emitters, num_emitters)
-    else
-        F_raw_uncertain = zeros(NumericType, num_emitters, num_emitters)
-    end
+    F_raw = zeros(G, num_emitters, num_emitters)
+    # F_raw_uncertain = zeros(G, num_emitters, num_emitters)
 
-    progress_f = Progress(num_emitters^2, 1, "Calculating F, progress: ")
+    progress_f = Progress(num_emitters^2, 1, "  Calculating F for bin $spectral_bin: ")
     calculated = 0
     
     for i in 1:num_emitters
         for j in 1:num_emitters
-            if F_counts[i, j] > zero(P)
-                F_raw[i, j] = F_counts[i, j] / rays_per_emitter
-            end
-            if uncertain && F_counts[i, j] > zero(P)
-                F_raw_uncertain[i, j] = (F_counts[i, j] / rays_per_emitter) ± (sqrt(F_counts[i, j]) / rays_per_emitter)
+            if F_counts[i, j] > 0
+                if G <: Measurement
+                    F_raw[i, j] = (F_counts[i, j] / rays_per_emitter) ± (sqrt(F_counts[i, j]) / rays_per_emitter)
+                else
+                    F_raw[i, j] = F_counts[i, j] / rays_per_emitter
+                end
             end
             calculated += 1
             if calculated % 1000 == 0
@@ -145,28 +174,5 @@ function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P,
     end
     finish!(progress_f)
 
-    return F_raw, F_raw_uncertain, rays_per_emitter
-end
-
-# In-place accumulation (zero additional memory)
-function sum_thread_results_inplace!(thread_results::Vector{Matrix{T}}) where T
-    nthreads = length(thread_results)
-    if nthreads == 1
-        return thread_results[1]
-    end
-    
-    n = size(thread_results[1], 1)
-    
-    # Accumulate everything into the first matrix
-    result = thread_results[1]
-    
-    @threads for i in 1:n
-        @inbounds for thread_id in 2:nthreads
-            for j in 1:n
-                result[i, j] += thread_results[thread_id][i, j]
-            end
-        end
-    end
-    
-    return result
+    return F_raw
 end

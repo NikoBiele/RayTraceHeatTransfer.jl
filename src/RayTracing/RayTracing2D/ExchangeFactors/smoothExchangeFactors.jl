@@ -147,19 +147,19 @@ function compute_convergence_metric_parallel(F::Matrix{T}, scaling_factors::Vect
     return sqrt(d_squared[])
 end
 
-# Updated smoothing algorithm - reads extinction directly from faces
+# Updated smoothing algorithm - reads extinction directly from faces for specific spectral bin
 function smooth_exchange_factors!(F::Matrix{T}, rtm::RayTracingMeshOptim, 
-                                 surface_mapping::Dict, volume_mapping::Dict,
-                                 rays_per_emitter::Int, uncertain::Bool; 
-                                 max_iterations::Int=100, tolerance=nothing) where {T}
+                                 rays_per_emitter::Int,
+                                 spectral_bin::Int=1; 
+                                 max_iterations::Int=1000, tolerance=nothing) where {T}
     
-    num_surfaces = length(surface_mapping)
-    num_volumes = length(volume_mapping)
+    num_surfaces = length(rtm.surface_mapping)
+    num_volumes = length(rtm.volume_mapping)
     
-    # Extract surface areas, volumes, and local extinction - read directly from faces
+    # Extract surface areas, volumes, and local extinction for specific spectral bin
     surface_areas = Vector{T}()
     volumes = Vector{T}() 
-    volume_betas = Vector{T}()  # Local extinction coefficients
+    volume_betas = Vector{T}()  # Local extinction coefficients for this bin
     
     for (coarse_index, coarse_face) in enumerate(rtm.coarse_mesh)
         for (fine_index, fine_face) in enumerate(rtm.fine_mesh[coarse_index])
@@ -169,23 +169,28 @@ function smooth_exchange_factors!(F::Matrix{T}, rtm::RayTracingMeshOptim,
                 end
             end
             push!(volumes, fine_face.volume)
-            # Always read local extinction directly from face
-            local_beta = fine_face.kappa_g + fine_face.sigma_s_g
+            
+            # Extract local extinction for specific spectral bin
+            if isa(fine_face.kappa_g, Vector)
+                local_beta = fine_face.kappa_g[spectral_bin] + fine_face.sigma_s_g[spectral_bin]
+            else
+                local_beta = fine_face.kappa_g + fine_face.sigma_s_g
+            end
             push!(volume_betas, local_beta)
         end
     end
     
-    # Call ultimate smoothing with local extinction
+    # Call ultimate smoothing with bin-specific extinction
     return smooth_exchange_factors_ultimate!(F, surface_areas, volumes, volume_betas, 
-                                           rays_per_emitter, uncertain; 
+                                           rays_per_emitter; 
                                            max_iterations=max_iterations, 
                                            tolerance=tolerance)
 end
 
 function smooth_exchange_factors_ultimate!(F::Matrix{T}, surface_areas::Vector{P}, 
                                          volumes::Vector{P}, volume_betas::Vector{P},
-                                         rays_per_emitter::Int, uncertain::Bool; 
-                                         max_iterations::Int=100, tolerance=nothing) where {T, P}
+                                         rays_per_emitter::Int; 
+                                         max_iterations::Int=1000, tolerance=nothing) where {T, P}
     
     num_surfaces = length(surface_areas)
     num_volumes = length(volumes)
@@ -308,7 +313,7 @@ function smooth_exchange_factors_ultimate!(F::Matrix{T}, surface_areas::Vector{P
     end
 
     # Handle uncertainty calculation if needed
-    if uncertain
+    if T <: Measurement
         F_smooth_uncertain = Matrix{Measurement{NumericT}}(undef, size(F_work))
         @inbounds for i in 1:size(F_work, 1)
             for j in 1:size(F_work, 2)
@@ -316,8 +321,9 @@ function smooth_exchange_factors_ultimate!(F::Matrix{T}, surface_areas::Vector{P
                 F_smooth_uncertain[i, j] = F_work[i, j] ± uncertainty
             end
         end
-        return F_work, F_smooth_uncertain
-    else
-        return F_work, zeros(NumericT, size(F_work))
+
+        return F_smooth_uncertain
     end
+
+    return F_work
 end

@@ -1,4 +1,6 @@
-function emit_volume_ray(face::PolyFace2D{G,T}, nudge) where {G, T}
+function emit_volume_ray(face::PolyFace2D{G}, nudge::G) where {G}
+    # println("Emitting volume ray, type of G is $(typeof(G))")
+
     vertices = face.vertices
     if length(vertices) == 4
         A, B, C, D = vertices
@@ -19,6 +21,7 @@ function emit_volume_ray(face::PolyFace2D{G,T}, nudge) where {G, T}
 
     # nudge the point a tiny bit towards the midpoint, to ensure we are inside cell
     point = point + (face.midPoint - point) * nudge
+    point = Point2{G}(point[1], point[2])
 
     # uniform emission distribution
     theta = acos(1 - 2*G(rand())) # Convert to type G

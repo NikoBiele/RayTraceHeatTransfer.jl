@@ -1,18 +1,39 @@
-function direct_ray_tracing!(rtm::RayTracingMeshOptim, rays_tot::Int, nudge=Float64(eps(Float32)))
+function direct_ray_tracing!(rtm::RayTracingMeshOptim, rays_tot::P, nudge::G, wavelength_range::Tuple{P,P}=(-7,-3)) where {G, P<:Integer}
+    
+    if rtm.spectral_mode != :grey
+        println("Running direct ray tracing for $(rtm.n_spectral_bins) spectral bins")
+        # Run direct ray tracing for each spectral bin
+        for bin in 1:rtm.n_spectral_bins
+            println("Processing spectral bin $bin/$(rtm.n_spectral_bins)")
+            direct_ray_tracing_single_bin!(rtm, rays_tot, nudge, bin, wavelength_range)
+        end
+    else
+        println("Running direct ray tracing for grey extinction")
+        direct_ray_tracing_single_bin!(rtm, rays_tot, nudge, 1, wavelength_range)  # bin=1 for grey
+    end
 
-    emitters, total_energy = prepare_emitters(rtm)
+    update_scalar_temperatures_and_heat_sources_direct!(rtm, wavelength_range)
 
-    # gas interaction counters
+end
+
+function direct_ray_tracing_single_bin!(rtm::RayTracingMeshOptim, rays_tot::P, nudge::G,
+                                        spectral_bin::P, wavelength_range::Tuple{P,P}=(-7,-3)) where {G, P<:Integer}
+
+    # Prepare emitters
+    emitters, total_energy = prepare_emitters(rtm, nudge, wavelength_range, spectral_bin) # pass nudge to get the type G
+    if total_energy == 0.0
+        @warn "No emitters found for spectral bin $spectral_bin"
+    end
+
+    # Initialize counters for this spectral bin
     absorbed_count = [zeros(Int, length(coarse_face.subFaces)) for coarse_face in rtm.coarse_mesh]
     gas_emitted_count = [zeros(Int, length(coarse_face.subFaces)) for coarse_face in rtm.coarse_mesh]
     scattered_count = [zeros(Int, length(coarse_face.subFaces)) for coarse_face in rtm.coarse_mesh]
-    # wall interaction counters
     wall_emitted_count = [[zeros(Int, length(face.solidWalls)) for face in coarse_face.subFaces] for coarse_face in rtm.coarse_mesh]
     reflected_count = [[zeros(Int, length(face.solidWalls)) for face in coarse_face.subFaces] for coarse_face in rtm.coarse_mesh]
     wall_absorbed_count = [[zeros(Int, length(face.solidWalls)) for face in coarse_face.subFaces] for coarse_face in rtm.coarse_mesh]
 
     nthreads = Threads.nthreads()
-    println("Using $nthreads threads for direct ray tracing")
     
     # Divide rays among threads
     rays_per_thread = div(rays_tot, nthreads)
@@ -28,13 +49,12 @@ function direct_ray_tracing!(rtm::RayTracingMeshOptim, rays_tot::Int, nudge=Floa
     end
     
     # Progress tracking
-    progress = Progress(rays_tot, 1, "Ray tracing progress: ")
+    progress = Progress(rays_tot, 1, "  Bin $spectral_bin ray tracing: ")
     completed_work = Threads.Atomic{Int}(0)
     
     # Thread-safe locks for writing to counters
     counter_locks = [Threads.SpinLock() for _ in 1:length(rtm.coarse_mesh)]
     
-    println("Starting direct ray tracing...")
     @threads for tid in 1:nthreads
         ray_range = thread_assignments[tid]
         local_rng = MersenneTwister(tid)  # Use thread ID as seed
@@ -53,21 +73,23 @@ function direct_ray_tracing!(rtm::RayTracingMeshOptim, rays_tot::Int, nudge=Floa
             if emitter.type == :surface
                 fine_face = rtm.coarse_mesh[emitter.coarse_index].subFaces[emitter.fine_index]
                 origin, direction = emit_surface_ray(fine_face, emitter.wall_index, nudge)
-                # Only count initial wall emissions for prescribed temperature walls
-                if fine_face.T_in_w[emitter.wall_index] >= 0.0
+                # Check prescribed temperature for this spectral bin
+                temp_value = fine_face.T_in_w[emitter.wall_index]
+                if temp_value >= 0.0
                     local_wall_emitted_count[emitter.coarse_index][emitter.fine_index][emitter.wall_index] += 1
                 end
             else
                 fine_face = rtm.coarse_mesh[emitter.coarse_index].subFaces[emitter.fine_index]
                 origin, direction = emit_volume_ray(fine_face, nudge)
-                # Only count initial gas emissions for prescribed temperature gas
-                if fine_face.T_in_g >= 0.0
+                # Check prescribed temperature for this spectral bin
+                temp_value = fine_face.T_in_g
+                if temp_value >= 0.0
                     local_gas_emitted_count[emitter.coarse_index][emitter.fine_index] += 1
                 end
             end
             
-            # Use new ray tracing interface
-            result = trace_single_ray(rtm, origin, direction, nudge, emitter.coarse_index, 100000)
+            # Use spectral ray tracing interface
+            result = trace_single_ray(rtm, origin, direction, nudge, emitter.coarse_index, spectral_bin, 100000)
             
             if result !== nothing
                 absorption_type, abs_coarse_index, abs_fine_index, abs_wall_index, path = result
@@ -123,9 +145,8 @@ function direct_ray_tracing!(rtm::RayTracingMeshOptim, rays_tot::Int, nudge=Floa
     end
     
     finish!(progress)
-    println("Direct ray tracing complete.")
-
-    update_heat_source!(rtm, absorbed_count, gas_emitted_count, wall_emitted_count, 
+    
+    update_spectral_results!(rtm, absorbed_count, gas_emitted_count, wall_emitted_count, 
                     reflected_count, scattered_count, wall_absorbed_count, 
-                    total_energy, rays_tot)
+                    total_energy, rays_tot, spectral_bin)
 end

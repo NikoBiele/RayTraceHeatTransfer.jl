@@ -1,6 +1,10 @@
 module RayTraceHeatTransfer
 
 const STEFAN_BOLTZMANN = 5.670374419e-8
+const h_P = 6.626e-34  # Planck constant
+const c0 = 2.998e8     # speed of light  
+const k_B = 1.38e-23   # Boltzmann constant
+const C2 = h_P * c0 / k_B
 
 # external dependencies
 using GeometryBasics
@@ -11,6 +15,7 @@ using ProgressMeter
 using Measurements
 using Base.Threads
 using StatsBase
+using SparseArrays
 
 # Declare plotting function names so they can be extended by an extension:
 function plotMesh2D end
@@ -34,7 +39,7 @@ include(joinpath(@__DIR__, "RayTracing", "rayTracing.jl"))
 # export
 # 2D participating media
 export PolyFace2D, RayTracingMeshOptim, plotMesh2D,
-        steadyState2D!, plotField2D,
+        steadyStateGrey2D!, steadyStateSpectral2D!, plotField2D,
 # 3D transparent medium
         Domain3D_faces, plotMesh3D, steadyState3D!,
         plotField3D

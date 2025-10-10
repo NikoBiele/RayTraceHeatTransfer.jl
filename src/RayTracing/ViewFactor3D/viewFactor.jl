@@ -30,11 +30,11 @@ The following must be true for both polygons:
 3) polygons are convex (in theory, concave polygons should work, but
     this remains untested)
 """
-function viewFactor(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G<:AbstractFloat}
+function viewFactor(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G}
 
     # INITIALIZATION
 
-    almostZero = eps(Float32) # 1e-7
+    almostZero = 10*eps(G) # eps(Float32) # 1e-7
     halfTol = almostZero*10
 
     # CONFIRM CORRECT INPUTS AND FIND AREA: polygon A

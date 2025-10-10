@@ -1,5 +1,13 @@
-# Mesh a quadrilateral
-function meshQuad(face::PolyFace2D{G,T}, Nx::P, Ny::P) where {G<:AbstractFloat,T,P<:Integer}
+# Updated meshQuad with spectral support
+function meshQuad(face::PolyFace2D{G}, Nx::P, Ny::P) where {G,P<:Integer}
+    # Determine spectral mode from parent face
+    is_spectral = isa(face.kappa_g, Vector)
+    n_bins = is_spectral ? length(face.kappa_g) : 1
+    
+    # Get default extinction values from parent face
+    kappa_default = is_spectral ? face.kappa_g[1] : face.kappa_g
+    sigma_s_default = is_spectral ? face.sigma_s_g[1] : face.sigma_s_g
+    
     # Define points in enclosure.
     Apoint = face.vertices[1]
     Bpoint = face.vertices[2]
@@ -82,12 +90,13 @@ function meshQuad(face::PolyFace2D{G,T}, Nx::P, Ny::P) where {G<:AbstractFloat,T
             # convert to static array
             solid_walls_in = SVector(solid_walls[1], solid_walls[2], solid_walls[3], solid_walls[4])
 
-            # Create a new PolyFace2D subface
+            # Create a new PolyFace2D subface - UPDATED with spectral support
             point1 = Point2(xPoints[n,m], yPoints[n,m])
             point2 = Point2(xPoints[n+1,m], yPoints[n+1,m])
             point3 = Point2(xPoints[n+1,m+1], yPoints[n+1,m+1])
             point4 = Point2(xPoints[n,m+1], yPoints[n,m+1])
-            subface = PolyFace2D{G,T}(SVector(point1, point2, point3, point4), solid_walls_in)
+            subface = PolyFace2D{G}(SVector(point1, point2, point3, point4), solid_walls_in, 
+                                     n_bins, kappa_default, sigma_s_default)
 
             # insert it
             # push!(face.subFaces, subface)
@@ -99,7 +108,16 @@ function meshQuad(face::PolyFace2D{G,T}, Nx::P, Ny::P) where {G<:AbstractFloat,T
     return face
 end
 
-function meshTriangle(face::PolyFace2D{G,T}, Ndim::P) where {G<:AbstractFloat, T, P<:Integer}
+# Updated meshTriangle with spectral support
+function meshTriangle(face::PolyFace2D{G}, Ndim::P) where {G, P<:Integer}
+    # Determine spectral mode from parent face
+    is_spectral = isa(face.kappa_g, Vector)
+    n_bins = is_spectral ? length(face.kappa_g) : 1
+    
+    # Get default extinction values from parent face
+    kappa_default = is_spectral ? face.kappa_g[1] : face.kappa_g
+    sigma_s_default = is_spectral ? face.sigma_s_g[1] : face.sigma_s_g
+    
     # save triangle midpoint
     triangle_midPoint = face.midPoint
     
@@ -146,8 +164,8 @@ function meshTriangle(face::PolyFace2D{G,T}, Ndim::P) where {G<:AbstractFloat, T
     # points to keep (triangle indices)
     tria_ids = setdiff([1,2,3,4], [mirror_ind]) # order of triangle points (counter clockwise) (from end of diagonal)
 
-    # create the new face (now quadrilateral)
-    face2 = PolyFace2D{G,T}(new_points, new_solid)
+    # create the new face (now quadrilateral) - UPDATED with spectral support
+    face2 = PolyFace2D{G}(new_points, new_solid, n_bins, kappa_default, sigma_s_default)
 
     # mesh as if it was a quadrilateral
     face2 = meshQuad(face2, Ndim, Ndim)
@@ -171,10 +189,10 @@ function meshTriangle(face::PolyFace2D{G,T}, Ndim::P) where {G<:AbstractFloat, T
             walls_ids = sort([subface_solid_wall_ids..., diag_ind]) # the diag is from the original triangle
             walls_solid = [i == diag_ind ? face.solidWalls[diag_ind] : subface.solidWalls[i] for i in walls_ids]
 
-            # create the new subface
+            # create the new subface - UPDATED with spectral support
             subface_points = SVector{3}(subface.vertices[tria_ids]...)
             subface_solid = SVector{3}(walls_solid...)
-            subface_keeper = PolyFace2D{G,T}(subface_points, subface_solid)
+            subface_keeper = PolyFace2D{G}(subface_points, subface_solid, n_bins, kappa_default, sigma_s_default)
             addSubFace!(face, subface_keeper)
         else
             # subface is not on the diagonal
@@ -195,26 +213,31 @@ function meshTriangle(face::PolyFace2D{G,T}, Ndim::P) where {G<:AbstractFloat, T
 
 end
 
-function addSubFace!(superFace::PolyFace2D{G,P}, subFace::PolyFace2D{G,P}) where {G,P}
+function addSubFace!(superFace::PolyFace2D{G}, subFace::PolyFace2D{G}) where {G}
 
     # next, update the properties of the added subface
     # the subface inherits the properties of the superface
 
-    # inherit extinction properties
-    subFace.kappa_g = superFace.kappa_g
-    subFace.sigma_s_g = superFace.sigma_s_g
+    # inherit extinction properties - direct assignment/copy
+    if isa(superFace.kappa_g, Vector)
+        subFace.kappa_g .= superFace.kappa_g
+        subFace.sigma_s_g .= superFace.sigma_s_g
+    else
+        subFace.kappa_g = superFace.kappa_g
+        subFace.sigma_s_g = superFace.sigma_s_g
+    end
 
-    # state variables (volume)
-    subFace.j_g = superFace.j_g # outgoing power [W]
-    subFace.g_a_g = superFace.g_a_g # incident absorbed power [W]
-    subFace.e_g = superFace.e_g # emissive power [W]
-    subFace.r_g = superFace.r_g # reflected power [W]
-    subFace.g_g = superFace.g_g # incident power [W]
-    subFace.i_g = superFace.i_g # total intensity [W*m^(-2)*sr^(-1)]
-    subFace.q_in_g = superFace.q_in_g # input source terms [W]
-    subFace.q_g = superFace.q_g # source terms [W]
-    subFace.T_in_g = superFace.T_in_g # input temperatures [K]
-    subFace.T_g = superFace.T_g # temperatures [K]
+    # inherit volume state variables - direct assignment/copy
+    inherit_volume_property!(superFace, subFace, :j_g)
+    inherit_volume_property!(superFace, subFace, :g_a_g)
+    inherit_volume_property!(superFace, subFace, :e_g)
+    inherit_volume_property!(superFace, subFace, :r_g)
+    inherit_volume_property!(superFace, subFace, :g_g)
+    inherit_volume_property!(superFace, subFace, :i_g)
+    inherit_volume_property!(superFace, subFace, :q_in_g)
+    inherit_volume_property!(superFace, subFace, :q_g)
+    inherit_volume_property!(superFace, subFace, :T_in_g)
+    inherit_volume_property!(superFace, subFace, :T_g)
 
     # then for walls
     for i in 1:length(subFace.vertices) # loop over walls of subface (same as number of vertices)
@@ -294,20 +317,54 @@ function addSubFace!(superFace::PolyFace2D{G,P}, subFace::PolyFace2D{G,P}) where
 
 end
 
-# inheritSurfaceProperties! function remains exactly the same - no changes needed
-function inheritSurfaceProperties!(superFace::PolyFace2D{G,T}, subFace::PolyFace2D{G,T}; from=i, to=j) where {G,T}
+# Helper function to inherit volume properties - direct copy
+function inherit_volume_property!(superFace::PolyFace2D{G}, subFace::PolyFace2D{G}, property::Symbol) where {G}
+    super_val = getfield(superFace, property)
+    sub_val = getfield(subFace, property)
+    
+    if isa(super_val, Vector)
+        # Spectral - copy entire vector
+        sub_val .= super_val
+    else
+        # Grey - direct assignment
+        setfield!(subFace, property, super_val)
+    end
+end
+
+# Updated inheritSurfaceProperties! function with direct inheritance
+function inheritSurfaceProperties!(superFace::PolyFace2D{G}, subFace::PolyFace2D{G}; from=i, to=j) where {G}
     # the subFace inherits the properties of the superFace
-    # boundary properties
+    
+    # boundary properties (unchanged - always scalar)
     subFace.epsilon[to] = superFace.epsilon[from]
-    # state variables (walls)
-    subFace.j_w[to] = superFace.j_w[from] # vector of outgoing power [W]
-    subFace.g_a_w[to] = superFace.g_a_w[from] # vector of incident absorbed power [W]
-    subFace.e_w[to] = superFace.e_w[from] # vector of emissive power [W]
-    subFace.r_w[to] = superFace.r_w[from] # vector of reflected power [W]
-    subFace.g_w[to] = superFace.g_w[from] # vector of incident power [W]
-    subFace.i_w[to] = superFace.i_w[from] # vector of total intensity [W*m^(-2)*sr^(-1)]
-    subFace.q_in_w[to] = superFace.q_in_w[from] # vector of input source terms [W]
-    subFace.q_w[to] = superFace.q_w[from] # vector of source terms [W]
-    subFace.T_in_w[to] = superFace.T_in_w[from] # vector of input temperatures [K]
-    subFace.T_w[to] = superFace.T_w[from] # vector of temperatures [K]
+    
+    # wall state variables - direct inheritance
+    inherit_wall_property!(superFace, subFace, :j_w, from, to)
+    inherit_wall_property!(superFace, subFace, :g_a_w, from, to)
+    inherit_wall_property!(superFace, subFace, :e_w, from, to)
+    inherit_wall_property!(superFace, subFace, :r_w, from, to)
+    inherit_wall_property!(superFace, subFace, :g_w, from, to)
+    inherit_wall_property!(superFace, subFace, :i_w, from, to)
+    inherit_wall_property!(superFace, subFace, :q_in_w, from, to)
+    inherit_wall_property!(superFace, subFace, :q_w, from, to)
+    inherit_wall_property!(superFace, subFace, :T_in_w, from, to)
+    inherit_wall_property!(superFace, subFace, :T_w, from, to)
+end
+
+# Helper function to inherit wall properties - direct copy
+function inherit_wall_property!(superFace::PolyFace2D{G}, subFace::PolyFace2D{G}, 
+                               property::Symbol, from::Int, to::Int) where {G}
+    super_wall_array = getfield(superFace, property)
+    sub_wall_array = getfield(subFace, property)
+    
+    super_val = super_wall_array[from]
+    sub_val = sub_wall_array[to]
+    
+    if isa(super_val, Vector)
+        # Spectral - copy entire vector
+        sub_val .= super_val
+    else
+        # Grey - direct assignment
+        sub_wall_array[to] = super_val
+    end
 end

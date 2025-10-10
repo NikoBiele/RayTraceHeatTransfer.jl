@@ -1,156 +1,139 @@
-function update_heat_source!(rtm::RayTracingMeshOptim, absorbed_count::Vector{Vector{Int}},
-                            gas_emitted_count::Vector{Vector{Int}}, wall_emitted_count::Vector{Vector{Vector{Int}}},
-                            reflected_count::Vector{Vector{Vector{Int}}}, scattered_count::Vector{Vector{Int}},
-                            wall_absorbed_count::Vector{Vector{Vector{Int}}}, total_energy::Float64, num_rays::Int)
+function update_spectral_results!(rtm::RayTracingMeshOptim, absorbed_count::Vector{Vector{P}},
+                            gas_emitted_count::Vector{Vector{P}}, wall_emitted_count::Vector{Vector{Vector{P}}},
+                            reflected_count::Vector{Vector{Vector{P}}}, scattered_count::Vector{Vector{P}},
+                            wall_absorbed_count::Vector{Vector{Vector{P}}}, total_energy::G, num_rays::P,
+                            spectral_bin::P=1) where {G, P<:Integer}
 
-    energy_per_ray = total_energy / num_rays
+    energy_per_ray = G(total_energy / num_rays)
 
-    println("Updating heat source...")
+    println("Updating spectral results for spectral bin $spectral_bin")
     println("Energy per ray: $energy_per_ray")
     
-    total_gas_elements = 0
-    nonzero_temps = 0
-    equilibrium_elements = 0
-    max_temp = 0.0
-    total_gas_absorbed_power = 0.0
-    total_gas_emitted_power = 0.0
-    
-    for (coarse_index, coarse_face) in enumerate(rtm.coarse_mesh)
-        fine_index = 1
-
-        for sub_face in rtm.fine_mesh[coarse_index]
-            total_gas_elements += 1
-            
-            # Gas properties
-            gas_absorbed = absorbed_count[coarse_index][fine_index] * energy_per_ray
-            gas_emitted = gas_emitted_count[coarse_index][fine_index] * energy_per_ray
-            gas_scattered = scattered_count[coarse_index][fine_index] * energy_per_ray
-            
-            total_gas_absorbed_power += gas_absorbed
-            total_gas_emitted_power += gas_emitted
-            
-            # Update gas properties from ray tracing results
-            sub_face.g_a_g = gas_absorbed  # Absorbed power for gas  
-            sub_face.e_g = gas_emitted     # Emitted power for gas (from ray tracing)
-            sub_face.r_g = gas_scattered   # Scattered power for gas
-            
-            # For radiative equilibrium: emitted should equal absorbed
-            # The ray tracing gives us the transport, but for equilibrium we need emission = absorption
-            sub_face.j_g = sub_face.e_g + sub_face.r_g     # Total outgoing radiant power
-            sub_face.g_g = sub_face.g_a_g + sub_face.r_g   # Total incident power (for energy balance)
-            
-            # Heat source calculation
-            if sub_face.T_in_g < 0.0
-                # Radiative equilibrium: q_g = 0 (no net energy gain/loss)
-                sub_face.q_g = 0.0
-            else
-                # Boundary element: q_g = absorbed - emitted (net energy balance)
-                sub_face.q_g = gas_emitted - gas_absorbed
+    for ((coarse_index, fine_index, wall_index), surface_index) in rtm.surface_mapping
+        sub_face = rtm.fine_mesh[coarse_index][fine_index]
+        wall_absorbed = G(wall_absorbed_count[coarse_index][fine_index][wall_index] * energy_per_ray)
+        wall_emitted = G(wall_emitted_count[coarse_index][fine_index][wall_index] * energy_per_ray)
+        wall_reflected = G(reflected_count[coarse_index][fine_index][wall_index] * energy_per_ray)
+        
+        # Update wall power variables - handle spectral vs grey
+        if isa(sub_face.g_a_w[wall_index], Vector)
+            # Spectral case
+            sub_face.g_a_w[wall_index][spectral_bin] = wall_absorbed
+            sub_face.e_w[wall_index][spectral_bin] = wall_emitted
+            sub_face.r_w[wall_index][spectral_bin] = wall_reflected
+            sub_face.j_w[wall_index][spectral_bin] = wall_emitted + wall_reflected
+            sub_face.g_w[wall_index][spectral_bin] = wall_absorbed + wall_reflected
+        else
+            # Grey case
+            if spectral_bin == 1
+                sub_face.g_a_w[wall_index] = wall_absorbed
+                sub_face.e_w[wall_index] = wall_emitted
+                sub_face.r_w[wall_index] = wall_reflected
+                sub_face.j_w[wall_index] = wall_emitted + wall_reflected
+                sub_face.g_w[wall_index] = wall_absorbed + wall_reflected
             end
-            
-            # Temperature calculation logic using local absorption coefficient
-            if sub_face.T_in_g < 0.0
-                equilibrium_elements += 1
-                # Radiative equilibrium element (negative T_in indicates unknown temperature)
-                # For equilibrium: absorbed = emitted, so calculate T from emitted power
-                if gas_emitted > 0.0 && sub_face.volume > 0.0
-                    # Get local absorption coefficient
-                    local_kappa = sub_face.kappa_g  # Always read directly from face
-                    
-                    if local_kappa > 0.0
-                        # T calculated from emitted power: e = 4*kappa*sigma*T^4*volume
-                        temp_calc = gas_emitted / (4 * local_kappa * STEFAN_BOLTZMANN * sub_face.volume)
-
-                        if temp_calc > 0.0
-                            sub_face.T_g = temp_calc^(1/4)  # Calculate and store in T_g
-                            nonzero_temps += 1
-                            max_temp = max(max_temp, sub_face.T_g)
-                            
-                            # Print first few calculated temperatures
-                            if nonzero_temps <= 5
-                                println("Calculated T_g for equilibrium element ($coarse_index,$fine_index): $(sub_face.T_g) K, emitted = $gas_emitted W, absorbed = $gas_absorbed W, kappa = $local_kappa")
-                            end
-                        else
-                            # No emission yet, keep T_g as is or set to small value
-                            if nonzero_temps <= 5
-                                println("Element ($coarse_index,$fine_index): No emission yet, T_in_g = $(sub_face.T_in_g)")
-                            end
-                        end
-                    else
-                        if nonzero_temps <= 5
-                            println("Element ($coarse_index,$fine_index): Zero absorption coefficient, cannot calculate temperature")
-                        end
-                    end
-                else
-                    if nonzero_temps <= 5
-                        println("Element ($coarse_index,$fine_index): Cannot calculate temperature, emitted = $gas_emitted W, T_in_g = $(sub_face.T_in_g)")
-                    end
-                end
-            else
-                # Prescribed boundary temperature (non-negative T_in) - copy to T_g
-                sub_face.T_g = sub_face.T_in_g
-                if nonzero_temps <= 5  # Print first few boundary elements too
-                    println("Prescribed temperature element ($coarse_index,$fine_index): T_g = $(sub_face.T_g) K (from T_in_g)")
-                end
-            end
-            
-            # Update wall properties (unchanged - walls don't use gas extinction)
-            for wall_index in 1:length(sub_face.solidWalls)
-                if sub_face.solidWalls[wall_index]
-                    wall_absorbed = wall_absorbed_count[coarse_index][fine_index][wall_index] * energy_per_ray
-                    wall_emitted = wall_emitted_count[coarse_index][fine_index][wall_index] * energy_per_ray
-                    wall_reflected = reflected_count[coarse_index][fine_index][wall_index] * energy_per_ray
-                    
-                    # Update wall power variables
-                    sub_face.g_a_w[wall_index] = wall_absorbed    # Absorbed power for wall
-                    sub_face.e_w[wall_index] = wall_emitted       # Emitted power for wall
-                    sub_face.r_w[wall_index] = wall_reflected     # Reflected power for wall
-                    sub_face.j_w[wall_index] = wall_emitted + wall_reflected  # Total outgoing power
-                    sub_face.g_w[wall_index] = wall_absorbed + wall_reflected  # Total incident power
-                    
-                    # Wall heat source calculation
-                    if sub_face.T_in_w[wall_index] < 0.0
-                        # Radiative equilibrium: q_w = 0
-                        sub_face.q_w[wall_index] = 0.0
-                    else
-                        # Boundary element: q_w = absorbed - emitted
-                        sub_face.q_w[wall_index] = wall_absorbed - wall_emitted
-                    end
-                    
-                    # Wall temperature calculation
-                    if sub_face.T_in_w[wall_index] < 0.0
-                        # Radiative equilibrium wall - calculate temperature from emitted power
-                        if wall_emitted > 0.0 && sub_face.area[wall_index] > 0.0
-                            # For wall: e = epsilon * sigma * T^4 * area
-                            # So: T = (e / (epsilon * sigma * area))^(1/4)
-                            epsilon_wall = sub_face.epsilon[wall_index]
-                            if epsilon_wall > 0.0
-                                temp_calc = wall_emitted / (epsilon_wall * STEFAN_BOLTZMANN * sub_face.area[wall_index])
-                                if temp_calc > 0.0
-                                    sub_face.T_w[wall_index] = temp_calc^(1/4)
-                                    if nonzero_temps <= 5  # Print first few
-                                        println("Calculated T_w for equilibrium wall ($coarse_index,$fine_index,$wall_index): $(sub_face.T_w[wall_index]) K, emitted = $wall_emitted W")
-                                    end
-                                end
-                            end
-                        end
-                    else
-                        # Prescribed boundary temperature
-                        sub_face.T_w[wall_index] = sub_face.T_in_w[wall_index]
-                    end
-                end
-            end
-            
-            fine_index += 1
         end
     end
-    
-    println("Temperature calculation summary:")
-    println("  Total gas elements: $total_gas_elements")
-    println("  Radiative equilibrium elements (T_in_g < 0): $equilibrium_elements")
-    println("  Elements with calculated non-zero temperature: $nonzero_temps")
-    println("  Maximum temperature: $max_temp K")
-    println("  Total gas absorbed power: $total_gas_absorbed_power W")
-    println("  Total gas emitted power: $total_gas_emitted_power W")
-    println("  Gas power balance: $(total_gas_emitted_power - total_gas_absorbed_power) W")
+
+    for ((coarse_index, fine_index), volume_index) in rtm.volume_mapping
+        sub_face = rtm.fine_mesh[coarse_index][fine_index]
+
+        # Gas properties for this spectral bin
+        gas_absorbed = G(absorbed_count[coarse_index][fine_index] * energy_per_ray)
+        gas_emitted = G(gas_emitted_count[coarse_index][fine_index] * energy_per_ray)
+        gas_scattered = G(scattered_count[coarse_index][fine_index] * energy_per_ray)
+        
+        # Update gas properties - handle spectral vs grey
+        if isa(sub_face.g_a_g, Vector)
+            # Spectral case - update specific bin
+            sub_face.g_a_g[spectral_bin] = gas_absorbed
+            sub_face.e_g[spectral_bin] = gas_emitted
+            sub_face.r_g[spectral_bin] = gas_scattered
+            sub_face.j_g[spectral_bin] = gas_emitted + gas_scattered
+            sub_face.g_g[spectral_bin] = gas_absorbed + gas_scattered
+        else
+            # Grey case - direct assignment (should only happen for bin 1)
+            if spectral_bin == 1
+                sub_face.g_a_g = gas_absorbed
+                sub_face.e_g = gas_emitted
+                sub_face.r_g = gas_scattered
+                sub_face.j_g = gas_emitted + gas_scattered
+                sub_face.g_g = gas_absorbed + gas_scattered
+            end
+        end 
+    end
+end
+
+function update_scalar_temperatures_and_heat_sources_direct!(rtm::RayTracingMeshOptim, wavelength_range::Tuple{Int,Int}=(-7,-3);
+                                                    temperatures_in=nothing)
+    G = eltype(rtm.fine_mesh[1][1].T_g)
+
+    if rtm.spectral_mode != :spectral_variable
+        # grey or uniform spectral
+        temperatures_calc = zeros(G, length(rtm.surface_mapping) + length(rtm.volume_mapping))
+        for ((coarse_idx, fine_idx, wall_index), surface_idx) in rtm.surface_mapping
+            sub_face = rtm.fine_mesh[coarse_idx][fine_idx]
+            if sub_face.T_in_w[wall_index] < -0.1
+                epsilon_wall = sum(sub_face.epsilon[wall_index])/length(sub_face.epsilon[wall_index])
+                sub_face.T_w[wall_index] = (sum(sub_face.e_w[wall_index]) / (epsilon_wall * STEFAN_BOLTZMANN * sub_face.area[wall_index]))^(1/4)
+                temperatures_calc[surface_idx] = sub_face.T_w[wall_index]
+            else
+                sub_face.T_w[wall_index] = sub_face.T_in_w[wall_index]
+                temperatures_calc[surface_idx] = sub_face.T_w[wall_index]
+                # update heat source
+                sub_face.q_w[wall_index] = sum(sub_face.e_w[wall_index]) - sum(sub_face.g_a_w[wall_index])
+            end
+        end
+        for ((coarse_idx, fine_idx), volume_idx) in rtm.volume_mapping
+            sub_face = rtm.fine_mesh[coarse_idx][fine_idx]
+            if sub_face.T_in_g < -0.1
+                local_kappa = sum(sub_face.kappa_g)/length(sub_face.kappa_g)
+                sub_face.T_g = (sum(sub_face.e_g) / (4 * local_kappa * STEFAN_BOLTZMANN * sub_face.volume))^(1/4)
+                temperatures_calc[length(rtm.surface_mapping) + volume_idx] = sub_face.T_g
+            else
+                sub_face.T_g = sub_face.T_in_g
+                temperatures_calc[length(rtm.surface_mapping) + volume_idx] = sub_face.T_g
+                # update heat source
+                sub_face.q_g = sum(sub_face.e_g) - sum(sub_face.g_a_g)
+            end
+        end
+    else # spectral variable
+        if temperatures_in === nothing
+            # first get the maximum initial temperature
+            temperatures_init = zeros(G, length(rtm.surface_mapping) + length(rtm.volume_mapping))
+            for ((coarse_idx, fine_idx, wall_index), surface_idx) in rtm.surface_mapping
+                sub_face = rtm.fine_mesh[coarse_idx][fine_idx]
+                if sub_face.T_in_w[wall_index] > -0.1
+                    temperatures_init[surface_idx] = sub_face.T_in_w[wall_index]
+                    sub_face.T_w[wall_index] = sub_face.T_in_w[wall_index]
+                end
+            end
+            for ((coarse_idx, fine_idx), volume_idx) in rtm.volume_mapping
+                sub_face = rtm.fine_mesh[coarse_idx][fine_idx]
+                if sub_face.T_in_g > -0.1
+                    temperatures_init[length(rtm.surface_mapping) + volume_idx] = sub_face.T_in_g
+                    sub_face.T_g = sub_face.T_in_g
+                end
+            end
+            maximum_temperature = maximum(temperatures_init)
+            # next, find the matching temperatures
+            wavelength_bands = G.(wavelength_band_splits(rtm, wavelength_range))
+            for ((coarse_idx, fine_idx, wall_index), surface_idx) in rtm.surface_mapping
+                sub_face = rtm.fine_mesh[coarse_idx][fine_idx]
+                if sub_face.T_in_w[wall_index] < -0.1
+                    sub_face.T_w[wall_index] = solve_temperature_newton_raphson(rtm, sub_face.area[wall_index], sub_face.e_w[wall_index],
+                                            sub_face.epsilon[wall_index], wavelength_bands; 
+                                            initial_temp=maximum_temperature, max_iter=10_000, tolerance=1000*eps(G))
+                end
+            end
+            for ((coarse_idx, fine_idx), volume_idx) in rtm.volume_mapping
+                sub_face = rtm.fine_mesh[coarse_idx][fine_idx]
+                if sub_face.T_in_g < -0.1
+                    sub_face.T_g = solve_temperature_newton_raphson(rtm, 4*sub_face.volume, sub_face.e_g,
+                                            sub_face.kappa_g, wavelength_bands; 
+                                            initial_temp=maximum_temperature, max_iter=10_000, tolerance=1000*eps(G))
+                end
+            end
+        end
+    end
 end

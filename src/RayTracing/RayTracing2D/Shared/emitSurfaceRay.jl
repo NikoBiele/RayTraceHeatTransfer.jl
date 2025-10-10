@@ -1,4 +1,6 @@
-function emit_surface_ray(face::PolyFace2D{G,T}, wall_index::P, nudge) where {G, T, P<:Integer}
+function emit_surface_ray(face::PolyFace2D{G}, wall_index::P, nudge::G) where {G, P<:Integer}
+    # println("Emitting surface ray, type of G is $(typeof(G))")
+
     p1, p2 = face.vertices[wall_index], face.vertices[mod1(wall_index+1, length(face.vertices))]
     R = G(rand()) # Convert random number to the appropriate type G
 
@@ -10,6 +12,7 @@ function emit_surface_ray(face::PolyFace2D{G,T}, wall_index::P, nudge) where {G,
     p = p1 + (p2 - p1) * R
     # nudge the point a tiny bit towards the midpoint, to ensure we are inside cell
     p = p + (face.midPoint - p) * nudge
+    p = Point2{G}(p[1], p[2])
 
     # sample direction of ray (local coordinate system)
     i1_loc = lambertSample3D() # Convert the result to type G if needed
