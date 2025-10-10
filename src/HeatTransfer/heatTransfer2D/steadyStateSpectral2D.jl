@@ -118,6 +118,6 @@ function steadyStateSpectral2D!(rtm::RayTracingMeshOptim, F_matrices::Union{Matr
     end
     
     # Update mesh with final results
-    # update_scalar_temperatures_and_heat_sources!(rtm, wavelength_range; temperatures_in=temperatures)
+    update_scalar_temperatures_and_heat_sources!(rtm, wavelength_range; temperatures_in=temperatures)
     
 end
