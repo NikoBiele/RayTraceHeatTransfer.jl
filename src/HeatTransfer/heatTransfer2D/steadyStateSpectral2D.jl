@@ -86,12 +86,7 @@ function steadyStateSpectral2D!(rtm::RayTracingMeshOptim, F_matrices::Union{Matr
         end
     end
     # Outside iteration loop - factorize once
-    if rtm.n_spectral_bins <= 1000
-        AtA = block_matrix' * block_matrix
-        Factorization = cholesky(AtA)  # Fast, exploits symmetry
-    else
-        Factorization = qr(block_matrix)
-    end
+    Factorization = qr(block_matrix)
         
     # Set boundary conditions from mesh
     boundary, temperatures, emissive = setup_boundary_conditions(rtm, F_matrices)
@@ -113,13 +108,7 @@ function steadyStateSpectral2D!(rtm::RayTracingMeshOptim, F_matrices::Union{Matr
         # calculate inverse of b-e matrix
         emissive_pow_vec = reduce(vcat, [emissive for _ in 1:rtm.n_spectral_bins])
         b_e_matrix = Diagonal(reduce(vcat, [boundary; emissive_pow_vec]))
-        # sol_j .= block_matrix\(b_e_matrix*[ones(G, total_elements); emit_frac[:]])
-        if rtm.n_spectral_bins <= 1000
-            Atb = block_matrix' * (b_e_matrix*[ones(G, total_elements); emit_frac[:]])
-            sol_j .= Factorization \ Atb
-        else
-            sol_j .= Factorization \ (b_e_matrix*[ones(G, total_elements); emit_frac[:]])
-        end
+        sol_j .= Factorization \ (b_e_matrix*[ones(G, total_elements); emit_frac[:]])
 
         # Check convergence
         convergence_error = maximum(abs.(sol_j - previous_sol_j))

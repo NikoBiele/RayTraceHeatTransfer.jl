@@ -85,12 +85,7 @@ function steadyStateSpectral3D!(domain::Domain3D_faces{G,P};
         end
     end
     # Outside iteration loop - factorize once
-    if domain.n_spectral_bins <= 1000
-        AtA = block_matrix' * block_matrix
-        Factorization = cholesky(AtA)  # Fast, exploits symmetry
-    else
-        Factorization = qr(block_matrix)
-    end
+    Factorization = qr(block_matrix)
     
     # Setup boundary conditions
     println("Setting up boundary conditions...")
@@ -115,13 +110,7 @@ function steadyStateSpectral3D!(domain::Domain3D_faces{G,P};
         # Solve block system
         emissive_pow_vec = reduce(vcat, [emissive for _ in 1:domain.n_spectral_bins])
         b_e_matrix = Diagonal(reduce(vcat, [boundary; emissive_pow_vec]))
-        # sol_j .= block_matrix \ (b_e_matrix * [ones(G, N_surfs); emit_frac[:]])
-        if domain.n_spectral_bins <= 1000
-            Atb = block_matrix' * (b_e_matrix*[ones(G, N_surfs); emit_frac[:]])
-            sol_j .= Factorization \ Atb
-        else
-            sol_j .= Factorization \ (b_e_matrix*[ones(G, N_surfs); emit_frac[:]])
-        end
+        sol_j .= Factorization \ (b_e_matrix*[ones(G, N_surfs); emit_frac[:]])
         
         # Check convergence
         convergence_error = maximum(abs.(sol_j - previous_sol_j))
