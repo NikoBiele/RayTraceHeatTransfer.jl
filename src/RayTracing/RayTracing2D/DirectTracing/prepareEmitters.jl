@@ -1,4 +1,4 @@
-function prepare_emitters(rtm::RayTracingMeshOptim, nudge::G, wavelength_range::Tuple{Int,Int}=(-1,-1), spectral_bin::Int=1) where {G}
+function prepare_emitters(rtm::RayTracingMeshOptim, nudge::G, spectral_bin::Int=1) where {G}
     emitters = Emitter[]
     total_energy = G(0.0)
 
@@ -22,8 +22,7 @@ function prepare_emitters(rtm::RayTracingMeshOptim, nudge::G, wavelength_range::
             end
         end
         # calculate emissive fractions
-        wavelength_bands = G.(wavelength_band_splits(rtm, wavelength_range))
-        emit_frac = getBinsEmissionFractions(rtm, wavelength_bands, temps)
+        emit_frac = getBinsEmissionFractions(rtm, temps)
 
         # use emissive fractions to weight absortion to get spectral emissive power
         emissive = zeros(G, total_elements)

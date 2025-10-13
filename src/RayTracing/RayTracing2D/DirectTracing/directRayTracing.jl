@@ -1,26 +1,26 @@
-function direct_ray_tracing!(rtm::RayTracingMeshOptim, rays_tot::P, nudge::G, wavelength_range::Tuple{P,P}=(-7,-3)) where {G, P<:Integer}
+function direct_ray_tracing!(rtm::RayTracingMeshOptim, rays_tot::P, nudge::G) where {G, P<:Integer}
     
     if rtm.spectral_mode != :grey
         println("Running direct ray tracing for $(rtm.n_spectral_bins) spectral bins")
         # Run direct ray tracing for each spectral bin
         for bin in 1:rtm.n_spectral_bins
             println("Processing spectral bin $bin/$(rtm.n_spectral_bins)")
-            direct_ray_tracing_single_bin!(rtm, rays_tot, nudge, bin, wavelength_range)
+            direct_ray_tracing_single_bin!(rtm, rays_tot, nudge, bin)
         end
     else
         println("Running direct ray tracing for grey extinction")
-        direct_ray_tracing_single_bin!(rtm, rays_tot, nudge, 1, wavelength_range)  # bin=1 for grey
+        direct_ray_tracing_single_bin!(rtm, rays_tot, nudge, 1)  # bin=1 for grey
     end
 
-    update_scalar_temperatures_and_heat_sources_direct!(rtm, wavelength_range)
+    update_scalar_temperatures_and_heat_sources_direct!(rtm)
 
 end
 
 function direct_ray_tracing_single_bin!(rtm::RayTracingMeshOptim, rays_tot::P, nudge::G,
-                                        spectral_bin::P, wavelength_range::Tuple{P,P}=(-7,-3)) where {G, P<:Integer}
+                                        spectral_bin::P) where {G, P<:Integer}
 
     # Prepare emitters
-    emitters, total_energy = prepare_emitters(rtm, nudge, wavelength_range, spectral_bin) # pass nudge to get the type G
+    emitters, total_energy = prepare_emitters(rtm, nudge, spectral_bin) # pass nudge to get the type G
     if total_energy == 0.0
         @warn "No emitters found for spectral bin $spectral_bin"
     end

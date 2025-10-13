@@ -66,9 +66,7 @@ mutable struct RayTracingMesh{VPF,VVPF,MT,VT,DIII,DII,GRID}
     
     # UPDATED: Exchange factor matrices - Union for spectral support
     F_raw::Union{MT, Vector{MT}}              # Single matrix (grey) or vector of matrices (spectral)
-    # F_raw_uncertain::Union{MTU, Vector{MTU}}  # Single matrix (grey) or vector of matrices (spectral)
     F_smooth::Union{MT, Vector{MT}}           # Single matrix (grey) or vector of matrices (spectral)
-    # F_smooth_uncertain::Union{MTU, Vector{MTU}} # Single matrix (grey) or vector of matrices (spectral)
     
     surface_areas::VT
     volumes::VT
@@ -119,19 +117,13 @@ function RayTracingMesh(faces::Vector{PolyFace2D{G}}, Ndiv::Vector{Tuple{P,P}}) 
         # Spectral mode - create vector of matrices (will be populated during ray tracing)
         F_raw = Matrix{G}[]
         push!(F_raw, zeros(G, 2, 2))
-        # F_raw_uncertain = Matrix{G}[]
-        # push!(F_raw_uncertain, zeros(G, 2, 2))
         F_smooth = Matrix{G}[]
         push!(F_smooth, zeros(G, 2, 2))
-        # F_smooth_uncertain = Matrix{G}[]
-        # push!(F_smooth_uncertain, zeros(G, 2, 2))
         spectral_mode = :spectral_variable  # Will be determined by validate_extinction_consistency!
     else
         # Grey mode - single matrices
         F_raw = zeros(G, 2, 2)
-        # F_raw_uncertain = zeros(G, 2, 2)
         F_smooth = zeros(G, 2, 2)
-        # F_smooth_uncertain = zeros(G, 2, 2)
         spectral_mode = :grey
     end
     
@@ -141,9 +133,7 @@ function RayTracingMesh(faces::Vector{PolyFace2D{G}}, Ndiv::Vector{Tuple{P,P}}) 
         coarse_grid,
         fine_grids,
         F_raw,
-        # F_raw_uncertain,
         F_smooth,
-        # F_smooth_uncertain,
         Vector{G}(),
         Vector{G}(),
         Dict{Tuple{Int,Int,Int}, Int}(),
@@ -207,9 +197,7 @@ mutable struct RayTracingMeshOptim{VPF,VVPF,MT,VT,DIII,DII,GRID}
     coarse_grid::GRID
     fine_grids::Vector{GRID}
     F_raw::Union{MT, Vector{MT}}              # UPDATED: Union for spectral support
-    # F_raw_uncertain::Union{MTU, Vector{MTU}}  # UPDATED: Union for spectral support
     F_smooth::Union{MT, Vector{MT}}           # UPDATED: Union for spectral support
-    # F_smooth_uncertain::Union{MTU, Vector{MTU}} # UPDATED: Union for spectral support
     surface_areas::VT
     volumes::VT
     surface_mapping::DIII
@@ -219,6 +207,7 @@ mutable struct RayTracingMeshOptim{VPF,VVPF,MT,VT,DIII,DII,GRID}
     # NEW: Spectral metadata
     spectral_mode::Symbol        # :grey, :spectral_uniform, :spectral_variable
     n_spectral_bins::Int        # Number of spectral bins (1 for grey)
+    wavelength_band_limits::Union{Nothing, Vector{Float64}}  # Wavelength boundaries [μm]
     
     # Optimized cache structures (existing)
     coarse_face_cache::Vector{PolyFace2D}  # Flattened for direct indexing
@@ -250,7 +239,6 @@ function RayTracingMeshOptim(rtm::RayTracingMesh)
     VPF = typeof(rtm.coarse_mesh)
     VVPF = typeof(rtm.fine_mesh)
     MT = rtm.F_raw isa Vector ? typeof(rtm.F_raw[1]) : typeof(rtm.F_raw)
-    # MTU = rtm.F_raw_uncertain isa Vector ? typeof(rtm.F_raw_uncertain[1]) : typeof(rtm.F_raw_uncertain)
     VT = typeof(rtm.surface_areas)
     DIII = typeof(rtm.surface_mapping)
     DII = typeof(rtm.volume_mapping)
@@ -341,11 +329,10 @@ function RayTracingMeshOptim(rtm::RayTracingMesh)
     
     return RayTracingMeshOptim{VPF,VVPF,MT,VT,DIII,DII,GRID}(
         rtm.coarse_mesh, rtm.fine_mesh, rtm.coarse_grid, rtm.fine_grids,
-        rtm.F_raw, # rtm.F_raw_uncertain,
-        rtm.F_smooth, # rtm.F_smooth_uncertain,
+        rtm.F_raw, rtm.F_smooth,
         surface_areas, volumes, surface_mapping, volume_mapping,
         rtm.uniform_extinction,
-        spectral_mode, n_bins,  # NEW spectral fields
+        spectral_mode, n_bins, nothing, # NEW spectral fields
         coarse_face_cache, fine_face_cache,
         coarse_wall_normals, coarse_wall_midpoints,
         fine_wall_normals, fine_wall_midpoints,

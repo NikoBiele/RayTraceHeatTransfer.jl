@@ -1,5 +1,5 @@
 function exchange_ray_tracing!(rtm::RayTracingMeshOptim, rays_tot::P, tol::G, 
-                              nudge::G, wavelength_range::Tuple{Int,Int}=(-1,-1)) where {G, P<:Integer}
+                              nudge::G) where {G, P<:Integer}
     
     # Ray trace domain - returns different types based on spectral mode
     F_raw, rays_per_emitter = parallel_ray_tracing_optimized(rtm, rays_tot, nudge)

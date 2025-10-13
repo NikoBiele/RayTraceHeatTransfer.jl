@@ -1,4 +1,4 @@
-function solve_temperature_newton_raphson(rtm::RayTracingMeshOptim, element_size, measured_powers, absorption_coeffs, wavelength_bands; 
+function solve_temperature_newton_raphson(rtm::RayTracingMeshOptim, element_size, measured_powers, absorption_coeffs; 
                                         initial_temp=1000.0, max_iter=10_000, tolerance=1e-12)
     """
     Solve for temperature given measured spectral emission powers using Newton-Raphson
@@ -25,24 +25,24 @@ function solve_temperature_newton_raphson(rtm::RayTracingMeshOptim, element_size
             if i == 1
                 F_lower = 0.0
             else
-                F_lower = emitFracBlackBody_element_spectrum(wavelength_bands, T, i-1)
+                F_lower = emitFracBlackBody_element_spectrum(rtm.wavelength_band_limits, T, i-1)
             end
             if i == rtm.n_spectral_bins
                 F_upper = 1.0
             else
-                F_upper = emitFracBlackBody_element_spectrum(wavelength_bands, T, i)   # Upper boundary
+                F_upper = emitFracBlackBody_element_spectrum(rtm.wavelength_band_limits, T, i)   # Upper boundary
             end
                 
             # Get derivatives at band boundaries
             if i == 1
                 dF_lower_dT = 0.0
             else
-                dF_lower_dT = emitFracBlackBody_element_spectrum_derivative(wavelength_bands, T, i-1)
+                dF_lower_dT = emitFracBlackBody_element_spectrum_derivative(rtm.wavelength_band_limits, T, i-1)
             end
             if i == rtm.n_spectral_bins
                 dF_upper_dT = 0.0
             else
-                dF_upper_dT = emitFracBlackBody_element_spectrum_derivative(wavelength_bands, T, i)
+                dF_upper_dT = emitFracBlackBody_element_spectrum_derivative(rtm.wavelength_band_limits, T, i)
             end
 
             # Band fraction and its derivative

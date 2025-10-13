@@ -23,7 +23,6 @@ include(joinpath(@__DIR__, "RayTracing2D", "Shared", "findNearestFace.jl"))
 include(joinpath(@__DIR__, "RayTracing2D", "Shared", "getGlobalIndex.jl"))
 include(joinpath(@__DIR__, "RayTracing2D", "Shared", "lambertSample3D.jl"))
 include(joinpath(@__DIR__, "RayTracing2D", "Shared", "multiDispatchRayTrace.jl"))
-include(joinpath(@__DIR__, "RayTracing2D", "Shared", "wavelength_band_splits.jl"))
 
 # ray tracing 3D
 # empty for now

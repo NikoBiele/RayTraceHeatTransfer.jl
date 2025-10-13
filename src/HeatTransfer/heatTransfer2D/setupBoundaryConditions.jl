@@ -1,4 +1,4 @@
-function setup_boundary_conditions(rtm, F_matrices::Union{Matrix{G}, Vector{Matrix{G}}}, wavelength_range::Tuple{Int,Int}=(-7,-3)) where {G}
+function setup_boundary_conditions(rtm, F_matrices::Union{Matrix{G}, Vector{Matrix{G}}}) where {G}
 
     # # Set up surface boundary conditions
     num_surfaces = length(rtm.surface_mapping)
@@ -24,8 +24,7 @@ function setup_boundary_conditions(rtm, F_matrices::Union{Matrix{G}, Vector{Matr
     if rtm.spectral_mode == :spectral_variable # works!
         
         # calculate emissive fractions
-        wavelength_bands = G.(wavelength_band_splits(rtm, wavelength_range))
-        emit_frac = getBinsEmissionFractions(rtm, wavelength_bands, temperatures)
+        emit_frac = getBinsEmissionFractions(rtm, temperatures)
 
         # use emissive fractions to weight absortion to get spectral emissive power
         for ((coarse_face, fine_face, wall_index), surface_index) in rtm.surface_mapping
@@ -55,8 +54,7 @@ function setup_boundary_conditions(rtm, F_matrices::Union{Matrix{G}, Vector{Matr
     elseif rtm.spectral_mode == :spectral_uniform # works!
         
         # calculate emissive fractions
-        wavelength_bands = G.(wavelength_band_splits(rtm, wavelength_range))
-        emit_frac = getBinsEmissionFractions(rtm, wavelength_bands, temperatures)
+        emit_frac = getBinsEmissionFractions(rtm, temperatures)
 
         # use emissive fractions to weight absortion to get spectral emissive power
         for ((coarse_face, fine_face, wall_index), surface_index) in rtm.surface_mapping

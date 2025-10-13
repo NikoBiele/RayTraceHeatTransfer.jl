@@ -1,11 +1,35 @@
 function steadyStateSpectral2D!(rtm::RayTracingMeshOptim, F_matrices::Union{Matrix{G}, Vector{Matrix{G}}}; 
-                              max_iterations::P=500, wavelength_range::Tuple{P,P}=(-7,-3),
-                              return_matrices::Bool=false) where {G, P<:Integer}
+                              max_iterations::P=500,return_matrices::Bool=false) where {G, P<:Integer}
     """
     Solve spectral radiative equilibrium using the iterative method from your example.
     F_matrices can be either a single matrix (grey/uniform) or vector of matrices (variable spectral)
     """
     
+    # Validate spectral setup at entry
+    if isnothing(rtm.wavelength_band_limits)
+        error("""
+        Spectral solve requires wavelength band limits to be set.
+        
+        Please set mesh.wavelength_band_limits before calling steadyStateSpectral2D!:
+        
+        Example, using logarithmic spacing:
+            mesh.wavelength_band_limits = 10 .^ range(log10(0.0000001), log10(0.001), length=51)
+        """)
+    end
+    
+    # Additional validation
+    if length(rtm.wavelength_band_limits) < 4
+        error("wavelength_band_limits must have at least 4 values (defining 3 bins)")
+    end
+    
+    if any(rtm.wavelength_band_limits .<= 0)
+        error("wavelength_band_limits must all be positive (wavelengths > 0)")
+    end
+
+    if any(diff(rtm.wavelength_band_limits) .<= 0)
+        error("wavelength_band_limits must be strictly increasing (no duplicates)")
+    end
+
     # Get system matrices
     surface_mapping, volume_mapping = rtm.surface_mapping, rtm.volume_mapping
     num_surfaces = length(surface_mapping)
@@ -18,9 +42,7 @@ function steadyStateSpectral2D!(rtm::RayTracingMeshOptim, F_matrices::Union{Matr
     M_matrices = Vector{Matrix{G}}()
     if rtm.spectral_mode == :spectral_uniform
         # uniform spectral - single F matrix for all bins
-        B, S_infty, A, R, C, D, M = steadyStateGrey2D!(rtm, F_matrices; return_matrices=true, spectral_bin=1)
-        # reset the grey energy conservation error (will be re-computed for spectral later)
-        rtm.energy_error = nothing
+        B, S_infty, A, R, C, D, M = build_system_matrices2D!(rtm, F_matrices; spectral_bin=1)
 
         # For uniform spectral, same matrices apply to all bins
         for bin in 1:rtm.n_spectral_bins
@@ -32,17 +54,16 @@ function steadyStateSpectral2D!(rtm::RayTracingMeshOptim, F_matrices::Union{Matr
         # Variable spectral - use different F matrix for each bin
         
         for bin in 1:rtm.n_spectral_bins
-            B, S_infty, A, R, C, D, M = steadyStateGrey2D!(rtm, F_matrices[bin]; return_matrices=true, spectral_bin=bin)
+            B, S_infty, A, R, C, D, M = build_system_matrices2D!(rtm, F_matrices[bin]; spectral_bin=bin)
             push!(D_matrices, D)
             push!(C_matrices, C)
             push!(M_matrices, M)
         end
 
-        # reset the grey energy conservation error (will be re-computed for spectral later)
-        rtm.energy_error = nothing
     end
     
     # Build block matrix structure
+    println("==== Building and Factorizing Block matrix ====")
     if G <: Measurement
         block_matrix = zeros(G, (rtm.n_spectral_bins + 1) * total_elements, rtm.n_spectral_bins * total_elements)
     else
@@ -64,17 +85,22 @@ function steadyStateSpectral2D!(rtm::RayTracingMeshOptim, F_matrices::Union{Matr
             # else: leave as sparse zeros
         end
     end
-    
+    # Outside iteration loop - factorize once
+    if rtm.n_spectral_bins <= 1000
+        AtA = block_matrix' * block_matrix
+        Factorization = cholesky(AtA)  # Fast, exploits symmetry
+    else
+        Factorization = qr(block_matrix)
+    end
+        
     # Set boundary conditions from mesh
-    boundary, temperatures, emissive = setup_boundary_conditions(rtm, F_matrices, wavelength_range)
-    println("Initial temperatures: $temperatures K")
+    boundary, temperatures, emissive = setup_boundary_conditions(rtm, F_matrices)
     
     # Iteration loop
     sol_j = zeros(G, rtm.n_spectral_bins * total_elements)
     record_convergence = G[]
     previous_sol_j = zeros(G, rtm.n_spectral_bins * total_elements)
-    wavelength_bands = G.(wavelength_band_splits(rtm, wavelength_range))
-    emit_frac = getBinsEmissionFractions(rtm, wavelength_bands, temperatures)
+    emit_frac = getBinsEmissionFractions(rtm, temperatures)
 
     println("Starting spectral steady-state iteration...")
     for iter = 1:max_iterations
@@ -82,13 +108,18 @@ function steadyStateSpectral2D!(rtm::RayTracingMeshOptim, F_matrices::Union{Matr
         # calculate emissive powers and temperatures
         emissive = updateSpectralEmission!(rtm, iter, D_matrices, sol_j, emit_frac, temperatures, emissive)
         temperatures = updateTemperaturesSpectral!(rtm, emissive, emit_frac)
-        emit_frac = getBinsEmissionFractions(rtm, wavelength_bands, temperatures)
-        println("Iteration $iter: emissive powers = $emissive")
+        emit_frac = getBinsEmissionFractions(rtm, temperatures)
         
         # calculate inverse of b-e matrix
         emissive_pow_vec = reduce(vcat, [emissive for _ in 1:rtm.n_spectral_bins])
         b_e_matrix = Diagonal(reduce(vcat, [boundary; emissive_pow_vec]))
-        sol_j .= block_matrix\(b_e_matrix*[ones(G, total_elements); emit_frac[:]])
+        # sol_j .= block_matrix\(b_e_matrix*[ones(G, total_elements); emit_frac[:]])
+        if rtm.n_spectral_bins <= 1000
+            Atb = block_matrix' * (b_e_matrix*[ones(G, total_elements); emit_frac[:]])
+            sol_j .= Factorization \ Atb
+        else
+            sol_j .= Factorization \ (b_e_matrix*[ones(G, total_elements); emit_frac[:]])
+        end
 
         # Check convergence
         convergence_error = maximum(abs.(sol_j - previous_sol_j))
@@ -100,24 +131,45 @@ function steadyStateSpectral2D!(rtm::RayTracingMeshOptim, F_matrices::Union{Matr
         if iter > 1 && convergence_error < 100_000*eps(Float64)
             println("Converged after $iter iterations")
             Ds_combined = hcat([D_matrices[i] for i in 1:rtm.n_spectral_bins]...)
-            emissive = max.(Ds_combined * sol_j, 1e-6)
+            emissive = max.(Ds_combined * sol_j, 10*eps(G))
             emissive = updateSpectralEmission!(rtm, iter, D_matrices, sol_j, emit_frac, temperatures, emissive)
             temperatures = updateTemperaturesSpectral!(rtm, emissive, emit_frac)
-            rtm.energy_error = G.([sum(C_matrices[i] * sol_j[(i - 1) * total_elements + 1:i * total_elements]) for i in 1:rtm.n_spectral_bins])
             break
         end
         
         if iter == max_iterations
             println("Warning: Maximum iterations reached. Final error = $convergence_error")
             Ds_combined = hcat([D_matrices[i] for i in 1:rtm.n_spectral_bins]...)
-            emissive = max.(Ds_combined * sol_j, 1e-6)
+            emissive = max.(Ds_combined * sol_j, 10*eps(G))
             emissive = updateSpectralEmission!(rtm, iter, D_matrices, sol_j, emit_frac, temperatures, emissive)
             temperatures = updateTemperaturesSpectral!(rtm, emissive, emit_frac)
-            rtm.energy_error = G.([sum(C_matrices[i] * sol_j[(i - 1) * total_elements + 1:i * total_elements]) for i in 1:rtm.n_spectral_bins])
         end
     end
     
+    # Write spectral results for each bin to mesh
+    println("Writing spectral results to mesh...")
+    for bin in 1:rtm.n_spectral_bins
+        # Extract solution for this bin
+        bin_start = (bin - 1) * total_elements + 1
+        bin_end = bin * total_elements
+        j_bin = sol_j[bin_start:bin_end]
+        
+        # Compute e, r, g_a from GERT matrices
+        e_bin = D_matrices[bin] * j_bin           # e = D * j
+        r_bin = j_bin - e_bin                     # r = j - e = R' * j
+        g_a_bin = j_bin - C_matrices[bin] * j_bin - r_bin  # g_a = A' * j = j - C*j - r
+        
+        # Dummy temperature vector (will be overwritten by update_scalar_temperatures_and_heat_sources!)
+        T_bin = zeros(G, total_elements)
+        
+        # Write to mesh for this bin
+        write_results_to_mesh!(rtm, T_bin, j_bin, g_a_bin, r_bin, num_surfaces; spectral_bin=bin)
+    end
+
     # Update mesh with final results
-    update_scalar_temperatures_and_heat_sources!(rtm, wavelength_range; temperatures_in=temperatures)
+    update_scalar_temperatures_and_heat_sources!(rtm)
+    # Compute energy conservation error for each spectral bin
+    rtm.energy_error = G.([sum(C_matrices[i] * sol_j[(i - 1) * total_elements + 1:i * total_elements]) 
+                            for i in 1:rtm.n_spectral_bins])
     
 end

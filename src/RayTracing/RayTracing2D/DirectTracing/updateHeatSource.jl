@@ -64,7 +64,7 @@ function update_spectral_results!(rtm::RayTracingMeshOptim, absorbed_count::Vect
     end
 end
 
-function update_scalar_temperatures_and_heat_sources_direct!(rtm::RayTracingMeshOptim, wavelength_range::Tuple{Int,Int}=(-7,-3);
+function update_scalar_temperatures_and_heat_sources_direct!(rtm::RayTracingMeshOptim;
                                                     temperatures_in=nothing)
     G = eltype(rtm.fine_mesh[1][1].T_g)
 
@@ -117,12 +117,11 @@ function update_scalar_temperatures_and_heat_sources_direct!(rtm::RayTracingMesh
             end
             maximum_temperature = maximum(temperatures_init)
             # next, find the matching temperatures
-            wavelength_bands = G.(wavelength_band_splits(rtm, wavelength_range))
             for ((coarse_idx, fine_idx, wall_index), surface_idx) in rtm.surface_mapping
                 sub_face = rtm.fine_mesh[coarse_idx][fine_idx]
                 if sub_face.T_in_w[wall_index] < -0.1
                     sub_face.T_w[wall_index] = solve_temperature_newton_raphson(rtm, sub_face.area[wall_index], sub_face.e_w[wall_index],
-                                            sub_face.epsilon[wall_index], wavelength_bands; 
+                                            sub_face.epsilon[wall_index]; 
                                             initial_temp=maximum_temperature, max_iter=10_000, tolerance=1000*eps(G))
                 end
             end
@@ -130,7 +129,7 @@ function update_scalar_temperatures_and_heat_sources_direct!(rtm::RayTracingMesh
                 sub_face = rtm.fine_mesh[coarse_idx][fine_idx]
                 if sub_face.T_in_g < -0.1
                     sub_face.T_g = solve_temperature_newton_raphson(rtm, 4*sub_face.volume, sub_face.e_g,
-                                            sub_face.kappa_g, wavelength_bands; 
+                                            sub_face.kappa_g; 
                                             initial_temp=maximum_temperature, max_iter=10_000, tolerance=1000*eps(G))
                 end
             end

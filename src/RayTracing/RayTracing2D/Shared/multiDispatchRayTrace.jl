@@ -1,5 +1,5 @@
 function (rtm::RayTracingMeshOptim{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; method::Symbol=:exchange,
-                                wavelength_range::Tuple{Int,Int}=(-7,-3), nudge=nothing, rtol=nothing) where {VPF,VVPF,MT,VT,DIII,DII,P<:Integer,GRID}
+                                nudge=nothing, rtol=nothing) where {VPF,VVPF,MT,VT,DIII,DII,P<:Integer,GRID}
     
     # Extract floating point type from the mesh vertices (Point2{G} where G is the float type)
     println("element type of rtm.fine_mesh[1][1].T_in_g is $(eltype(rtm.fine_mesh[1][1].T_in_g))")
@@ -17,7 +17,7 @@ function (rtm::RayTracingMeshOptim{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; m
     if method == :exchange
         exchange_ray_tracing!(rtm, rays_tot, actual_rtol, actual_nudge)
     elseif method == :direct
-        direct_ray_tracing!(rtm, rays_tot, actual_nudge, wavelength_range)
+        direct_ray_tracing!(rtm, rays_tot, actual_nudge)
     else
         error("Unknown ray tracing method: $method, must be :exchange or :direct")
     end

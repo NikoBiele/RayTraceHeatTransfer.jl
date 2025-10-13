@@ -319,15 +319,24 @@ end
 
 # Helper function to inherit volume properties - direct copy
 function inherit_volume_property!(superFace::PolyFace2D{G}, subFace::PolyFace2D{G}, property::Symbol) where {G}
-    super_val = getfield(superFace, property)
-    sub_val = getfield(subFace, property)
-    
-    if isa(super_val, Vector)
-        # Spectral - copy entire vector
-        sub_val .= super_val
+    if property == :q_in_g || property == :q_g
+        super_val = getfield(superFace, property)
+        sub_val = getfield(subFace, property)
+
+        # source flux should reduce by area ratio
+        sub_val = super_val*subFace.volume/superFace.volume
+        setfield!(subFace, property, sub_val)
     else
-        # Grey - direct assignment
-        setfield!(subFace, property, super_val)
+        super_val = getfield(superFace, property)
+        sub_val = getfield(subFace, property)
+    
+        if isa(super_val, Vector)
+            # Spectral - copy entire vector
+            sub_val .= super_val
+        else
+            # Grey - direct assignment
+            setfield!(subFace, property, super_val)
+        end
     end
 end
 
@@ -354,17 +363,29 @@ end
 # Helper function to inherit wall properties - direct copy
 function inherit_wall_property!(superFace::PolyFace2D{G}, subFace::PolyFace2D{G}, 
                                property::Symbol, from::Int, to::Int) where {G}
-    super_wall_array = getfield(superFace, property)
-    sub_wall_array = getfield(subFace, property)
-    
-    super_val = super_wall_array[from]
-    sub_val = sub_wall_array[to]
-    
-    if isa(super_val, Vector)
-        # Spectral - copy entire vector
-        sub_val .= super_val
+    if property == :q_in_w || property == :q_w
+        
+        super_wall_array = getfield(superFace, property)
+        sub_wall_array = getfield(subFace, property)
+        
+        super_val = super_wall_array[from]
+        sub_val = sub_wall_array[to]
+        
+        # source flux should reduce by area ratio
+        sub_wall_array[to] = super_val*subFace.area[to]/superFace.area[from]
     else
-        # Grey - direct assignment
-        sub_wall_array[to] = super_val
+        super_wall_array = getfield(superFace, property)
+        sub_wall_array = getfield(subFace, property)
+        
+        super_val = super_wall_array[from]
+        sub_val = sub_wall_array[to]
+        
+        if isa(super_val, Vector)
+            # Spectral - copy entire vector
+            sub_val .= super_val
+        else
+            # Grey - direct assignment
+            sub_wall_array[to] = super_val
+        end
     end
 end
