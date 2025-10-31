@@ -1,4 +1,4 @@
-function updateSpectralEmission!(rtm::RayTracingMeshOptim, iter::Int, D_matrices::Vector{Matrix{G}},
+function updateSpectralEmission!(rtm::RayTracingDomain2D, iter::Int, D_matrices::Vector{Matrix{G}},
                                 sol_j::Vector{G}, emit_frac::Matrix{G}, temperatures::Vector{G}, emissive::Vector{G}) where {G}
     num_surfaces = length(rtm.surface_mapping)
 

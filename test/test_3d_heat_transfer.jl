@@ -43,7 +43,7 @@ println("-"^60)
     q_in_w = zeros(6)
     T_in_w = fill(T_iso, 6)
     
-    domain3D = Domain3D_faces(points, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     steadyStateGrey3D!(domain3D, domain3D.F)
     
     # Extract temperatures from all subfaces
@@ -92,7 +92,7 @@ end
     T_in_w = [T_hot, T_cold, -1.0, -1.0, -1.0, -1.0]
     q_in_w = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     
-    domain3D = Domain3D_faces(points, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     steadyStateGrey3D!(domain3D, domain3D.F)
     
     # Check that specified temperatures are maintained
@@ -146,7 +146,7 @@ end
     T_in_w = [1000.0, 500.0, -1.0, -1.0, -1.0, -1.0]
     q_in_w = [0.0, 0.0, q_heating, q_heating, 0.0, 0.0]
     
-    domain3D = Domain3D_faces(points, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     steadyStateGrey3D!(domain3D, domain3D.F)
     
     # Calculate total energy balance
@@ -224,7 +224,7 @@ end
     T_in_w = [T_hot, T_cold, -1.0, -1.0, -1.0, -1.0]
     q_in_w = zeros(6)
     
-    domain_base = Domain3D_faces(points_base, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain_base = ViewFactorDomain3D(points_base, faces, Ndim, q_in_w, T_in_w, epsilon)
     steadyStateGrey3D!(domain_base, domain_base.F)
     
     # Get temperature statistics from base case
@@ -243,7 +243,7 @@ end
         @testset "Rotation: $desc" begin
             points_rot = rotate_points_3d(points_base, axis, angle)
             
-            domain_rot = Domain3D_faces(points_rot, faces, Ndim, q_in_w, T_in_w, epsilon)
+            domain_rot = ViewFactorDomain3D(points_rot, faces, Ndim, q_in_w, T_in_w, epsilon)
             steadyStateGrey3D!(domain_rot, domain_rot.F)
             
             # Temperature statistics should be invariant
@@ -294,7 +294,7 @@ end
     T_in_w = [1000.0, 500.0, -1.0, -1.0, -1.0, -1.0]
     q_in_w = zeros(6)
     
-    domain3D = Domain3D_faces(points, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     steadyStateGrey3D!(domain3D, domain3D.F)
     
     # Solution should still exist and be physically reasonable

@@ -45,7 +45,7 @@ println("-"^60)
     
     # Grey case
     epsilon_grey = ones(6)
-    domain_grey = Domain3D_faces(points, faces, Ndim, q_in_w, T_in_w, epsilon_grey)
+    domain_grey = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon_grey)
     steadyStateGrey3D!(domain_grey, domain_grey.F)
     
     grey_T = Float64[]
@@ -61,7 +61,7 @@ println("-"^60)
     epsilon_spectral_black = fill(1.0, n_bins)
     epsilon_spectral = [epsilon_spectral_black for _ in 1:6]
     
-    domain_spectral = Domain3D_faces(points, faces, Ndim, q_in_w, T_in_w, 
+    domain_spectral = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, 
                                      epsilon_spectral)
     domain_spectral.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     steadyStateSpectral3D!(domain_spectral; max_iterations=200)
@@ -144,7 +144,7 @@ end
     epsilon_bins = fill(1.0, n_bins)
     face.epsilon = [epsilon_bins, epsilon_bins, epsilon_bins, epsilon_bins]
     
-    mesh = RayTracingMeshOptim([face], [(Ndim, Ndim)])
+    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
     mesh.spectral_mode = :spectral_uniform
     mesh.n_spectral_bins = n_bins
     mesh.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
@@ -226,7 +226,7 @@ end
     epsilon_black = fill(1.0, n_bins)
     epsilon_all_black = [epsilon_black for _ in 1:6]
     
-    domain_black = Domain3D_faces(points, faces, Ndim, q_in_w, T_in_w, 
+    domain_black = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, 
                                   epsilon_all_black)
     domain_black.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     steadyStateSpectral3D!(domain_black)
@@ -237,7 +237,7 @@ end
     epsilon_selective = [i <= n_bins÷2 ? 0.3 : 0.9 for i in 1:n_bins]
     epsilon_all_selective = [epsilon_selective for _ in 1:6]
     
-    domain_selective = Domain3D_faces(points, faces, Ndim, q_in_w, T_in_w,
+    domain_selective = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w,
                                       epsilon_all_selective)
     domain_selective.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     steadyStateSpectral3D!(domain_selective)
@@ -283,7 +283,7 @@ end
     
     # Grey mode: scalar epsilon
     epsilon_grey = ones(6)
-    domain_grey = Domain3D_faces(points, faces, Ndim, q_in_w, T_in_w, epsilon_grey)
+    domain_grey = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon_grey)
     
     @test domain_grey.spectral_mode == :grey
     @test domain_grey.n_spectral_bins == 1
@@ -293,7 +293,7 @@ end
     epsilon_spectral_vec = fill(1.0, n_bins)
     epsilon_spectral = [epsilon_spectral_vec for _ in 1:6]
     
-    domain_spectral = Domain3D_faces(points, faces, Ndim, q_in_w, T_in_w, 
+    domain_spectral = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, 
                                      epsilon_spectral)
     domain_spectral.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     
@@ -336,7 +336,7 @@ end
     epsilon_bins = fill(1.0, n_bins)
     epsilon = [epsilon_bins for _ in 1:6]
     
-    domain = Domain3D_faces(points, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     domain.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     steadyStateSpectral3D!(domain)
     

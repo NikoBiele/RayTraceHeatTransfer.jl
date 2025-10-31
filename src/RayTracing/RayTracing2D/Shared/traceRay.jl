@@ -1,4 +1,4 @@
-function trace_ray(hmesh::RayTracingMeshOptim, p_emit::Point2{G}, dir_emit::Point2{G}, 
+function trace_ray(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit::Point2{G}, 
                    nudge::G, current_coarse_index::P, spectral_bin::P=1) where {G, P<:Integer}
     
     if hmesh.uniform_extinction
@@ -17,7 +17,7 @@ function trace_ray(hmesh::RayTracingMeshOptim, p_emit::Point2{G}, dir_emit::Poin
 end
 
 # Uniform ray tracing (unchanged - extinction is uniform across all bins)
-function trace_ray_uniform(hmesh::RayTracingMeshOptim, p_emit::Point2{G}, dir_emit::Point2{G}, 
+function trace_ray_uniform(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit::Point2{G}, 
                            beta::T, nudge, current_coarse_index::P) where {G, T, P<:Integer}
     point = p_emit
     direction = dir_emit
@@ -70,7 +70,7 @@ function trace_ray_uniform(hmesh::RayTracingMeshOptim, p_emit::Point2{G}, dir_em
 end
 
 # Updated variable ray tracing with spectral bin support
-function trace_ray_variable(hmesh::RayTracingMeshOptim, p_emit::Point2{G}, dir_emit::Point2{G}, 
+function trace_ray_variable(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit::Point2{G}, 
                            nudge, current_coarse_index::P, spectral_bin::Int=1) where {G, P<:Integer}
     point = p_emit
     direction = dir_emit

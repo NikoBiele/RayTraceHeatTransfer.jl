@@ -1,4 +1,4 @@
-function solve_temperature_newton_raphson(rtm::RayTracingMeshOptim, element_size, measured_powers, absorption_coeffs; 
+function solve_temperature_newton_raphson(rtm::RayTracingDomain2D, element_size, measured_powers, absorption_coeffs; 
                                         initial_temp=1000.0, max_iter=10_000, tolerance=1e-12)
     """
     Solve for temperature given measured spectral emission powers using Newton-Raphson
@@ -81,8 +81,8 @@ function solve_temperature_newton_raphson(rtm::RayTracingMeshOptim, element_size
         T = T_new
         
         # Debug output
-        if iter <= 3 || iter % 5 == 0
-            println("Iter $iter: T = $T K, F = $F, relative_change = $relative_change")
+        if iter <= 3 || iter % 20 == 0
+            println("Iter $iter: T = $T K, relative_change = $relative_change")
         end
     end
     

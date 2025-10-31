@@ -117,7 +117,7 @@ end
     T_in_w = -ones(size(faces, 1))  # All unknown
     
     # Create domain and compute view factors
-    domain3D = Domain3D_faces(points, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     
     # Test against EES reference
     @test maximum(abs.(domain3D.F - F_EES)) < VF_TOLERANCE
@@ -216,7 +216,7 @@ end
             points_rotated = rotate_points(points_base, axis, angle)
             
             # Create domain with rotated geometry
-            domain3D = Domain3D_faces(points_rotated, faces, Ndim, q_in_w, T_in_w, epsilon)
+            domain3D = ViewFactorDomain3D(points_rotated, faces, Ndim, q_in_w, T_in_w, epsilon)
             
             # Extract unique view factor values (excluding self-view)
             F_unique = Float64[]

@@ -1,4 +1,4 @@
-function RayTraceHeatTransfer.plotMesh2D(ax, faces::RayTracingMeshOptim; superfaces=false,
+function RayTraceHeatTransfer.plotMesh2D(ax, faces::RayTracingDomain2D; superfaces=false,
                 wallNumbers=[], volumeNumbers=[], color=:lightblue, strokecolor=:black, strokewidth=1)
 
     function plot_volume(ax, face::PolyFace2D, index=nothing)

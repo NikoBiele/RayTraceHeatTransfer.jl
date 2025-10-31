@@ -1,4 +1,4 @@
-function prepare_emitters(rtm::RayTracingMeshOptim, nudge::G, spectral_bin::Int=1) where {G}
+function prepare_emitters(rtm::RayTracingDomain2D, nudge::G, spectral_bin::Int=1) where {G}
     emitters = Emitter[]
     total_energy = G(0.0)
 

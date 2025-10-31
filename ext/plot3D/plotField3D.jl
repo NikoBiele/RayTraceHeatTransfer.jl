@@ -1,4 +1,4 @@
-function RayTraceHeatTransfer.plotField3D(ax1, domain3D::Domain3D_faces, cmap; field=:T)
+function RayTraceHeatTransfer.plotField3D(ax1, domain3D::ViewFactorDomain3D, cmap; field=:T)
 
     # Function to get the field value
     value_field = Symbol(string(field) * "_w")

@@ -1,8 +1,7 @@
-function (rtm::RayTracingMeshOptim{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; method::Symbol=:exchange,
+function (rtm::RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; method::Symbol=:exchange,
                                 nudge=nothing, rtol=nothing) where {VPF,VVPF,MT,VT,DIII,DII,P<:Integer,GRID}
     
     # Extract floating point type from the mesh vertices (Point2{G} where G is the float type)
-    println("element type of rtm.fine_mesh[1][1].T_in_g is $(eltype(rtm.fine_mesh[1][1].T_in_g))")
     FloatType = eltype(rtm.fine_mesh[1][1].T_in_g) # Gets G from PolyFace2D{G}
     
     # Set defaults based on the mesh's floating point precision

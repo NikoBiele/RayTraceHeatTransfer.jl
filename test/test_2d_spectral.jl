@@ -62,7 +62,7 @@ function create_spectral_uniform_mesh(; T_hot=1000.0, T_cold=0.0, kappa=1.0,
     end
     face.epsilon = [epsilon_bins, epsilon_bins, epsilon_bins, epsilon_bins]
     
-    mesh = RayTracingMeshOptim([face], [(Ndim, Ndim)])
+    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
     mesh.spectral_mode = :spectral_uniform
     mesh.n_spectral_bins = n_bins
     
@@ -118,7 +118,7 @@ function create_spectral_variable_mesh(; T_hot=1000.0, T_cold=0.0, base_kappa=1.
     end
     face.epsilon = [epsilon_bins, epsilon_bins, epsilon_bins, epsilon_bins]
     
-    mesh = RayTracingMeshOptim([face], [(Ndim, Ndim)])
+    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
     mesh.spectral_mode = :spectral_variable
     mesh.n_spectral_bins = n_bins
     
@@ -151,7 +151,7 @@ end
     face_grey.epsilon = [1.0, 1.0, 1.0, 1.0]
     face_grey.T_in_g = -1.0
     
-    mesh_grey = RayTracingMeshOptim([face_grey], [(Ndim, Ndim)])
+    mesh_grey = RayTracingDomain2D([face_grey], [(Ndim, Ndim)])
     mesh_grey(N_rays; method=:exchange)
     steadyStateGrey2D!(mesh_grey, mesh_grey.F_smooth)
     

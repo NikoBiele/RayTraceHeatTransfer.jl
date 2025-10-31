@@ -1,4 +1,4 @@
-function RayTraceHeatTransfer.plotMesh3D(ax1, domain3D::Domain3D_faces)
+function RayTraceHeatTransfer.plotMesh3D(ax1, domain3D::ViewFactorDomain3D)
 
     # Determine the "grid" dimensions - assuming all faces have same structure
     num_faces = length(domain3D.facesMesh)

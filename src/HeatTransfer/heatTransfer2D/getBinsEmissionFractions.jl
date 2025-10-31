@@ -1,4 +1,4 @@
-function getBinsEmissionFractions(rtm::RayTracingMeshOptim, temperatures::Vector{G}) where {G}
+function getBinsEmissionFractions(rtm::RayTracingDomain2D, temperatures::Vector{G}) where {G}
 
     # Calculate spectral emission fractions using Planck function
     emit_frac = zeros(G, length(rtm.surface_mapping)+length(rtm.volume_mapping), rtm.n_spectral_bins)

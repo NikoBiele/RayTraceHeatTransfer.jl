@@ -148,7 +148,7 @@ function compute_convergence_metric_parallel(F::Matrix{T}, scaling_factors::Vect
 end
 
 # Updated smoothing algorithm - reads extinction directly from faces for specific spectral bin
-function smooth_exchange_factors!(F::Matrix{T}, rtm::RayTracingMeshOptim, 
+function smooth_exchange_factors!(F::Matrix{T}, rtm::RayTracingDomain2D, 
                                  rays_per_emitter::Int,
                                  spectral_bin::Int=1; 
                                  max_iterations::Int=1000, tolerance=nothing) where {T}

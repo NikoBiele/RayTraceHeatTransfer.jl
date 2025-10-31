@@ -1,4 +1,4 @@
-function create_index_mapping(rtm::RayTracingMeshOptim, rays_total::P) where {P<:Integer}
+function create_index_mapping(rtm::RayTracingDomain2D, rays_total::P) where {P<:Integer}
     surface_index = zero(P)
     volume_index = zero(P)
     surface_mapping = Dict{Tuple{P,P,P}, P}()

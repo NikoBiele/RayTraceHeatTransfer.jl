@@ -1,4 +1,4 @@
-function exchangeFactors3D!(superFaces::Vector{Face3D})
+function exchangeFactors3D!(superFaces::Vector{PolyFace3D})
     # Calculate dimensions
     num_faces = length(superFaces)
     num_subFaces = length(superFaces[1].subFaces)

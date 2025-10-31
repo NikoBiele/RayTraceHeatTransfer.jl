@@ -1,4 +1,4 @@
-function trace_single_ray(hmesh::RayTracingMeshOptim, origin::Point2{G},
+function trace_single_ray(hmesh::RayTracingDomain2D, origin::Point2{G},
                         direction::Point2{G}, nudge::G,
                         current_coarse_index::P, spectral_bin::P=1, max_iterations::P=10_000) where {G, P<:Integer}
     path = []

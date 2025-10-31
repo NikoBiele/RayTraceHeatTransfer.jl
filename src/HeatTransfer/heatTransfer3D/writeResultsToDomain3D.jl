@@ -4,7 +4,7 @@ Handles grey and spectral modes correctly.
 """
 
 # Grey mode - write scalar results
-function write_results_to_domain_grey_3D!(domain::Domain3D_faces, T::Vector{P}, j::Vector{P}, 
+function write_results_to_domain_grey_3D!(domain::ViewFactorDomain3D, T::Vector{P}, j::Vector{P}, 
                                           Abs::Vector{P}, r::Vector{P}) where P
     surf_count = 0
     
@@ -36,7 +36,7 @@ function write_results_to_domain_grey_3D!(domain::Domain3D_faces, T::Vector{P}, 
 end
 
 # Spectral mode - write results for a specific spectral bin
-function write_results_to_domain_spectral_bin_3D!(domain::Domain3D_faces, T::Vector{P}, j::Vector{P}, 
+function write_results_to_domain_spectral_bin_3D!(domain::ViewFactorDomain3D, T::Vector{P}, j::Vector{P}, 
                                                   Abs::Vector{P}, r::Vector{P}, spectral_bin::Int) where P
     surf_count = 0
     
@@ -73,7 +73,7 @@ function write_results_to_domain_spectral_bin_3D!(domain::Domain3D_faces, T::Vec
 end
 
 # Main interface - dispatches based on spectral mode
-function write_results_to_domain_3D!(domain::Domain3D_faces, T::Vector{P}, j::Vector{P}, 
+function write_results_to_domain_3D!(domain::ViewFactorDomain3D, T::Vector{P}, j::Vector{P}, 
                                     Abs::Vector{P}, r::Vector{P};
                                     spectral_bin::Union{Nothing,Int}=nothing) where P
     
@@ -97,7 +97,7 @@ function write_results_to_domain_3D!(domain::Domain3D_faces, T::Vector{P}, j::Ve
 end
 
 # Helper function to update scalar temperatures after all spectral bins computed
-function update_scalar_temperatures_3D!(domain::Domain3D_faces{G,P}) where {G,P}
+function update_scalar_temperatures_3D!(domain::ViewFactorDomain3D{G,P}) where {G,P}
     
     if domain.spectral_mode == :grey
         # Already scalar, nothing to do
@@ -117,7 +117,7 @@ function update_scalar_temperatures_3D!(domain::Domain3D_faces{G,P}) where {G,P}
                 # Solve for scalar temperature
                 subface.T_w = solve_temperature_newton_raphson_3D(
                     domain, subface.area, measured_powers, epsilon_vals;
-                    initial_temp=max_temp, max_iter=10_000, tolerance=1000*eps(G)
+                    initial_temp=max_temp, max_iter=10_000, tolerance=sqrt(eps(G))
                 )
                 
                 # Prescribed heat source (scalar)
@@ -136,7 +136,7 @@ function update_scalar_temperatures_3D!(domain::Domain3D_faces{G,P}) where {G,P}
 end
 
 # Newton-Raphson solver for 3D (adapted from 2D version)
-function solve_temperature_newton_raphson_3D(domain::Domain3D_faces, element_size, measured_powers, 
+function solve_temperature_newton_raphson_3D(domain::ViewFactorDomain3D, element_size, measured_powers, 
                                             absorption_coeffs; 
                                             initial_temp=1000.0, max_iter=10_000, tolerance=1e-12)
     

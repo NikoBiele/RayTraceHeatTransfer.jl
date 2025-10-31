@@ -75,7 +75,7 @@ function create_square_domain_2d(; T_hot=1000.0, T_cold=0.0, kappa=1.0, sigma_s=
     face.q_in_g = 0.0   # Radiative equilibrium
     
     # Create mesh
-    mesh = RayTracingMeshOptim([face], [(Ndim, Ndim)])
+    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
     
     return mesh
 end

@@ -1,4 +1,4 @@
-function direct_ray_tracing!(rtm::RayTracingMeshOptim, rays_tot::P, nudge::G) where {G, P<:Integer}
+function direct_ray_tracing!(rtm::RayTracingDomain2D, rays_tot::P, nudge::G) where {G, P<:Integer}
     
     if rtm.spectral_mode != :grey
         println("Running direct ray tracing for $(rtm.n_spectral_bins) spectral bins")
@@ -16,13 +16,14 @@ function direct_ray_tracing!(rtm::RayTracingMeshOptim, rays_tot::P, nudge::G) wh
 
 end
 
-function direct_ray_tracing_single_bin!(rtm::RayTracingMeshOptim, rays_tot::P, nudge::G,
+function direct_ray_tracing_single_bin!(rtm::RayTracingDomain2D, rays_tot::P, nudge::G,
                                         spectral_bin::P) where {G, P<:Integer}
 
     # Prepare emitters
     emitters, total_energy = prepare_emitters(rtm, nudge, spectral_bin) # pass nudge to get the type G
     if total_energy == 0.0
-        @warn "No emitters found for spectral bin $spectral_bin"
+        @warn "No emitters found for spectral bin $spectral_bin, skipping ray tracing"
+        return
     end
 
     # Initialize counters for this spectral bin

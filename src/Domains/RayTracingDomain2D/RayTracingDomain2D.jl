@@ -58,7 +58,7 @@ struct SpatialGrid{G,P}
     dims::Tuple{P,P}
 end
 
-mutable struct RayTracingMesh{VPF,VVPF,MT,VT,DIII,DII,GRID}
+mutable struct IntermediateMesh{VPF,VVPF,MT,GRID}
     coarse_mesh::VPF
     fine_mesh::VVPF
     coarse_grid::GRID  
@@ -67,20 +67,10 @@ mutable struct RayTracingMesh{VPF,VVPF,MT,VT,DIII,DII,GRID}
     # UPDATED: Exchange factor matrices - Union for spectral support
     F_raw::Union{MT, Vector{MT}}              # Single matrix (grey) or vector of matrices (spectral)
     F_smooth::Union{MT, Vector{MT}}           # Single matrix (grey) or vector of matrices (spectral)
-    
-    surface_areas::VT
-    volumes::VT
-    surface_mapping::DIII
-    volume_mapping::DII
-    uniform_extinction::Bool
-    
-    # NEW: Spectral metadata
-    spectral_mode::Symbol        # :grey, :spectral_uniform, :spectral_variable
-    n_spectral_bins::Int        # Number of spectral bins (1 for grey)
 end
 
 # Updated constructor
-function RayTracingMesh(faces::Vector{PolyFace2D{G}}, Ndiv::Vector{Tuple{P,P}}) where {G, P<:Integer}
+function IntermediateMesh(faces::Vector{PolyFace2D{G}}, Ndiv::Vector{Tuple{P,P}}) where {G, P<:Integer}
     meshing_mesh = PolyFace2D{G}[]
     for (index, face) in enumerate(faces)
         if length(face.vertices) == 3
@@ -110,7 +100,6 @@ function RayTracingMesh(faces::Vector{PolyFace2D{G}}, Ndiv::Vector{Tuple{P,P}}) 
     # Determine spectral mode from the first face
     first_face = fine_mesh[1][1]
     is_spectral = isa(first_face.kappa_g, Vector)
-    n_bins = is_spectral ? length(first_face.kappa_g) : 1
     
     # Initialize F matrices based on spectral mode
     if is_spectral
@@ -119,41 +108,25 @@ function RayTracingMesh(faces::Vector{PolyFace2D{G}}, Ndiv::Vector{Tuple{P,P}}) 
         push!(F_raw, zeros(G, 2, 2))
         F_smooth = Matrix{G}[]
         push!(F_smooth, zeros(G, 2, 2))
-        spectral_mode = :spectral_variable  # Will be determined by validate_extinction_consistency!
     else
         # Grey mode - single matrices
         F_raw = zeros(G, 2, 2)
         F_smooth = zeros(G, 2, 2)
-        spectral_mode = :grey
     end
     
-    rtm = RayTracingMesh(
+    rtm = IntermediateMesh(
         coarse_mesh, 
         fine_mesh,
         coarse_grid,
         fine_grids,
         F_raw,
         F_smooth,
-        Vector{G}(),
-        Vector{G}(),
-        Dict{Tuple{Int,Int,Int}, Int}(),
-        Dict{Tuple{Int,Int}, Int}(),
-        false,
-        spectral_mode,
-        n_bins
     )
-
-    rtm.uniform_extinction = validate_extinction_consistency!(rtm)
-    
-    # Update spectral mode based on uniformity
-    if rtm.uniform_extinction && is_spectral
-        rtm.spectral_mode = :spectral_uniform
-    end
 
     return rtm
 end
 
-function get_F_matrix(mesh::RayTracingMesh, spectral_bin::Int=1)
+function get_F_matrix(mesh::IntermediateMesh, spectral_bin::Int=1)
     if mesh.spectral_mode == :spectral_variable
         return mesh.F_smooth[spectral_bin]
     else
@@ -162,7 +135,7 @@ function get_F_matrix(mesh::RayTracingMesh, spectral_bin::Int=1)
     end
 end
 
-function get_F_matrices(mesh::RayTracingMesh)
+function get_F_matrices(mesh::IntermediateMesh)
     if mesh.spectral_mode == :spectral_variable
         return mesh.F_smooth
     else
@@ -189,8 +162,8 @@ struct UniformGrid{G}
     ny::Int                   # Number of cells in y direction
 end
 
-# Enhanced RayTracingMeshOptim with spectral support
-mutable struct RayTracingMeshOptim{VPF,VVPF,MT,VT,DIII,DII,GRID}
+# Enhanced RayTracingDomain2D with spectral support
+mutable struct RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}
     # Original fields (matching your exact RayTracingMesh structure)
     coarse_mesh::VPF
     fine_mesh::VVPF
@@ -202,12 +175,12 @@ mutable struct RayTracingMeshOptim{VPF,VVPF,MT,VT,DIII,DII,GRID}
     volumes::VT
     surface_mapping::DIII
     volume_mapping::DII
-    uniform_extinction::Bool
     
     # NEW: Spectral metadata
     spectral_mode::Symbol        # :grey, :spectral_uniform, :spectral_variable
     n_spectral_bins::Int        # Number of spectral bins (1 for grey)
     wavelength_band_limits::Union{Nothing, Vector{Float64}}  # Wavelength boundaries [μm]
+    uniform_extinction::Bool     # Whether to use uniform exchange factors across all wavelengths
     
     # Optimized cache structures (existing)
     coarse_face_cache::Vector{PolyFace2D}  # Flattened for direct indexing
@@ -234,18 +207,14 @@ mutable struct RayTracingMeshOptim{VPF,VVPF,MT,VT,DIII,DII,GRID}
 end
 
 # Updated constructor from existing RayTracingMesh - now with spectral support
-function RayTracingMeshOptim(rtm::RayTracingMesh)
+function RayTracingDomain2D(rtm::IntermediateMesh)
     # Extract the type parameters from the input
     VPF = typeof(rtm.coarse_mesh)
     VVPF = typeof(rtm.fine_mesh)
     MT = rtm.F_raw isa Vector ? typeof(rtm.F_raw[1]) : typeof(rtm.F_raw)
-    VT = typeof(rtm.surface_areas)
-    DIII = typeof(rtm.surface_mapping)
-    DII = typeof(rtm.volume_mapping)
     GRID = typeof(rtm.coarse_grid)
     
     # Build optimized cache structures
-    println("Building optimized cache structures...")
     
     # 1. Coarse face cache (direct vector access)
     coarse_face_cache = [face for face in rtm.coarse_mesh]
@@ -254,7 +223,6 @@ function RayTracingMeshOptim(rtm::RayTracingMesh)
     fine_face_cache = [Vector{eltype(submesh)}([face for face in submesh]) for submesh in rtm.fine_mesh]
     
     # 3. Pre-compute geometric data for coarse mesh
-    println("Pre-computing coarse mesh geometry...")
     coarse_wall_normals = [copy(face.outwardNormals) for face in rtm.coarse_mesh]
     coarse_wall_midpoints = [copy(face.wallMidPoints) for face in rtm.coarse_mesh]
     
@@ -269,7 +237,6 @@ function RayTracingMeshOptim(rtm::RayTracingMesh)
     end
     
     # 4. Pre-compute geometric data for fine mesh
-    println("Pre-computing fine mesh geometry...")
     fine_wall_normals = Vector{Vector{Vector{Point2}}}(undef, length(rtm.fine_mesh))
     fine_wall_midpoints = Vector{Vector{Vector{Point2}}}(undef, length(rtm.fine_mesh))
     fine_bounding_boxes = Vector{Vector{Tuple{Point2, Point2}}}(undef, length(rtm.fine_mesh))
@@ -292,20 +259,11 @@ function RayTracingMeshOptim(rtm::RayTracingMesh)
     # 5. Determine spectral mode from the first face
     first_face = fine_face_cache[1][1]
     is_spectral = isa(first_face.kappa_g, Vector)
-    n_bins = is_spectral ? length(first_face.kappa_g) : 1
-    
-    # Initialize F matrices based on spectral mode
-    if is_spectral
-        # Check if extinction is uniform across all bins and faces
-        spectral_mode = rtm.uniform_extinction ? :spectral_uniform : :spectral_variable
-    else
-        spectral_mode = :grey
-    end
+    n_spectral_bins = is_spectral ? length(first_face.kappa_g) : 1
     
     # 6. Compute mappings
     surface_mapping = Dict{Tuple{Int,Int,Int}, Int}()
     volume_mapping = Dict{Tuple{Int,Int}, Int}()
-    element_mapping = Dict{Tuple{Int,Int,Int}, Int}()
     surface_index = 1
     volume_index = 1
     surface_areas = []
@@ -324,15 +282,16 @@ function RayTracingMeshOptim(rtm::RayTracingMesh)
             volume_index += 1
         end
     end
-    
-    println("Optimization cache built successfully!")
-    
-    return RayTracingMeshOptim{VPF,VVPF,MT,VT,DIII,DII,GRID}(
+    VT = typeof(surface_areas)
+    DIII = typeof(surface_mapping)
+    DII = typeof(volume_mapping)
+        
+    rtm_optim = RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}(
         rtm.coarse_mesh, rtm.fine_mesh, rtm.coarse_grid, rtm.fine_grids,
         rtm.F_raw, rtm.F_smooth,
         surface_areas, volumes, surface_mapping, volume_mapping,
-        rtm.uniform_extinction,
-        spectral_mode, n_bins, nothing, # NEW spectral fields
+        :not_yet_set, n_spectral_bins, nothing, # NEW spectral fields
+        false,
         coarse_face_cache, fine_face_cache,
         coarse_wall_normals, coarse_wall_midpoints,
         fine_wall_normals, fine_wall_midpoints,
@@ -344,15 +303,28 @@ function RayTracingMeshOptim(rtm::RayTracingMesh)
         nothing,  # fine_bboxes_opt
         nothing   # energy_error
     )
+
+    rtm_optim.uniform_extinction = validate_extinction_uniformity!(rtm_optim)
+
+    # Update spectral mode based on uniformity
+    if validate_spectral_uniformity!(rtm_optim) && is_spectral
+        rtm_optim.spectral_mode = :spectral_uniform
+    elseif is_spectral
+        rtm_optim.spectral_mode = :spectral_variable
+    else
+        rtm_optim.spectral_mode = :grey
+    end
+
+    return rtm_optim
 end
 
 # Updated constructor that builds from scratch (for new meshes) - now with spectral support  
-function RayTracingMeshOptim(faces::Vector{PolyFace2D{G}}, Ndiv::Vector{Tuple{P,P}}) where {G, P<:Integer}
+function RayTracingDomain2D(faces::Vector{PolyFace2D{G}}, Ndiv::Vector{Tuple{P,P}}) where {G, P<:Integer}
     # First create the standard RayTracingMesh
-    standard_mesh = RayTracingMesh(faces, Ndiv)
+    standard_mesh = IntermediateMesh(faces, Ndiv)
     
     # Then convert to optimized version with spectral support
-    optimMesh = RayTracingMeshOptim(standard_mesh)
+    optimMesh = RayTracingDomain2D(standard_mesh)
 
     # Build spatial acceleration
     build_spatial_acceleration!(optimMesh)
@@ -360,11 +332,7 @@ function RayTracingMeshOptim(faces::Vector{PolyFace2D{G}}, Ndiv::Vector{Tuple{P,
     return optimMesh
 end
 
-function n_spectral_bins(mesh::RayTracingMeshOptim)
-    return mesh.n_spectral_bins
-end
-
-function get_F_matrix(mesh::RayTracingMeshOptim, spectral_bin::Int=1)
+function get_F_matrix(mesh::RayTracingDomain2D, spectral_bin::Int=1)
     if mesh.spectral_mode == :spectral_variable
         return mesh.F_smooth[spectral_bin]
     else
@@ -373,7 +341,7 @@ function get_F_matrix(mesh::RayTracingMeshOptim, spectral_bin::Int=1)
     end
 end
 
-function get_F_matrices(mesh::RayTracingMeshOptim)
+function get_F_matrices(mesh::RayTracingDomain2D)
     if mesh.spectral_mode == :spectral_variable
         return mesh.F_smooth
     else
@@ -671,7 +639,7 @@ function build_optimized_spatial_structure(faces::Vector{PolyFace2D{G}}) where {
 end
 
 # Main function to build all spatial acceleration structures
-function build_spatial_acceleration!(mesh::RayTracingMeshOptim)
+function build_spatial_acceleration!(mesh::RayTracingDomain2D)
     println("Building spatial acceleration structures...")
     
     # Build for coarse mesh
@@ -746,74 +714,71 @@ function build_spatial_grid(mesh::Vector{PolyFace2D{G}}, ncells::P) where {G,P<:
     SpatialGrid(cells, cell_size, min_point, max_point, (ncells, ncells))
 end
 
-function validate_extinction_consistency!(mesh::RayTracingMesh; rtol=1e-10)
+function validate_spectral_uniformity!(rtm::RayTracingDomain2D; atol=1e-5)
     """
-    Checks if extinction properties are uniform across all faces and spectral bins.
-    Returns true if all faces have approximately the same kappa_g and sigma_s_g values
-    for all spectral bins, false otherwise. Used to set global uniform_extinction flag.
+    Checks if spectral properties are uniform across all faces and spectral bins.
     """
     
-    first_beta = nothing
-    first_n_bins = nothing
-    is_spectral_mesh = false
-    
-    for (coarse_idx, coarse_face) in enumerate(mesh.coarse_mesh)
-        for (fine_idx, fine_face) in enumerate(mesh.fine_mesh[coarse_idx])
-            
-            # Determine if this face is spectral
-            current_is_spectral = isa(fine_face.kappa_g, Vector)
-            
-            # Check consistency of spectral structure across mesh
-            if first_n_bins === nothing
-                first_n_bins = current_is_spectral ? length(fine_face.kappa_g) : 1
-                is_spectral_mesh = current_is_spectral
+    first_epsilon = nothing
+    for ((coarse_face, fine_face, wall_index), surface_index) in rtm.surface_mapping
+        face = rtm.fine_mesh[coarse_face][fine_face]
+        for bin in 1:rtm.n_spectral_bins
+            if first_epsilon === nothing
+                first_epsilon = face.epsilon[wall_index][bin]
             else
-                current_n_bins = current_is_spectral ? length(fine_face.kappa_g) : 1
-                if current_n_bins != first_n_bins || current_is_spectral != is_spectral_mesh
-                    error("Inconsistent spectral structure across mesh faces")
+                epsilon = face.epsilon[wall_index][bin]
+                if abs(epsilon - first_epsilon) > atol
+                    println("Spectral variation detected across mesh, using spectral solver")
+                    return false
                 end
             end
-            
-            # Check extinction values for uniformity
-            if current_is_spectral
-                # Spectral case - check each bin
-                for bin in 1:length(fine_face.kappa_g)
-                    current_beta = fine_face.kappa_g[bin] + fine_face.sigma_s_g[bin]
-                    
-                    if first_beta === nothing
-                        first_beta = current_beta
-                    else
-                        if !isapprox(current_beta, first_beta, rtol=rtol)
-                            println("Variable extinction detected - using variable ray tracing")
-                            println("  Found spectral variation: bin $bin, face ($coarse_idx,$fine_idx)")
-                            println("  β = $current_beta vs reference β = $first_beta")
-                            return false
-                        end
-                    end
-                end
+        end        
+    end
+    println("No spectral variation detected across walls")
+    
+    first_kappa_g = nothing
+    first_sigma_s_g = nothing
+    for ((coarse_face, fine_face), volume_index) in rtm.volume_mapping        
+        face = rtm.fine_mesh[coarse_face][fine_face]
+        for bin in 1:rtm.n_spectral_bins
+            if first_kappa_g === nothing
+                first_kappa_g = face.kappa_g[bin]
+                first_sigma_s_g = face.sigma_s_g[bin]
             else
-                # Grey case - single value
-                current_beta = fine_face.kappa_g + fine_face.sigma_s_g
-                
-                if first_beta === nothing
-                    first_beta = current_beta
-                else
-                    if !isapprox(current_beta, first_beta, rtol=rtol)
-                        println("Variable extinction detected - using variable ray tracing")
-                        println("  Found spatial variation: face ($coarse_idx,$fine_idx)")
-                        println("  β = $current_beta vs reference β = $first_beta")
-                        return false
-                    end
+                kappa_g = face.kappa_g[bin]
+                sigma_s_g = face.sigma_s_g[bin]
+                if abs(kappa_g - first_kappa_g) > atol || abs(sigma_s_g - first_sigma_s_g) > atol
+                    println("Spectral variation detected across mesh, using spectral solver")
+                    return false
+                end
+            end
+        end
+    end
+    println("No spectral variation detected across volumes")
+    
+    println("No spectral variation detected across mesh, using efficient grey solver")
+    return true
+end
+
+function validate_extinction_uniformity!(rtm::RayTracingDomain2D; atol=1e-5)
+    """
+    Checks if extinction properties are uniform across all faces and spectral bins.
+    """
+    first_beta = nothing
+    for ((coarse_face, fine_face), volume_index) in rtm.volume_mapping
+        face = rtm.fine_mesh[coarse_face][fine_face]
+        for bin = 1:rtm.n_spectral_bins
+            if first_beta === nothing
+                first_beta = face.kappa_g[bin] + face.sigma_s_g[bin]
+            else
+                if abs(first_beta - (face.kappa_g[bin] + face.sigma_s_g[bin])) > atol
+                    println("Extinction variation detected across the spectrum, ray tracing each spectral bin separately")
+                    return false
                 end
             end
         end
     end
     
-    if mesh.spectral_mode != :grey
-        println("Uniform extinction detected across $first_n_bins spectral bins (β_g=$(first_beta)) - using fast uniform ray tracing")
-    else
-        println("Uniform extinction detected (β_g=$(first_beta)) - using fast uniform ray tracing")
-    end
-    
+    println("No extinction variation detected across the spectrum, ray tracing grey domain only")
     return true
 end

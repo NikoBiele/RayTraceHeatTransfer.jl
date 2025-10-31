@@ -218,16 +218,9 @@ function addSubFace!(superFace::PolyFace2D{G}, subFace::PolyFace2D{G}) where {G}
     # next, update the properties of the added subface
     # the subface inherits the properties of the superface
 
-    # inherit extinction properties - direct assignment/copy
-    if isa(superFace.kappa_g, Vector)
-        subFace.kappa_g .= superFace.kappa_g
-        subFace.sigma_s_g .= superFace.sigma_s_g
-    else
-        subFace.kappa_g = superFace.kappa_g
-        subFace.sigma_s_g = superFace.sigma_s_g
-    end
-
     # inherit volume state variables - direct assignment/copy
+    inherit_volume_property!(superFace, subFace, :kappa_g)
+    inherit_volume_property!(superFace, subFace, :sigma_s_g)
     inherit_volume_property!(superFace, subFace, :j_g)
     inherit_volume_property!(superFace, subFace, :g_a_g)
     inherit_volume_property!(superFace, subFace, :e_g)
@@ -344,10 +337,8 @@ end
 function inheritSurfaceProperties!(superFace::PolyFace2D{G}, subFace::PolyFace2D{G}; from=i, to=j) where {G}
     # the subFace inherits the properties of the superFace
     
-    # boundary properties (unchanged - always scalar)
-    subFace.epsilon[to] = superFace.epsilon[from]
-    
     # wall state variables - direct inheritance
+    inherit_wall_property!(superFace, subFace, :epsilon, from, to)
     inherit_wall_property!(superFace, subFace, :j_w, from, to)
     inherit_wall_property!(superFace, subFace, :g_a_w, from, to)
     inherit_wall_property!(superFace, subFace, :e_w, from, to)

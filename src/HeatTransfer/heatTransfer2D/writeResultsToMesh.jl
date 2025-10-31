@@ -4,7 +4,7 @@ Handles grey, spectral_uniform, and spectral_variable modes correctly.
 """
 
 # Grey mode - write scalar results (your existing function with minor fixes)
-function write_results_to_mesh_grey!(mesh::RayTracingMeshOptim, T::Vector{P}, j::Vector{P}, 
+function write_results_to_mesh_grey!(mesh::RayTracingDomain2D, T::Vector{P}, j::Vector{P}, 
                                      Abs::Vector{P}, r::Vector{P}, N_surfs::Int) where P
     surf_count = 0
     vol_count = 0
@@ -46,7 +46,7 @@ function write_results_to_mesh_grey!(mesh::RayTracingMeshOptim, T::Vector{P}, j:
 end
 
 # Spectral mode - write results for a specific spectral bin
-function write_results_to_mesh_spectral_bin!(mesh::RayTracingMeshOptim, T::Vector{P}, j::Vector{P}, 
+function write_results_to_mesh_spectral_bin!(mesh::RayTracingDomain2D, T::Vector{P}, j::Vector{P}, 
                                              Abs::Vector{P}, r::Vector{P}, N_surfs::Int,
                                              spectral_bin::Int) where P
     surf_count = 0
@@ -106,7 +106,7 @@ function write_results_to_mesh_spectral_bin!(mesh::RayTracingMeshOptim, T::Vecto
 end
 
 # Main interface - dispatches based on spectral mode
-function write_results_to_mesh!(mesh::RayTracingMeshOptim, T::Vector{P}, j::Vector{P}, 
+function write_results_to_mesh!(mesh::RayTracingDomain2D, T::Vector{P}, j::Vector{P}, 
                                Abs::Vector{P}, r::Vector{P}, N_surfs::Int;
                                spectral_bin::Union{Nothing,Int}=nothing) where P
     
@@ -130,7 +130,7 @@ function write_results_to_mesh!(mesh::RayTracingMeshOptim, T::Vector{P}, j::Vect
 end
 
 # Convenience function to update temperatures and heat sources after all spectral bins are computed
-function update_scalar_temperatures_and_heat_sources!(rtm::RayTracingMeshOptim;
+function update_scalar_temperatures_and_heat_sources!(rtm::RayTracingDomain2D;
                                                       temperatures_in=nothing)
     G = eltype(rtm.fine_mesh[1][1].T_g)
 
@@ -204,7 +204,7 @@ function update_scalar_temperatures_and_heat_sources!(rtm::RayTracingMeshOptim;
                     sub_face.T_w[wall_index] = solve_temperature_newton_raphson(
                         rtm, sub_face.area[wall_index], sub_face.e_w[wall_index],
                         sub_face.epsilon[wall_index]; 
-                        initial_temp=maximum_temperature, max_iter=10_000, tolerance=1000*eps(G)
+                        initial_temp=maximum_temperature, max_iter=10_000, tolerance=sqrt(eps(G))
                     )
                     # Heat source is computed from energy balance
                     sub_face.q_w[wall_index] = sum(sub_face.e_w[wall_index]) - sum(sub_face.g_a_w[wall_index])
@@ -216,7 +216,7 @@ function update_scalar_temperatures_and_heat_sources!(rtm::RayTracingMeshOptim;
                     sub_face.T_g = solve_temperature_newton_raphson(
                         rtm, 4*sub_face.volume, sub_face.e_g,
                         sub_face.kappa_g; 
-                        initial_temp=maximum_temperature, max_iter=10_000, tolerance=1000*eps(G)
+                        initial_temp=maximum_temperature, max_iter=10_000, tolerance=sqrt(eps(G))
                     )
                     # Heat source is computed from energy balance
                     sub_face.q_g = sum(sub_face.e_g) - sum(sub_face.g_a_g)

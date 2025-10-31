@@ -1,4 +1,4 @@
-function exchange_ray_tracing!(rtm::RayTracingMeshOptim, rays_tot::P, tol::G, 
+function exchange_ray_tracing!(rtm::RayTracingDomain2D, rays_tot::P, tol::G, 
                               nudge::G) where {G, P<:Integer}
     
     # Ray trace domain - returns different types based on spectral mode

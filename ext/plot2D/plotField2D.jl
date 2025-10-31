@@ -1,4 +1,4 @@
-function RayTraceHeatTransfer.plotField2D(mesh::RayTracingMeshOptim; field::Symbol=:T,
+function RayTraceHeatTransfer.plotField2D(mesh::RayTracingDomain2D; field::Symbol=:T,
                             include_walls::Bool=false, minmax::Union{Nothing, Tuple{Float64, Float64}}=nothing)
     
     # Function to create a shape for plotting

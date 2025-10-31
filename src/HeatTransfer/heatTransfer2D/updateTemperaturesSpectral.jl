@@ -1,4 +1,4 @@
-function updateTemperaturesSpectral!(rtm::RayTracingMeshOptim, emissive::Vector{G}, emit_frac::Matrix{G}) where {G}
+function updateTemperaturesSpectral!(rtm::RayTracingDomain2D, emissive::Vector{G}, emit_frac::Matrix{G}) where {G}
     
     num_surfaces = length(rtm.surface_mapping)
     num_volumes = length(rtm.volume_mapping)

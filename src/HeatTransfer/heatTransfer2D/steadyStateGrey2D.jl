@@ -37,7 +37,7 @@ mutable struct TwoMatrixWorkspace{P}
 end
 
 # Populate workspace arrays from mesh - NOW with kappa_g and omega_g precomputation
-function populate_workspace!(ws::TwoMatrixWorkspace{P}, mesh::RayTracingMeshOptim, spectral_bin::Int) where P
+function populate_workspace!(ws::TwoMatrixWorkspace{P}, mesh::RayTracingDomain2D, spectral_bin::Int) where P
     surf_count = 0
     vol_count = 0
     
@@ -73,7 +73,7 @@ end
 
 # Updated compute_emissive_powers - use precomputed kappa
 function compute_emissive_powers_variable!(E_known::Vector{P}, Q_known::Vector{P}, ws::TwoMatrixWorkspace{P}, 
-                                          mesh::RayTracingMeshOptim,
+                                          mesh::RayTracingDomain2D,
                                           N_surfs::Int, N_vols::Int) where {P}
     
     # Build Q_vec_known
@@ -106,7 +106,7 @@ end
 
 # Updated compute temperatures - use precomputed kappa
 function compute_temperatures_variable!(T::Vector{P}, j::Vector{P}, r::Vector{P}, ws::TwoMatrixWorkspace{P},
-                                       mesh::RayTracingMeshOptim,
+                                       mesh::RayTracingDomain2D,
                                        N_surfs::Int, N_vols::Int, spectral_bin::Int) where {P}
     
     # Surface temperatures
@@ -149,7 +149,7 @@ end
 end
 
 # Main solver - UNCHANGED except using get_B_value
-function steadyStateGrey2D!(mesh::RayTracingMeshOptim, F::Matrix{P}; spectral_bin::N=1) where {P<:Real, N<:Integer}
+function steadyStateGrey2D!(mesh::RayTracingDomain2D, F::Matrix{P}; spectral_bin::N=1) where {P<:Real, N<:Integer}
     println("=== Variable Extinction Memory-Optimized Steady State Solver ===")
     
     # Count surfaces and volumes
@@ -344,7 +344,7 @@ function steadyStateGrey2D!(mesh::RayTracingMeshOptim, F::Matrix{P}; spectral_bi
     return nothing
 end
 
-function build_system_matrices2D!(mesh::RayTracingMeshOptim, F::Matrix{P}; 
+function build_system_matrices2D!(mesh::RayTracingDomain2D, F::Matrix{P}; 
                                 spectral_bin::Int=1) where {P<:Real}
     
     # Count surfaces and volumes

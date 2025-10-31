@@ -38,10 +38,10 @@ include(joinpath(@__DIR__, "RayTracing", "rayTracing.jl"))
 
 # export
 # 2D participating media
-export PolyFace2D, RayTracingMeshOptim, plotMesh2D, build_system_matrices2D!,
+export PolyFace2D, RayTracingDomain2D, plotMesh2D, build_system_matrices2D!,
         steadyStateGrey2D!, steadyStateSpectral2D!, plotField2D,
 # 3D transparent medium
-        Domain3D_faces, plotMesh3D, viewFactor, build_system_matrices3D!,
+        ViewFactorDomain3D, plotMesh3D, viewFactor, build_system_matrices3D!,
         steadyStateGrey3D!, steadyStateSpectral3D!,
         plotField3D
         

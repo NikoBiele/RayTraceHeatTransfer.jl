@@ -30,7 +30,7 @@ mutable struct SurfaceOnlyWorkspace{P}
 end
 
 # Populate workspace from 3D domain (surfaces only!)
-function populate_workspace_3D!(ws::SurfaceOnlyWorkspace{P}, domain::Domain3D_faces, 
+function populate_workspace_3D!(ws::SurfaceOnlyWorkspace{P}, domain::ViewFactorDomain3D, 
                                 spectral_bin::Int) where P
     surf_count = 0
     
@@ -92,7 +92,7 @@ end
 end
 
 # Main grey solver for 3D surfaces - ALWAYS solves
-function steadyStateGrey3D!(domain::Domain3D_faces, F::Matrix{P}; 
+function steadyStateGrey3D!(domain::ViewFactorDomain3D, F::Matrix{P}; 
                                    spectral_bin::Int=1) where {P<:Real}
     println("=== 3D Surface-Only Grey Solver ===")
     
@@ -251,7 +251,7 @@ function steadyStateGrey3D!(domain::Domain3D_faces, F::Matrix{P};
     return nothing
 end
 
-function build_system_matrices3D!(domain::Domain3D_faces, F::Matrix{P}; 
+function build_system_matrices3D!(domain::ViewFactorDomain3D, F::Matrix{P}; 
                                    spectral_bin::Int=1) where {P<:Real}
     
     # Count surfaces (no volumes in 3D!)

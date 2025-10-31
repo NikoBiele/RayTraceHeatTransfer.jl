@@ -1,4 +1,4 @@
-function update_spectral_results!(rtm::RayTracingMeshOptim, absorbed_count::Vector{Vector{P}},
+function update_spectral_results!(rtm::RayTracingDomain2D, absorbed_count::Vector{Vector{P}},
                             gas_emitted_count::Vector{Vector{P}}, wall_emitted_count::Vector{Vector{Vector{P}}},
                             reflected_count::Vector{Vector{Vector{P}}}, scattered_count::Vector{Vector{P}},
                             wall_absorbed_count::Vector{Vector{Vector{P}}}, total_energy::G, num_rays::P,
@@ -64,7 +64,7 @@ function update_spectral_results!(rtm::RayTracingMeshOptim, absorbed_count::Vect
     end
 end
 
-function update_scalar_temperatures_and_heat_sources_direct!(rtm::RayTracingMeshOptim;
+function update_scalar_temperatures_and_heat_sources_direct!(rtm::RayTracingDomain2D;
                                                     temperatures_in=nothing)
     G = eltype(rtm.fine_mesh[1][1].T_g)
 
@@ -122,7 +122,7 @@ function update_scalar_temperatures_and_heat_sources_direct!(rtm::RayTracingMesh
                 if sub_face.T_in_w[wall_index] < -0.1
                     sub_face.T_w[wall_index] = solve_temperature_newton_raphson(rtm, sub_face.area[wall_index], sub_face.e_w[wall_index],
                                             sub_face.epsilon[wall_index]; 
-                                            initial_temp=maximum_temperature, max_iter=10_000, tolerance=1000*eps(G))
+                                            initial_temp=maximum_temperature, max_iter=10_000, tolerance=sqrt(eps(G)))
                 end
             end
             for ((coarse_idx, fine_idx), volume_idx) in rtm.volume_mapping
@@ -130,7 +130,7 @@ function update_scalar_temperatures_and_heat_sources_direct!(rtm::RayTracingMesh
                 if sub_face.T_in_g < -0.1
                     sub_face.T_g = solve_temperature_newton_raphson(rtm, 4*sub_face.volume, sub_face.e_g,
                                             sub_face.kappa_g; 
-                                            initial_temp=maximum_temperature, max_iter=10_000, tolerance=1000*eps(G))
+                                            initial_temp=maximum_temperature, max_iter=10_000, tolerance=sqrt(eps(G)))
                 end
             end
         end

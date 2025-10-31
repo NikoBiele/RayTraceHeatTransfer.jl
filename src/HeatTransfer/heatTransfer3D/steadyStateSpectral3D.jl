@@ -4,8 +4,8 @@ Key insight: View factors F are wavelength-independent, so we compute them once
 and reuse for all spectral bands!
 """
 
-function steadyStateSpectral3D!(domain::Domain3D_faces{G,P}; 
-                               max_iterations::Int=500) where {G,P<:Integer}
+function steadyStateSpectral3D_full!(domain::ViewFactorDomain3D{G,P}; 
+                               max_iterations::Int=500, spectral_coupling_tolerance::G=1e-11) where {G,P<:Integer}
     
     # Validate spectral setup at entry
     if isnothing(domain.wavelength_band_limits)
@@ -119,7 +119,7 @@ function steadyStateSpectral3D!(domain::Domain3D_faces{G,P};
         
         println("Iteration $iter: convergence error = $convergence_error")
         
-        if iter > 1 && convergence_error < 100_000*eps(Float64)
+        if iter > 1 && convergence_error < spectral_coupling_tolerance
             println("Converged after $iter iterations")
             
             # Compute energy conservation error for each band
@@ -173,9 +173,156 @@ function steadyStateSpectral3D!(domain::Domain3D_faces{G,P};
     println("=== 3D Spectral Solution Complete ===")
 end
 
+function steadyStateSpectral3D_direct!(domain::ViewFactorDomain3D{G,P}; 
+                                      max_iterations::Int=500, spectral_coupling_tolerance::G=1e-11) where {G,P<:Integer}
+    """
+    OPTIMIZED direct emission solver for 3D non-scattering, non-reflecting problems.
+    
+    Key optimization: Instead of solving (n_bins+1)*N × n_bins*N block system for j,
+    we solve N×N system for e directly, then recover j from emission fractions.
+    
+    Requires: ε=1 everywhere (no reflection) - 3D has no volumes so no scattering check needed
+    """
+    
+    # Validate spectral setup at entry
+    if isnothing(domain.wavelength_band_limits)
+        error("""
+        Spectral solve requires wavelength band limits to be set.
+        
+        Please set mesh.wavelength_band_limits before calling steadyStateSpectral3D_direct!:
+        
+        Example, using logarithmic spacing:
+            mesh.wavelength_band_limits = 10 .^ range(log10(0.0000001), log10(0.001), length=51)
+        """)
+    end
+    
+    # Additional validation
+    if length(domain.wavelength_band_limits) < 4
+        error("wavelength_band_limits must have at least 4 values (defining 3 bins)")
+    end
+    
+    if any(domain.wavelength_band_limits .<= 0)
+        error("wavelength_band_limits must all be positive (wavelengths > 0)")
+    end
+
+    if any(diff(domain.wavelength_band_limits) .<= 0)
+        error("wavelength_band_limits must be strictly increasing (no duplicates)")
+    end
+
+    println("=== 3D Spectral Surface Radiation Solver (DIRECT) ===")
+    println("Spectral mode: $(domain.spectral_mode)")
+    println("Number of spectral bins: $(domain.n_spectral_bins)")
+    println("Using optimized direct emission solver")
+    
+    # Get system size
+    N_surfs = sum([length(superface.subFaces) for superface in domain.facesMesh])
+    
+    # KEY INSIGHT: Use the SAME F matrix for all spectral bands!
+    # View factors are geometry-only and wavelength-independent
+    F = domain.F
+    
+    println("\nComputing GERT matrices for each spectral band...")
+    println("(Using same view factor matrix F for all bands)")
+    
+    B, S_infty, A, R, C, D, M = build_system_matrices3D!(domain, F; spectral_bin=1)
+    
+    # Setup boundary conditions
+    println("Setting up boundary conditions...")
+    boundary, temperatures, emissive = setup_boundary_conditions_3D(domain)
+    
+    # Initialize emission fractions
+    emit_frac = getBinsEmissionFractions_3D(domain, temperatures)  # N_surfs × n_spectral_bins
+    
+    # Iteration loop
+    println("\nStarting spectral direct solve...")
+    # Build reduced system: A_reduced = sum_bin M_bin * Diagonal(emit_frac[:, bin])
+    # This is the key optimization! N×N system instead of (n_bins*N)×(n_bins*N)        
+    # DIRECT solve for emission e (N×N system!)
+    j_tot = M \ boundary
+        
+    # Recover j for each bin: j_bin = emit_frac[:, bin] .* e
+    sol_j = zeros(G, domain.n_spectral_bins * N_surfs)
+    for bin in 1:domain.n_spectral_bins
+        bin_start = (bin - 1) * N_surfs + 1
+        bin_end = bin * N_surfs
+        sol_j[bin_start:bin_end] = emit_frac[:, bin] .* j_tot
+    end
+        
+    # Update emissive powers and temperatures
+    emissive = D*j_tot
+    temperatures = updateTemperaturesSpectral_3D!(domain, emissive, emit_frac)
+    emit_frac = getBinsEmissionFractions_3D(domain, temperatures)
+                    
+    # Compute energy conservation error for each band
+    domain.energy_error = G.([sum(C * sol_j[(i - 1) * N_surfs + 1:i * N_surfs]) 
+                        for i in 1:domain.n_spectral_bins])
+    println("Energy conservation errors by band: $(domain.energy_error)")
+    
+    # AFTER convergence: Write spectral results for each band to mesh FIRST
+    println("\nWriting spectral results to mesh...")
+
+    for bin in 1:domain.n_spectral_bins
+        # Extract solution for this band
+        bin_start = (bin - 1) * N_surfs + 1
+        bin_end = bin * N_surfs
+        j_bin = sol_j[bin_start:bin_end]
+        
+        # Compute e, r, g_a from GERT matrices and radiosity
+        e_bin = D * j_bin           # e = D * j
+        r_bin = j_bin - e_bin                     # r = j - e = R' * j
+        g_a_bin = j_bin - C * j_bin - r_bin  # g_a = A' * j = j - C*j - r
+        
+        # Write to mesh for this band
+        surf_count = 0
+        for superface in domain.facesMesh
+            for subface in superface.subFaces
+                surf_count += 1
+                
+                if isa(subface.e_w, Vector)
+                    subface.j_w[bin] = j_bin[surf_count]
+                    subface.e_w[bin] = max(e_bin[surf_count], 0.0)
+                    subface.r_w[bin] = max(r_bin[surf_count], 0.0)
+                    subface.g_a_w[bin] = max(g_a_bin[surf_count], 0.0)
+                    subface.g_w[bin] = subface.g_a_w[bin] + subface.r_w[bin]
+                    subface.i_w[bin] = j_bin[surf_count] / (π * subface.area)
+                end
+            end
+        end
+    end
+    
+    # THEN update scalar temperatures and heat fluxes from spectral results
+    println("Computing final scalar temperatures and heat fluxes...")
+    update_scalar_temperatures_3D!(domain)
+    
+    println("=== 3D Spectral Solution Complete (DIRECT) ===")
+end
+
+function steadyStateSpectral3D!(domain::ViewFactorDomain3D{G,P}; 
+                               max_iterations::Int=500,
+                               spectral_coupling_tolerance::G=1e-11) where {G,P<:Integer}
+    """
+    Solve 3D spectral surface radiation using the optimal solver.
+    
+    Automatically chooses between:
+    - Direct emission solver: for ε=1 everywhere (orders of magnitude faster for many bins)
+    - Full iterative solver: for general problems with reflection
+    
+    Set force_full=true to disable optimization and always use full solver.
+    """
+    
+    # Check if we can use the fast direct solver
+    if domain.uniform_epsilon
+        println("=== Using DIRECT solver ===")
+        println("Complexity: O(N²) per iteration instead of O((n_bins×N)²)")
+        return steadyStateSpectral3D_direct!(domain; max_iterations=max_iterations, spectral_coupling_tolerance=spectral_coupling_tolerance)
+    else
+        return steadyStateSpectral3D_full!(domain; max_iterations=max_iterations, spectral_coupling_tolerance=spectral_coupling_tolerance)
+    end
+end
+
 # Helper functions (adapted from 2D versions)
 
-function setup_boundary_conditions_3D(domain::Domain3D_faces{G,P}) where {G,P}
+function setup_boundary_conditions_3D(domain::ViewFactorDomain3D{G,P}) where {G,P}
     
     N_surfs = sum([length(superface.subFaces) for superface in domain.facesMesh])
     boundary = zeros(G, N_surfs)
@@ -223,7 +370,7 @@ function setup_boundary_conditions_3D(domain::Domain3D_faces{G,P}) where {G,P}
     return boundary, temperatures, emissive
 end
 
-function getBinsEmissionFractions_3D(domain::Domain3D_faces{G,P},
+function getBinsEmissionFractions_3D(domain::ViewFactorDomain3D{G,P},
                                     temperatures::Vector{G}) where {G,P}
     
     N_surfs = sum([length(superface.subFaces) for superface in domain.facesMesh])
@@ -252,7 +399,7 @@ function getBinsEmissionFractions_3D(domain::Domain3D_faces{G,P},
     return emit_frac
 end
 
-function updateSpectralEmission_3D!(domain::Domain3D_faces{G,P}, iter::Int, 
+function updateSpectralEmission_3D!(domain::ViewFactorDomain3D{G,P}, iter::Int, 
                                    D_matrices::Vector{Matrix{G}}, sol_j::Vector{G}, 
                                    emit_frac::Matrix{G}, temperatures::Vector{G}, 
                                    emissive::Vector{G}) where {G,P}
@@ -289,7 +436,7 @@ function updateSpectralEmission_3D!(domain::Domain3D_faces{G,P}, iter::Int,
     return emissive
 end
 
-function updateTemperaturesSpectral_3D!(domain::Domain3D_faces{G,P}, 
+function updateTemperaturesSpectral_3D!(domain::ViewFactorDomain3D{G,P}, 
                                        emissive::Vector{G}, 
                                        emit_frac::Matrix{G}) where {G,P}
     

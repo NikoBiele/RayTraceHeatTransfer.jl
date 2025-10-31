@@ -1,4 +1,4 @@
-function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P, 
+function parallel_ray_tracing_optimized(rtm::RayTracingDomain2D, rays_total::P, 
                                         nudge::G) where {P<:Integer, G}
 
     surface_mapping, volume_mapping, num_surfaces, num_volumes = create_index_mapping(rtm, rays_total)
@@ -45,7 +45,7 @@ function parallel_ray_tracing_optimized(rtm::RayTracingMeshOptim, rays_total::P,
     end
 end
 
-function compute_F_matrix_for_bin(rtm::RayTracingMeshOptim, rays_per_emitter::P, 
+function compute_F_matrix_for_bin(rtm::RayTracingDomain2D, rays_per_emitter::P, 
                                  nudge::G, spectral_bin::P,
                                  surface_mapping, volume_mapping, num_surfaces, num_volumes, num_emitters) where {P<:Integer, G}
     
