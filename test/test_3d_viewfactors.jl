@@ -65,7 +65,7 @@ println("-"^60)
     
     for (i, test) in enumerate(test_cases)
         @testset "$(test.name)" begin
-            F_AB, F_BA, area_A, area_B = viewFactor(test.poly_A, test.poly_B)
+            F_AB, F_BA, area_A, area_B = viewFactor3D(test.poly_A, test.poly_B)
             
             @test isapprox(F_AB, test.F_ref, atol=VF_TOLERANCE)
             
@@ -120,21 +120,21 @@ end
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     
     # Test against EES reference
-    @test maximum(abs.(domain3D.F - F_EES)) < VF_TOLERANCE
+    @test maximum(abs.(domain3D.F_smooth - F_EES)) < VF_TOLERANCE
     
     # Test reciprocity for all face pairs
     for i in 1:6, j in 1:6
         if i != j
             area_i = sum([sf.area for sf in domain3D.facesMesh[i].subFaces])
             area_j = sum([sf.area for sf in domain3D.facesMesh[j].subFaces])
-            reciprocity_error = abs(area_i * domain3D.F[i,j] - area_j * domain3D.F[j,i])
+            reciprocity_error = abs(area_i * domain3D.F_smooth[i,j] - area_j * domain3D.F_smooth[j,i])
             @test reciprocity_error < 1e-10
         end
     end
     
     # Test summation rule: sum of view factors from each face should be ~1
     for i in 1:6
-        @test isapprox(sum(domain3D.F[i,:]), 1.0, atol=1e-10)
+        @test isapprox(sum(domain3D.F_smooth[i,:]), 1.0, atol=1e-10)
     end
 end
 
@@ -142,7 +142,7 @@ end
 ### TEST 3: ROTATED CUBE VIEW FACTORS ######################################
 #############################################################################
 
-function rotate_points(points, axis, angle)
+function rotatePoints(points, axis, angle)
     """Rotate points around given axis by angle (radians)"""
     if axis == :x
         R = [1.0 0.0 0.0;
@@ -213,7 +213,7 @@ end
     for (axis, angle, desc) in rotations
         @testset "Rotation: $desc" begin
             # Rotate the cube
-            points_rotated = rotate_points(points_base, axis, angle)
+            points_rotated = rotatePoints(points_base, axis, angle)
             
             # Create domain with rotated geometry
             domain3D = ViewFactorDomain3D(points_rotated, faces, Ndim, q_in_w, T_in_w, epsilon)
@@ -221,7 +221,7 @@ end
             # Extract unique view factor values (excluding self-view)
             F_unique = Float64[]
             for i in 1:6, j in i+1:6
-                push!(F_unique, domain3D.F[i,j])
+                push!(F_unique, domain3D.F_smooth[i,j])
             end
             sort!(F_unique)
             
@@ -239,13 +239,13 @@ end
                 if i != j
                     area_i = sum([sf.area for sf in domain3D.facesMesh[i].subFaces])
                     area_j = sum([sf.area for sf in domain3D.facesMesh[j].subFaces])
-                    @test isapprox(area_i * domain3D.F[i,j], area_j * domain3D.F[j,i], rtol=1e-10)
+                    @test isapprox(area_i * domain3D.F_smooth[i,j], area_j * domain3D.F_smooth[j,i], rtol=1e-10)
                 end
             end
             
             # Test summation rule
             for i in 1:6
-                @test isapprox(sum(domain3D.F[i,:]), 1.0, atol=1e-10)
+                @test isapprox(sum(domain3D.F_smooth[i,:]), 1.0, atol=1e-10)
             end
         end
     end

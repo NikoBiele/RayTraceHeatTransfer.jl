@@ -15,7 +15,7 @@ println("-"^60)
 ### HELPER FUNCTIONS #######################################################
 #############################################################################
 
-function create_spectral_uniform_mesh(; T_hot=1000.0, T_cold=0.0, kappa=1.0, 
+function createSpectralUniformMesh(; T_hot=1000.0, T_cold=0.0, kappa=1.0, 
                                        sigma_s=0.0, epsilon_bins=nothing, 
                                        Ndim=5, n_bins=10)
     """
@@ -30,7 +30,7 @@ function create_spectral_uniform_mesh(; T_hot=1000.0, T_cold=0.0, kappa=1.0,
     )
     
     solidWalls = SVector(true, true, true, true)
-    face = PolyFace2D{Float64}(vertices, solidWalls, n_bins, kappa, sigma_s)
+    face = PolyVolume2D{Float64}(vertices, solidWalls, n_bins, kappa, sigma_s)
     
     # Set spectral properties (uniform across bins)
     face.kappa_g = fill(kappa, n_bins)
@@ -69,7 +69,7 @@ function create_spectral_uniform_mesh(; T_hot=1000.0, T_cold=0.0, kappa=1.0,
     return mesh
 end
 
-function create_spectral_variable_mesh(; T_hot=1000.0, T_cold=0.0, base_kappa=1.0,
+function createSpectralVariableMesh(; T_hot=1000.0, T_cold=0.0, base_kappa=1.0,
                                         base_sigma_s=0.0, epsilon_bins=nothing,
                                         Ndim=5, n_bins=10)
     """
@@ -85,7 +85,7 @@ function create_spectral_variable_mesh(; T_hot=1000.0, T_cold=0.0, base_kappa=1.
     )
     
     solidWalls = SVector(true, true, true, true)
-    face = PolyFace2D{Float64}(vertices, solidWalls, n_bins, base_kappa, base_sigma_s)
+    face = PolyVolume2D{Float64}(vertices, solidWalls, n_bins, base_kappa, base_sigma_s)
     
     # Variable extinction (small variation for testing)
     face.kappa_g = [base_kappa * (1.0 + 0.01 * (i-1)/(n_bins-1)) for i in 1:n_bins]
@@ -146,26 +146,26 @@ end
         Point2(0.0, 1.0)
     )
     solidWalls = SVector(true, true, true, true)
-    face_grey = PolyFace2D{Float64}(vertices, solidWalls, 1, kappa, sigma_s)
+    face_grey = PolyVolume2D{Float64}(vertices, solidWalls, 1, kappa, sigma_s)
     face_grey.T_in_w = [T_hot, T_cold, T_cold, T_cold]
     face_grey.epsilon = [1.0, 1.0, 1.0, 1.0]
     face_grey.T_in_g = -1.0
     
     mesh_grey = RayTracingDomain2D([face_grey], [(Ndim, Ndim)])
     mesh_grey(N_rays; method=:exchange)
-    steadyStateGrey2D!(mesh_grey, mesh_grey.F_smooth)
+    solveEquilibrium!(mesh_grey, mesh_grey.F_smooth)
     
     grey_temps = [fine_face.T_g for fine_face in mesh_grey.fine_mesh[1]]
     
     # Spectral uniform case (black walls in all bins)
     epsilon_bins = fill(1.0, n_bins)
-    mesh_spectral = create_spectral_uniform_mesh(T_hot=T_hot, T_cold=T_cold,
+    mesh_spectral = createSpectralUniformMesh(T_hot=T_hot, T_cold=T_cold,
                                                  kappa=kappa, sigma_s=sigma_s,
                                                  epsilon_bins=epsilon_bins,
                                                  Ndim=Ndim, n_bins=n_bins)
     mesh_spectral.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     mesh_spectral(N_rays; method=:exchange)
-    steadyStateSpectral2D!(mesh_spectral, mesh_spectral.F_smooth)
+    solveEquilibrium!(mesh_spectral, mesh_spectral.F_smooth)
     
     spectral_temps = [fine_face.T_g for fine_face in mesh_spectral.fine_mesh[1]]
     
@@ -197,18 +197,18 @@ end
     epsilon_bins = fill(1.0, n_bins)
     
     # Exchange factor method
-    mesh_exchange = create_spectral_uniform_mesh(T_hot=T_hot, T_cold=T_cold,
+    mesh_exchange = createSpectralUniformMesh(T_hot=T_hot, T_cold=T_cold,
                                                  kappa=kappa, sigma_s=sigma_s,
                                                  epsilon_bins=epsilon_bins,
                                                  Ndim=Ndim, n_bins=n_bins)
     mesh_exchange.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     mesh_exchange(N_rays; method=:exchange)
-    steadyStateSpectral2D!(mesh_exchange, mesh_exchange.F_smooth)
+    solveEquilibrium!(mesh_exchange, mesh_exchange.F_smooth)
     
     exchange_temps = [fine_face.T_g for fine_face in mesh_exchange.fine_mesh[1]]
     
     # Direct method
-    mesh_direct = create_spectral_uniform_mesh(T_hot=T_hot, T_cold=T_cold,
+    mesh_direct = createSpectralUniformMesh(T_hot=T_hot, T_cold=T_cold,
                                                kappa=kappa, sigma_s=sigma_s,
                                                epsilon_bins=epsilon_bins,
                                                Ndim=Ndim, n_bins=n_bins)
@@ -240,19 +240,19 @@ end
     epsilon_bins = fill(1.0, n_bins)
     
     # Exchange factor method
-    mesh_exchange = create_spectral_variable_mesh(T_hot=T_hot, T_cold=T_cold,
+    mesh_exchange = createSpectralVariableMesh(T_hot=T_hot, T_cold=T_cold,
                                                   base_kappa=base_kappa,
                                                   base_sigma_s=base_sigma_s,
                                                   epsilon_bins=epsilon_bins,
                                                   Ndim=Ndim, n_bins=n_bins)
     mesh_exchange.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     mesh_exchange(N_rays; method=:exchange)
-    steadyStateSpectral2D!(mesh_exchange, mesh_exchange.F_smooth)
+    solveEquilibrium!(mesh_exchange, mesh_exchange.F_smooth)
     
     exchange_temps = [fine_face.T_g for fine_face in mesh_exchange.fine_mesh[1]]
     
     # Direct method
-    mesh_direct = create_spectral_variable_mesh(T_hot=T_hot, T_cold=T_cold,
+    mesh_direct = createSpectralVariableMesh(T_hot=T_hot, T_cold=T_cold,
                                                 base_kappa=base_kappa,
                                                 base_sigma_s=base_sigma_s,
                                                 epsilon_bins=epsilon_bins,
@@ -284,13 +284,13 @@ end
     
     epsilon_bins = fill(1.0, n_bins)
     
-    mesh = create_spectral_uniform_mesh(T_hot=T_hot, T_cold=T_cold,
+    mesh = createSpectralUniformMesh(T_hot=T_hot, T_cold=T_cold,
                                        kappa=kappa, sigma_s=sigma_s,
                                        epsilon_bins=epsilon_bins,
                                        Ndim=Ndim, n_bins=n_bins)
     mesh.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     mesh(N_rays; method=:exchange)
-    steadyStateSpectral2D!(mesh, mesh.F_smooth)
+    solveEquilibrium!(mesh, mesh.F_smooth)
     
     # Check energy error for each bin if available
     if !isnothing(mesh.energy_error)
@@ -323,13 +323,13 @@ end
     # Create selective emissivity (low in some bins, high in others)
     epsilon_selective = [i <= n_bins÷2 ? 0.3 : 0.9 for i in 1:n_bins]
     
-    mesh = create_spectral_uniform_mesh(T_hot=T_hot, T_cold=T_cold,
+    mesh = createSpectralUniformMesh(T_hot=T_hot, T_cold=T_cold,
                                        kappa=kappa, sigma_s=sigma_s,
                                        epsilon_bins=epsilon_selective,
                                        Ndim=Ndim, n_bins=n_bins)
     mesh.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     mesh(N_rays; method=:exchange)
-    steadyStateSpectral2D!(mesh, mesh.F_smooth)
+    solveEquilibrium!(mesh, mesh.F_smooth)
     
     # Solution should exist and be physical
     for fine_face in mesh.fine_mesh[1]
@@ -367,13 +367,13 @@ end
         @testset "n_bins = $n_bins" begin
             epsilon_bins = fill(1.0, n_bins)
             
-            mesh = create_spectral_uniform_mesh(T_hot=T_hot, T_cold=T_cold,
+            mesh = createSpectralUniformMesh(T_hot=T_hot, T_cold=T_cold,
                                                kappa=kappa, sigma_s=sigma_s,
                                                epsilon_bins=epsilon_bins,
                                                Ndim=Ndim, n_bins=n_bins)
             mesh.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
             mesh(N_rays; method=:exchange)
-            steadyStateSpectral2D!(mesh, mesh.F_smooth)
+            solveEquilibrium!(mesh, mesh.F_smooth)
             
             temps = [fine_face.T_g for fine_face in mesh.fine_mesh[1]]
 

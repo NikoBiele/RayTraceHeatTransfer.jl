@@ -2,8 +2,8 @@ module RayTraceHeatTransferPlotsExt
 
 using Plots
 using RayTraceHeatTransfer
-import RayTraceHeatTransfer: plotField2D
+import RayTraceHeatTransfer: plotField
 
-include(joinpath(@__DIR__, "plot2D", "plotField2D.jl"))
+include("plotField.jl")
 
 end

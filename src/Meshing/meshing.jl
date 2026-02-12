@@ -1,0 +1,8 @@
+include(joinpath(@__DIR__, "meshing", "addSubVolume.jl"))
+include(joinpath(@__DIR__, "meshing", "inheritSurfaceProperties.jl"))
+include(joinpath(@__DIR__, "meshing", "inheritVolumeProperty.jl"))
+include(joinpath(@__DIR__, "meshing", "inheritWallProperty.jl"))
+include(joinpath(@__DIR__, "meshing", "meshFaces.jl"))
+include(joinpath(@__DIR__, "meshing", "meshQuad.jl"))
+include(joinpath(@__DIR__, "meshing", "meshTriangle.jl"))
+include(joinpath(@__DIR__, "meshing", "projectPlane.jl"))

@@ -14,7 +14,7 @@ const CONSISTENCY_TOLERANCE = 0.05  # 5% tolerance for consistency checks (ray t
 
 @testset "RayTraceHeatTransfer.jl" begin
     println("\n" * "="^80)
-    println("STARTING COMPREHENSIVE TEST SUITE")
+    println("STARTING TEST SUITE")
     println("="^80)
     
     # Test 3D transparent surfaces (view factors and heat transfer)
@@ -29,7 +29,7 @@ const CONSISTENCY_TOLERANCE = 0.05  # 5% tolerance for consistency checks (ray t
         include("test_2d_spectral.jl")
     end
     
-    # Test spectral capabilities
+    # # Test spectral capabilities
     @testset "Spectral Radiation" begin
         include("test_spectral_consistency.jl")
     end

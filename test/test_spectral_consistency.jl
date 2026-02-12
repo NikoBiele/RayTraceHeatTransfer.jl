@@ -46,7 +46,7 @@ println("-"^60)
     # Grey case
     epsilon_grey = ones(6)
     domain_grey = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon_grey)
-    steadyStateGrey3D!(domain_grey, domain_grey.F)
+    solveEquilibrium!(domain_grey, domain_grey.F_smooth)
     
     grey_T = Float64[]
     grey_q = Float64[]
@@ -64,7 +64,7 @@ println("-"^60)
     domain_spectral = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, 
                                      epsilon_spectral)
     domain_spectral.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
-    steadyStateSpectral3D!(domain_spectral; max_iterations=200)
+    solveEquilibrium!(domain_spectral, domain_spectral.F_smooth)
     
     spectral_T = Float64[]
     spectral_q = Float64[]
@@ -115,7 +115,7 @@ end
     )
     
     solidWalls = SVector(true, true, true, true)
-    face = PolyFace2D{Float64}(vertices, solidWalls, n_bins, kappa, sigma_s)
+    face = PolyVolume2D{Float64}(vertices, solidWalls, n_bins, kappa, sigma_s)
     
     # Uniform spectral properties
     face.kappa_g = fill(kappa, n_bins)
@@ -152,7 +152,7 @@ end
     # Solve spectral problem
     N_rays = 1_000_000
     mesh(N_rays; method=:exchange)
-    steadyStateSpectral2D!(mesh, mesh.F_smooth)
+    solveEquilibrium!(mesh, mesh.F_smooth)
     
     # Check that spectral results integrate properly
     for fine_face in mesh.fine_mesh[1]
@@ -229,7 +229,7 @@ end
     domain_black = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, 
                                   epsilon_all_black)
     domain_black.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
-    steadyStateSpectral3D!(domain_black)
+    solveEquilibrium!(domain_black, domain_black.F_smooth)
     
     black_temps = [sf.T_w for i in 1:6 for sf in domain_black.facesMesh[i].subFaces]
     
@@ -240,7 +240,7 @@ end
     domain_selective = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w,
                                       epsilon_all_selective)
     domain_selective.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
-    steadyStateSpectral3D!(domain_selective)
+    solveEquilibrium!(domain_selective, domain_selective.F_smooth)
     
     selective_temps = [sf.T_w for i in 1:6 for sf in domain_selective.facesMesh[i].subFaces]
     
@@ -338,7 +338,7 @@ end
     
     domain = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     domain.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
-    steadyStateSpectral3D!(domain)
+    solveEquilibrium!(domain, domain.F_smooth)
     
     # Check energy balance for each spectral bin separately
     # and for the integrated total

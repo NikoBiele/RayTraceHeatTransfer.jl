@@ -44,7 +44,7 @@ println("-"^60)
     T_in_w = fill(T_iso, 6)
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-    steadyStateGrey3D!(domain3D, domain3D.F)
+    solveEquilibrium!(domain3D, domain3D.F_smooth)
     
     # Extract temperatures from all subfaces
     for (i, superface) in enumerate(domain3D.facesMesh)
@@ -93,7 +93,7 @@ end
     q_in_w = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-    steadyStateGrey3D!(domain3D, domain3D.F)
+    solveEquilibrium!(domain3D, domain3D.F_smooth)
     
     # Check that specified temperatures are maintained
     avg_T_face1 = mean([sf.T_w for sf in domain3D.facesMesh[1].subFaces])
@@ -147,7 +147,7 @@ end
     q_in_w = [0.0, 0.0, q_heating, q_heating, 0.0, 0.0]
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-    steadyStateGrey3D!(domain3D, domain3D.F)
+    solveEquilibrium!(domain3D, domain3D.F_smooth)
     
     # Calculate total energy balance
     total_q_in = 0.0
@@ -172,7 +172,7 @@ end
 ### TEST 4: ROTATIONAL INVARIANCE ##########################################
 #############################################################################
 
-function rotate_points_3d(points, axis, angle)
+function rotatePoints3D(points, axis, angle)
     """Rotate points around given axis by angle (radians)"""
     if axis == :x
         R = [1.0 0.0 0.0;
@@ -225,7 +225,7 @@ end
     q_in_w = zeros(6)
     
     domain_base = ViewFactorDomain3D(points_base, faces, Ndim, q_in_w, T_in_w, epsilon)
-    steadyStateGrey3D!(domain_base, domain_base.F)
+    solveEquilibrium!(domain_base, domain_base.F_smooth)
     
     # Get temperature statistics from base case
     base_T_min = minimum(sf.T_w for i in 1:6 for sf in domain_base.facesMesh[i].subFaces)
@@ -241,10 +241,10 @@ end
     
     for (axis, angle, desc) in rotations
         @testset "Rotation: $desc" begin
-            points_rot = rotate_points_3d(points_base, axis, angle)
+            points_rot = rotatePoints3D(points_base, axis, angle)
             
             domain_rot = ViewFactorDomain3D(points_rot, faces, Ndim, q_in_w, T_in_w, epsilon)
-            steadyStateGrey3D!(domain_rot, domain_rot.F)
+            solveEquilibrium!(domain_rot, domain_rot.F_smooth)
             
             # Temperature statistics should be invariant
             rot_T_min = minimum(sf.T_w for i in 1:6 for sf in domain_rot.facesMesh[i].subFaces)
@@ -295,7 +295,7 @@ end
     q_in_w = zeros(6)
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-    steadyStateGrey3D!(domain3D, domain3D.F)
+    solveEquilibrium!(domain3D, domain3D.F_smooth)
     
     # Solution should still exist and be physically reasonable
     for (i, superface) in enumerate(domain3D.facesMesh)

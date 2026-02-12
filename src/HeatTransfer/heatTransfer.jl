@@ -1,15 +1,23 @@
-# 2D
-include(joinpath(@__DIR__, "heatTransfer2D", "emitFracBlackBodyElementSpectrum.jl"))
-include(joinpath(@__DIR__, "heatTransfer2D", "emitFracBlackBodyElementSpectrumDeriv.jl"))
-include(joinpath(@__DIR__, "heatTransfer2D", "getBinsEmissionFractions.jl"))
-include(joinpath(@__DIR__, "heatTransfer2D", "setupBoundaryConditions.jl"))
-include(joinpath(@__DIR__, "heatTransfer2D", "solveTemperatureNewtonRaphson.jl"))
-include(joinpath(@__DIR__, "heatTransfer2D", "steadyStateGrey2D.jl"))
-include(joinpath(@__DIR__, "heatTransfer2D", "steadyStateSpectral2D.jl"))
-include(joinpath(@__DIR__, "heatTransfer2D", "updateSpectralEmission.jl"))
-include(joinpath(@__DIR__, "heatTransfer2D", "updateTemperaturesSpectral.jl"))
-include(joinpath(@__DIR__, "heatTransfer2D", "writeResultsToMesh.jl"))
-# 3D
-include(joinpath(@__DIR__, "heatTransfer3D", "steadyStateGrey3D.jl"))
-include(joinpath(@__DIR__, "heatTransfer3D", "steadyStateSpectral3D.jl"))
-include(joinpath(@__DIR__, "heatTransfer3D", "writeResultsToDomain3D.jl"))
+# heat transfer
+# black body
+include(joinpath(@__DIR__, "blackBody", "emitFracBlackBodySpectrum.jl"))
+include(joinpath(@__DIR__, "blackBody", "emitFracBlackBodySpectrumDerivative.jl"))
+include(joinpath(@__DIR__, "blackBody", "getBinsEmissionFractions.jl"))
+include(joinpath(@__DIR__, "blackBody", "solveTemperatureNewtonRaphson.jl"))
+# equilibrium
+include(joinpath(@__DIR__, "equilibrium", "WorkspaceStructs.jl"))
+include(joinpath(@__DIR__, "equilibrium", "chooseSpectralMatrixType.jl"))
+include(joinpath(@__DIR__, "equilibrium", "buildSystemMatrices.jl"))
+include(joinpath(@__DIR__, "equilibrium", "equilibriumGrey2D.jl"))
+include(joinpath(@__DIR__, "equilibrium", "equilibriumSpectral2D.jl"))
+include(joinpath(@__DIR__, "equilibrium", "equilibriumSurfacesGrey3D.jl"))
+include(joinpath(@__DIR__, "equilibrium", "equilibriumSurfacesSpectral3D.jl"))
+include(joinpath(@__DIR__, "equilibrium", "setupBoundaryConditions.jl"))
+include(joinpath(@__DIR__, "equilibrium", "solveEquilibrium.jl"))
+include(joinpath(@__DIR__, "equilibrium", "updateSpectralEmission.jl"))
+include(joinpath(@__DIR__, "equilibrium", "updateTemperaturesSpectral.jl"))
+# exchange factor smoothing
+include(joinpath(@__DIR__, "exchangeFactorSmoothing", "smoothExchangeFactors.jl"))
+# heat transfer 2D
+include(joinpath(@__DIR__, "writeResults", "writeResultsToDomain3D.jl"))
+include(joinpath(@__DIR__, "writeResults", "writeTemperaturesHeatSources.jl"))

@@ -27,7 +27,7 @@ const SOURCE_FUNC_CENTER = [0.6293, 0.6198, 0.6017, 0.5767, 0.5460, 0.5108, 0.47
 ### HELPER FUNCTIONS #######################################################
 #############################################################################
 
-function create_square_domain_2d(; T_hot=1000.0, T_cold=0.0, kappa=1.0, sigma_s=0.0, 
+function createSquareDomain2D(; T_hot=1000.0, T_cold=0.0, kappa=1.0, sigma_s=0.0, 
                                   epsilon=1.0, Ndim=11, rotation_angle=0.0)
     """
     Create a 2D square domain for testing.
@@ -66,7 +66,7 @@ function create_square_domain_2d(; T_hot=1000.0, T_cold=0.0, kappa=1.0, sigma_s=
     )
     
     solidWalls = SVector(true, true, true, true)
-    face = PolyFace2D{Float64}(vertices_static, solidWalls, 1, kappa, sigma_s)
+    face = PolyVolume2D{Float64}(vertices_static, solidWalls, 1, kappa, sigma_s)
     
     # Set boundary conditions
     face.T_in_w = [T_hot, T_cold, T_cold, T_cold]
@@ -80,7 +80,7 @@ function create_square_domain_2d(; T_hot=1000.0, T_cold=0.0, kappa=1.0, sigma_s=
     return mesh
 end
 
-function extract_centerline_temperatures(mesh, Ndim)
+function extractCenterlineTemperatures(mesh, Ndim)
     """
     Extract temperatures along centerline.
     Returns dimensionless source function along centerline.
@@ -101,7 +101,7 @@ function extract_centerline_temperatures(mesh, Ndim)
     return centerline_temps
 end
 
-function dimensionless_source_function(temps, T_hot)
+function dimensionlessSourceFunction(temps, T_hot)
     """Convert temperatures to dimensionless source function"""
     return (temps ./ T_hot).^4
 end
@@ -110,7 +110,7 @@ end
 Simple linear interpolation function.
 Returns a function that interpolates between (x_data, y_data) points.
 """
-function line_interpolation(x_data, y_data)
+function lineInterpolation(x_data, y_data)
     # Sort data by x values
     sorted_indices = sortperm(x_data)
     x_sorted = x_data[sorted_indices]
@@ -120,15 +120,15 @@ function line_interpolation(x_data, y_data)
     return function(x)
         if isa(x, Number)
             # Single value
-            return _interpolate_single(x, x_sorted, y_sorted)
+            return _interpolateSingle(x, x_sorted, y_sorted)
         else
             # Array of values
-            return [_interpolate_single(xi, x_sorted, y_sorted) for xi in x]
+            return [_interpolateSingle(xi, x_sorted, y_sorted) for xi in x]
         end
     end
 end
 
-function _interpolate_single(x, x_data, y_data)
+function _interpolateSingle(x, x_data, y_data)
     # Handle extrapolation (constant)
     if x <= x_data[1]
         return y_data[1]
@@ -166,7 +166,7 @@ end
     N_rays_total = 1_000_000  # Need more rays to reduce noise like in original
     
     # Create interpolation from analytical solution
-    itp_analytical = line_interpolation(RELATIVE_TAU_Z, SOURCE_FUNC_CENTER)
+    itp_analytical = lineInterpolation(RELATIVE_TAU_Z, SOURCE_FUNC_CENTER)
     
     # Sample points (tau values along centerline) - cell centers
     tau_sample = range(1.0/(2*Ndim), 1.0 - 1.0/(2*Ndim), length=Ndim)
@@ -179,7 +179,7 @@ end
     for (wall_idx, wall_name) in enumerate(wall_names)
         @testset "$wall_name Wall Hot" begin
             # Create mesh with only this wall hot
-            mesh = create_square_domain_2d(T_hot=T_hot, T_cold=T_cold, 
+            mesh = createSquareDomain2D(T_hot=T_hot, T_cold=T_cold, 
                                           kappa=kappa, sigma_s=sigma_s,
                                           epsilon=epsilon, Ndim=Ndim,
                                           rotation_angle=rotation_angle)
@@ -193,13 +193,13 @@ end
             mesh(N_rays_total; method=:exchange)
             
             # Solve steady state
-            steadyStateGrey2D!(mesh, mesh.F_smooth)
+            solveEquilibrium!(mesh, mesh.F_smooth)
             
             # Extract centerline temperatures
-            centerline_temps = extract_centerline_temperatures(mesh, Ndim) #, wall_idx)
+            centerline_temps = extractCenterlineTemperatures(mesh, Ndim) #, wall_idx)
             
             # Convert to dimensionless source function
-            source_func_computed = dimensionless_source_function(centerline_temps, T_hot)
+            source_func_computed = dimensionlessSourceFunction(centerline_temps, T_hot)
             
             # Compare with analytical solution from Crosbie & Schrenker
             @test isapprox(source_func_computed, analytical_values, rtol=ANALYTICAL_TOLERANCE)
@@ -235,7 +235,7 @@ end
     for angle in angles
         angle_deg = round(rad2deg(angle), digits=1)
         @testset "Rotation $(angle_deg)°" begin
-            mesh = create_square_domain_2d(T_hot=T_hot, T_cold=T_cold,
+            mesh = createSquareDomain2D(T_hot=T_hot, T_cold=T_cold,
                                           kappa=kappa, sigma_s=sigma_s,
                                           epsilon=epsilon, Ndim=Ndim,
                                           rotation_angle=angle)
@@ -244,7 +244,7 @@ end
             mesh(N_rays_total; method=:exchange)
             
             # Solve steady state
-            steadyStateGrey2D!(mesh, mesh.F_smooth)
+            solveEquilibrium!(mesh, mesh.F_smooth)
             
             # Collect statistics
             temps = [fine_face.T_g for fine_face in mesh.fine_mesh[1]]
@@ -290,12 +290,12 @@ end
             N_rays_per_element = 2_000
             N_rays_total = N_elements * N_rays_per_element
             
-            mesh = create_square_domain_2d(T_hot=T_hot, T_cold=T_cold,
+            mesh = createSquareDomain2D(T_hot=T_hot, T_cold=T_cold,
                                           kappa=kappa, sigma_s=sigma_s,
                                           epsilon=epsilon, Ndim=Ndim)
             
             mesh(N_rays_total; method=:exchange)
-            steadyStateGrey2D!(mesh, mesh.F_smooth)
+            solveEquilibrium!(mesh, mesh.F_smooth)
             
             temps = [fine_face.T_g for fine_face in mesh.fine_mesh[1]]
             push!(mean_temps, mean(temps))
@@ -325,12 +325,12 @@ end
     epsilon = 1.0
     N_rays_total = 1_000_000
     
-    mesh = create_square_domain_2d(T_hot=T_hot, T_cold=T_cold,
+    mesh = createSquareDomain2D(T_hot=T_hot, T_cold=T_cold,
                                   kappa=kappa, sigma_s=sigma_s,
                                   epsilon=epsilon, Ndim=Ndim)
     
     mesh(N_rays_total; method=:exchange)
-    steadyStateGrey2D!(mesh, mesh.F_smooth)
+    solveEquilibrium!(mesh, mesh.F_smooth)
     
     # Check energy error if available
     if !isnothing(mesh.energy_error)
