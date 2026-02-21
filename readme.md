@@ -47,7 +47,7 @@ vertices = SVector(
 )
 solidWalls = SVector(true, true, true, true)
 
-face = PolyVolume2D{Float64}(vertices, solidWalls, 1, 1.0, 0.0)  # κ=1, σₛ=0
+face = PolyVolume2D{Float64}(vertices, solidWalls, 1, 1.0, 0.0);  # κ=1, σₛ=0
 
 face.T_in_w  = [1000.0, 0.0, 0.0, 0.0]   # bottom hot, rest cold
 face.epsilon = [1.0, 1.0, 1.0, 1.0]       # black walls
@@ -140,12 +140,12 @@ Plots.plot!(p2, top_margin=8Plots.mm, bottom_margin=8Plots.mm)
 # --- Combined figure ---
 Plots.plot!(p1, guidefontsize=12, tickfontsize=10, 
             left_margin=5Plots.mm, right_margin=10Plots.mm)
-p = Plots.plot(p1, p2, layout = (1,2), size = (1400, 500), dpi=500)
+p = Plots.plot(p1, p2, layout = (2,1), size = (600, 800), dpi=1000)
 display(p)
 Plots.savefig(p, "fig/validation_2d_grey.png")
 ```
 
-![2D grey validation](fig/2d_grey_validation.png)
+![2D grey validation](fig/validation_2d_grey.png)
 
 The left panel shows the 2D temperature field; the right panel compares the computed centerline source function (blue dots) with the analytical reference (black line). Agreement is within 5 % for 10⁶ rays on an 11 × 11 mesh.
 
