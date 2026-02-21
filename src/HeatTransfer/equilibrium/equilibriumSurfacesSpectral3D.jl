@@ -1,5 +1,6 @@
 function equilibriumSurfacesSpectral3D_full!(domain::ViewFactorDomain3D{G,P}, F::Matrix{G}; 
-                               max_iterations::Int=500, matrixType::Symbol) where {G,P<:Integer}
+                               max_iterations::Int=500, matrixType::Symbol,
+                               convergence_tol::G=0.001) where {G,P<:Integer}
     
     # Validate spectral setup at entry
     if isnothing(domain.wavelength_band_limits)
@@ -88,9 +89,7 @@ function equilibriumSurfacesSpectral3D_full!(domain::ViewFactorDomain3D{G,P}, F:
     sol_j = zeros(G, domain.n_spectral_bins * N_surfs)
     previous_sol_j = zeros(G, domain.n_spectral_bins * N_surfs)
     emitFrac = getBinsEmissionFractions(domain, temperatures)
-    
-    record_convergence = G[]
-    
+        
     println("\nStarting spectral iteration...")
     for iter = 1:max_iterations
         
@@ -106,13 +105,15 @@ function equilibriumSurfacesSpectral3D_full!(domain::ViewFactorDomain3D{G,P}, F:
         sol_j .= Factorization \ (b_e_matrix*[ones(G, N_surfs); emitFrac[:]])
         
         # Check convergence
-        convergence_error = maximum(abs.(sol_j - previous_sol_j))
-        push!(record_convergence, convergence_error)
+        convergence_error = maximum(abs.(sol_j - previous_sol_j)) / maximum(abs.(sol_j))
         previous_sol_j .= sol_j
+        if iter % 20 == 0
+            println("Iteration $iter: convergence error = $convergence_error")
+        end
         
         println("Iteration $iter: convergence error = $convergence_error")
         
-        if iter > 1 && convergence_error < convergenceTolerance
+        if iter > 1 && convergence_error < convergence_tol
             println("Converged after $iter iterations")
             
             # Compute energy conservation error for each band
@@ -289,7 +290,7 @@ function equilibriumSurfacesSpectral3D_direct!(domain::ViewFactorDomain3D{G,P}, 
 end
 
 function equilibriumSurfacesSpectral3D!(domain::ViewFactorDomain3D{G,P}, F::Matrix{G}; 
-                               max_iterations::Int=500) where {G,P<:Integer}
+                               max_iterations::Int=500, convergence_tol::G=0.001) where {G,P<:Integer}
     """
     Solve 3D spectral surface radiation using the optimal solver.
     
@@ -307,6 +308,7 @@ function equilibriumSurfacesSpectral3D!(domain::ViewFactorDomain3D{G,P}, F::Matr
     else
         println("=== Using FULL solver ===")
         matrixType = chooseMatrixType(size(F)[1], domain.n_spectral_bins, F)
-        return equilibriumSurfacesSpectral3D_full!(domain, F; max_iterations=max_iterations, matrixType=matrixType)
+        return equilibriumSurfacesSpectral3D_full!(domain, F; max_iterations=max_iterations,
+                                                matrixType=matrixType, convergence_tol=convergence_tol)
     end
 end

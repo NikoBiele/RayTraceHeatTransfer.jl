@@ -2,7 +2,11 @@
 
 # 2d plotField
 function RayTraceHeatTransfer.plotField(domain::RayTracingDomain2D; field::Symbol=:T,
-                            include_walls::Bool=false, minmax::Union{Nothing, Tuple{Float64, Float64}}=nothing)
+                            include_walls::Bool=false, transparent_interfaces::Bool=false, 
+                            minmax::Union{Nothing, Tuple{Float64, Float64}}=nothing,
+                            xlims::Union{Nothing, Tuple{Float64, Float64}}=nothing,
+                            ylims::Union{Nothing, Tuple{Float64, Float64}}=nothing,
+                            title::Union{Nothing, String}=nothing)
     
     # Function to create a shape for plotting
     function shape(vertices)
@@ -33,13 +37,14 @@ function RayTraceHeatTransfer.plotField(domain::RayTracingDomain2D; field::Symbo
     vmin, vmax = extrema(all_values)
 
     # Initialize the plot
-    p = Plots.plot(aspect_ratio=1.0, legend=false)
+    p = Plots.plot(legend=false)
 
     # Plot volumes (gas properties)
     for i in 1:length(domain.coarse_mesh)
         for subvolume in domain.fine_mesh[i] # face.subvolumes
             color_value = get_field_value(subvolume, field)
-            Plots.plot!(shape(subvolume.vertices), fill_z=color_value, colorbar=false)
+            line_color = transparent_interfaces ? :transparent : :black
+            Plots.plot!(shape(subvolume.vertices), fill_z=color_value, colorbar=false, linecolor=line_color)
         end
     end
 
@@ -77,7 +82,6 @@ function RayTraceHeatTransfer.plotField(domain::RayTracingDomain2D; field::Symbo
 
     Plots.plot!(p, xlabel="Position (m)", 
                     ylabel="Position (m)",
-                    title="Distribution of $field",
                     guidefontsize=20,
                     tickfontsize=18,
                     colorbar_titlefontsize=20,
@@ -88,15 +92,24 @@ function RayTraceHeatTransfer.plotField(domain::RayTracingDomain2D; field::Symbo
       colorbar_tickfont=font(18, "Computer Modern"),
       colorbar_title_margin=10)
 
-      Plots.xlims!(p, 0.0, 1.0)
-      Plots.ylims!(p, 0.0, 1.0)
+    if xlims !== nothing
+        Plots.xlims!(p, xlims)
+    end
+    if ylims !== nothing
+        Plots.ylims!(p, ylims)
+    end
+    if title !== nothing
+        Plots.title!(p, title)
+    else
+        Plots.title!(p,"Distribution of $field")
+    end
 
     display(p)
     return p
 end
 
 # 3d plotField
-function RayTraceHeatTransfer.plotField(ax1, domain::ViewFactorDomain3D, cmap; field=:T)
+function RayTraceHeatTransfer.plotField(ax1, domain::ViewFactorDomain3D; field=:T, cmap=:thermal)
 
     # Function to get the field value
     value_field = Symbol(string(field) * "_w")

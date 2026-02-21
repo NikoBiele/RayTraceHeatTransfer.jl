@@ -71,7 +71,7 @@ function setupBoundaryConditions(rtm::RayTracingDomain2D, F_matrices::Union{Matr
             face = rtm.fine_mesh[coarse_face][fine_face]
             if face.T_in_g > -0.1
                 weighted_kappa = sum([face.kappa_g[i] * emitFrac[num_surfaces + volume_index, i] for i in 1:rtm.n_spectral_bins])
-                emissive[num_surfaces + volume_index] = 4*STEFAN_BOLTZMANN*weighted_kappa*face.Volume*face.T_in_g^4
+                emissive[num_surfaces + volume_index] = 4*STEFAN_BOLTZMANN*weighted_kappa*face.volume*face.T_in_g^4
                 boundary[num_surfaces + volume_index] = emissive[num_surfaces + volume_index]
             else
                 boundary[num_surfaces + volume_index] = face.q_in_g

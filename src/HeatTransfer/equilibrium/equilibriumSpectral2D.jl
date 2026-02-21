@@ -1,5 +1,6 @@
 function equilibriumSpectral2D_full!(rtm::RayTracingDomain2D, F_matrices::Union{Matrix{G}, Vector{Matrix{G}}}; 
-                                    max_iterations::P=500, matrixType::Symbol) where {G, P<:Integer}
+                                    max_iterations::P=500, matrixType::Symbol,
+                                    convergence_tol=0.001) where {G, P<:Integer}
     """
     Solve spectral radiative equilibrium using the iterative method from your example.
     F_matrices can be either a single matrix (grey/uniform) or vector of matrices (variable spectral)
@@ -74,16 +75,12 @@ function equilibriumSpectral2D_full!(rtm::RayTracingDomain2D, F_matrices::Union{
     end
     # Outside iteration loop - factorize once
     Factorization = qr(block_matrix)
-        
+    
     # Set boundary conditions from mesh
     boundary, temperatures, emissive = setupBoundaryConditions(rtm, F_matrices)
 
-    # convergence tolerance
-    convergenceTolerance = G == BigFloat ? sqrt(eps(G)) : 1e-11
-    
     # Iteration loop
     sol_j = zeros(G, rtm.n_spectral_bins * total_elements)
-    record_convergence = G[]
     previous_sol_j = zeros(G, rtm.n_spectral_bins * total_elements)
     emitFrac = getBinsEmissionFractions(rtm, temperatures)
 
@@ -101,25 +98,22 @@ function equilibriumSpectral2D_full!(rtm::RayTracingDomain2D, F_matrices::Union{
         sol_j .= Factorization \ (b_e_matrix*[ones(G, total_elements); emitFrac[:]])
 
         # Check convergence
-        convergence_error = maximum(abs.(sol_j - previous_sol_j))
-        push!(record_convergence, convergence_error)
+        convergence_error = maximum(abs.(sol_j - previous_sol_j)) / maximum(abs.(sol_j))
         previous_sol_j .= sol_j
+        if iter % 20 == 0
+            println("Iteration $iter: convergence error = $convergence_error")
+        end
         
-        println("Iteration $iter: convergence error = $convergence_error")
-        
-        if iter > 1 && convergence_error < convergenceTolerance
+        if iter > 1 && convergence_error < convergence_tol
             println("Converged after $iter iterations")
-            Ds_combined = hcat([D_matrices[i] for i in 1:rtm.n_spectral_bins]...)
-            emissive = max.(Ds_combined * sol_j, 10*eps(G))
             emissive = updateSpectralEmission!(rtm, iter, D_matrices, sol_j, emitFrac, temperatures, emissive)
             temperatures = updateTemperaturesSpectral!(rtm, emissive, emitFrac)
             break
         end
         
         if iter == max_iterations
-            println("Warning: Maximum iterations reached. Final error = $convergence_error")
-            Ds_combined = hcat([D_matrices[i] for i in 1:rtm.n_spectral_bins]...)
-            emissive = max.(Ds_combined * sol_j, 10*eps(G))
+            println("Warning: Maximum iterations reached:")
+            println("Final errors: convergence error = $convergence_error")
             emissive = updateSpectralEmission!(rtm, iter, D_matrices, sol_j, emitFrac, temperatures, emissive)
             temperatures = updateTemperaturesSpectral!(rtm, emissive, emitFrac)
         end
@@ -254,7 +248,7 @@ function equilibriumSpectral2D_direct!(rtm::RayTracingDomain2D, F_matrices::Unio
 end
 
 function equilibriumSpectral2D!(rtm::RayTracingDomain2D, F_matrices::Union{Matrix{G}, Vector{Matrix{G}}}; 
-                              max_iterations::P=500) where {G, P<:Integer}
+                              max_iterations::P=500, convergence_tol=0.001) where {G, P<:Integer}
     """
     Solve spectral radiative equilibrium using the optimal solver.
     
@@ -273,7 +267,8 @@ function equilibriumSpectral2D!(rtm::RayTracingDomain2D, F_matrices::Union{Matri
         println("=== Using FULL spectral solver ===")
         N_elements = length(rtm.surface_mapping) + length(rtm.volume_mapping)
         matrixType = chooseMatrixType(N_elements, rtm.n_spectral_bins, F_matrices)
-        return equilibriumSpectral2D_full!(rtm, F_matrices; max_iterations=max_iterations, matrixType=matrixType)
+        return equilibriumSpectral2D_full!(rtm, F_matrices; max_iterations=max_iterations, matrixType=matrixType,
+                                           convergence_tol=convergence_tol)
     else
         error("spectral_mode must be :spectral_uniform or :spectral_variable but is $(rtm.spectral_mode)")
     end
