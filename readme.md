@@ -147,7 +147,7 @@ Plots.savefig(p, "fig/validation_2d_grey.png")
 
 ![2D grey validation](fig/validation_2d_grey.png)
 
-The left panel shows the 2D temperature field; the right panel compares the computed centerline source function (blue dots) with the analytical reference (black line). Agreement is within 5 % for 10⁶ rays on an 11 × 11 mesh.
+The top panel shows the 2D temperature field; the bottom panel compares the computed centerline source function (blue dots) with the analytical reference (black line). Agreement is excellent for 10⁶ rays on an 11 × 11 mesh.
 
 ### References
 
