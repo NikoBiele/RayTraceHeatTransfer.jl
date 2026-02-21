@@ -1,13 +1,13 @@
 # RayTraceHeatTransfer.jl
 
-A Julia package for radiative heat transfer using Monte Carlo ray tracing and the Graph Equilibrium Radiative Transfer (GERT) methods. Solves grey and spectral radiative equilibrium in 2D participating media and 3D surface enclosures, with exchange factor smoothing for machine precision energy-conserving solutions.
+A Julia package for radiative heat transfer using Monte Carlo ray tracing and the Graph Equilibrium Radiative Transfer (GERT, see [Bielefeld, 2025](https://arxiv.org/abs/2512.22157)) methods. Solves grey and spectral radiative equilibrium in 2D participating media and 3D surface enclosures, with exchange factor smoothing for machine precision reciprocity and energy-conserving solutions.
 
 ## Features
 
 - **2D participating media** — absorbing, emitting, and scattering gases with enclosing surfaces
 - **3D surface enclosures** — transparent media with analytical view factors (Narayanaswamy 2015)
 - **Grey and spectral** — wavelength-independent or band-resolved radiation with automatic solver selection
-- **Exchange factor smoothing** — iterative reciprocity enforcement for machine-precision energy conservation
+- **Exchange factor smoothing** — iterative reciprocity enforcement for machine-precision reciprocity and energy conservation
 - **Callable domains** — `mesh(N_rays; method=:exchange)` runs ray tracing directly on the domain object
 - **Plotting extensions** — GLMakie and Plots backends for mesh and field visualisation
 
@@ -21,7 +21,7 @@ Pkg.add("RayTraceHeatTransfer")
 For plotting, also install a Makie backend and/or Plots:
 
 ```julia
-Pkg.add("GLMakie")   # for plotMesh (2D and 3D)
+Pkg.add("GLMakie")   # for plotMesh (2D and 3D) and plotField (3D)
 Pkg.add("Plots")     # for plotField (2D)
 ```
 
@@ -29,7 +29,7 @@ Pkg.add("Plots")     # for plotField (2D)
 
 ## Example 1 — 2D Grey Participating Medium
 
-This example solves radiative equilibrium in a 1 × 1 m square enclosure filled with an absorbing gas (κ = 1 m⁻¹, no scattering). The bottom wall is held at 1000 K and all other walls are at 0 K; all surfaces are black (ε = 1). The gas temperature field is found by solving the GERT system after computing exchange factors with Monte Carlo ray tracing.
+This example solves radiative equilibrium in a 1 × 1 m square enclosure filled with an absorbing gas (absorption coefficient: κ = 1 m⁻¹, no scattering: σₛ = 0 m⁻¹). The bottom wall is held at 1000 K and all other walls are at 0 K; all surfaces are black (ε = 1). The gas temperature field is found by solving the GERT system after computing exchange factors with Monte Carlo ray tracing.
 
 ### Step 1: Define the geometry and mesh
 
@@ -37,24 +37,23 @@ This example solves radiative equilibrium in a 1 × 1 m square enclosure filled 
 using RayTraceHeatTransfer
 using GeometryBasics, StaticArrays
 
-Ndim = 11  # 11 × 11 elements
-
 vertices = SVector(
     Point2(0.0, 0.0),
     Point2(1.0, 0.0),
     Point2(1.0, 1.0),
     Point2(0.0, 1.0)
 )
-solidWalls = SVector(true, true, true, true)
+solidWalls = SVector(true, true, true, true) # all walls impenetrable by radiation
 
-face = PolyVolume2D{Float64}(vertices, solidWalls, 1, 1.0, 0.0);  # κ=1, σₛ=0
+face = PolyVolume2D{Float64}(vertices, solidWalls, 1, 1.0, 0.0);  # κ=1, σₛ=0, for the gas volume
 
 face.T_in_w  = [1000.0, 0.0, 0.0, 0.0]   # bottom hot, rest cold
 face.epsilon = [1.0, 1.0, 1.0, 1.0]       # black walls
 face.T_in_g  = -1.0                         # unknown (solve for this)
 face.q_in_g  = 0.0                          # radiative equilibrium
 
-mesh = RayTracingDomain2D([face], [(Ndim, Ndim)]);
+Ndim = 11  # 11 × 11 elements
+mesh = RayTracingDomain2D([face], [(Ndim, Ndim)]); # mesh the domain
 ```
 
 ### Understanding the mesh numbering
@@ -83,12 +82,12 @@ save("fig/mesh_numbering.png", fig, px_per_unit=3)
 
 ![Mesh numbering](fig/mesh_numbering.png)
 
-Volume elements are labelled **g*i*** and wall surfaces **w*i***. The indices shown here are the same indices used in the exchange factor matrix `mesh.F_smooth` and in the system matrices returned by `buildSystemMatrices!`.
+Volume elements are labelled **g*i*** and wall surfaces **w*i***. The indices shown here are the same indices used in the exchange factor matrix `mesh.F_smooth` and in the system matrices returned by the `buildSystemMatrices!` function (used internally). The system matrices row/column numberings always start with the surfaces, then volumes.
 
 ### Step 2: Ray trace and solve
 
 ```julia
-mesh(10_000_000; method = :exchange)          # Monte Carlo ray tracing
+mesh(10_000_000; method = :exchange)         # Monte Carlo ray tracing
 solveEquilibrium!(mesh, mesh.F_smooth)       # solve GERT system
 ```
 
@@ -122,7 +121,7 @@ S_ref  = [0.6293, 0.6198, 0.6017, 0.5767, 0.5460, 0.5108, 0.4724,
           0.1981, 0.1768, 0.1584, 0.1424, 0.1287, 0.1171, 0.1073,
           0.0992, 0.0930, 0.0885, 0.0863]
 
-# --- Right panel: centerline validation ---
+# --- Bottom panel: centerline validation ---
 p2 = Plots.plot(tau_ref, S_ref,
     linewidth = 2, color = :black, label = "Analytical (C & S)",
     xlabel = "Optical depth τ",
@@ -159,9 +158,9 @@ The top panel shows the 2D temperature field; the bottom panel compares the comp
 
 ## Example 2 — Spectral Greenhouse Atmosphere
 
-This example models a simplified planetary atmosphere to demonstrate the spectral solver. The atmosphere is transparent in the visible and opaque in the infrared, producing a greenhouse effect: solar radiation penetrates to the surface, while thermal emission from the warm surface is trapped by the absorbing gas. The equilibrium surface temperature — not prescribed — emerges far above the bare blackbody value.
+This example models a simplified planetary atmosphere to demonstrate the spectral solver. The atmosphere is transparent in the visible and opaque in the infrared, producing a greenhouse effect: solar radiation penetrates to the surface, while thermal emission from the warm surface is trapped by the absorbing gas. The equilibrium surface temperature, which is not prescribed, emerges far above the value for a transparent atmosphere.
 
-The geometry is a vertical stack of 20 sub-enclosures representing atmospheric layers, each with spectrally varying absorption. A thin volume at the top emits at solar temperature, acting as the radiation source. The domain is wide relative to its height, approximating a 1D atmosphere.
+The geometry is a vertical stack of 20 sub-enclosures representing atmospheric layers, each with spectrally distinct absorption. A thin volume at the top emits at solar temperature, acting as the radiation source. The domain is wide relative to its height, approximating a 1D atmosphere.
 
 ### Step 1: Define the atmosphere
 
@@ -176,7 +175,7 @@ N_layers     = 20            # atmospheric layers
 width        = 100.0         # normalized width (wide domain ≈ 1D)
 scale_height = 15_900.0      # density scale height (m)
 T_sun        = 5800.0        # solar temperature (K)
-q_solar      = 2 * 2600.0    # isotropic solar flux (W/m²)
+q_solar      = 2 * 2600.0    # isotropic solar flux (both up and down) (W/m²)
 κ_vis        = 0.01          # visible absorption coefficient
 κ_ir         = 100.0         # infrared absorption coefficient
 λ_min        = 1e-9          # minimum wavelength (m)
@@ -184,7 +183,7 @@ q_solar      = 2 * 2600.0    # isotropic solar flux (W/m²)
 stretch      = 5.0           # spatial layer clustering near surface
 ```
 
-The spectral range spans from 1 nm to 1 m — wide enough to capture the full Planck distribution at all temperatures in the problem. An insufficient spectral range forces energy into edge bins and degrades the solution.
+The spectral range spans from 1 nm to 1 m; wide enough to capture the full Planck distribution at all temperatures in the problem. An insufficient spectral range forces energy into edge bins and degrades the solution.
 
 ### Step 2: Build the spectral grid and layer geometry
 
@@ -201,14 +200,14 @@ layer_edges_norm = [(exp(stretch * t) - 1) / (exp(stretch) - 1) for t in layer_p
 # Solar volume: a thin layer at the top whose emission matches the desired
 # irradiance. This avoids modifying the solver for spectral boundary fluxes.
 sun_layer_height = 1000.0     # 1 km thick
-κ_sun = q_solar * L / (4 * 5.670374419e-8 * T_sun^4 * sun_layer_height)
+κ_sun = q_solar * L / (4 * 5.670374419e-8 * T_sun^4 * sun_layer_height) # tuned absorption coefficient (emission)
 
 normalized_scale_height = scale_height / L
 ```
 
 ### Step 3: Assemble the atmospheric layers
 
-Each layer has a spectrally varying absorption coefficient: a sigmoid transition around λ = 4 μm separates the transparent visible window (κ ≈ 0.01) from the opaque infrared (κ ≈ 100), scaled by the local atmospheric density. This spectral asymmetry is the mechanism behind the greenhouse effect.
+Each layer has a spectrally distinct absorption coefficient: a sigmoid transition around λ = 4 μm separates the transparent visible window (κ ≈ 0.01) from the opaque infrared (κ ≈ 100), scaled by the local atmospheric density. This spectral asymmetry is the mechanism behind the greenhouse effect.
 
 ```julia
 faces     = PolyVolume2D{Float64}[]
@@ -223,7 +222,7 @@ for j in 1:N_layers
         Point2(0.0, y_bot), Point2(width, y_bot),
         Point2(width, y_top), Point2(0.0, y_top)
     )
-    solidwalls = SVector((j == 1), true, false, true)
+    solidwalls = SVector((j == 1), true, false, true) # transparent horizontal walls
 
     # Exponential density decay
     ρ = exp(-y_mid / normalized_scale_height)
@@ -234,8 +233,8 @@ for j in 1:N_layers
                for b in 1:n_bins]
 
     face = PolyVolume2D{Float64}(verts, solidwalls, n_bins, 1.0, 0.0)
-    face.kappa_g   = layer_κ
-    face.sigma_s_g = fill(0.0, n_bins)
+    face.kappa_g   = layer_κ # local spectral absorption coefficients
+    face.sigma_s_g = fill(0.0, n_bins) # local spectral scattering coefficients
     face.epsilon   = [fill(1.0, n_bins) for _ in 1:4]
     face.T_in_g    = -1.0       # solve for gas temperature
     face.q_in_g    = 0.0        # radiative equilibrium
@@ -245,12 +244,14 @@ for j in 1:N_layers
     else
         face.T_in_w = [0.0, 0.0, 0.0, 0.0]   # cold boundaries
     end
-    face.q_in_w = [0.0, 0.0, 0.0, 0.0]
+    face.q_in_w = [0.0, 0.0, 0.0, 0.0] # source flux
 
     push!(faces, face)
-    push!(divisions, (1, 2))
+    push!(divisions, (1, 2)) # each layer must be divided for the ray tracer to work
 end
 ```
+
+In general, to solve for temperature, set `T=-1`. Then the solver uses the prescribed flux to solve for `T`. Any non-negative prescribed `T` will remain fixed, then the solved determines the source flux `q`. At least one `T` in the domain must be fixed.
 
 ### Step 4: Add the solar source and build the mesh
 
@@ -263,19 +264,19 @@ verts_sun  = SVector(
 
 face_sun = PolyVolume2D{Float64}(
     verts_sun, SVector(false, true, true, true), n_bins, κ_sun, 0.0);
-face_sun.kappa_g   = fill(κ_sun, n_bins)
-face_sun.sigma_s_g = fill(0.0, n_bins)
-face_sun.epsilon   = [fill(1.0, n_bins) for _ in 1:4]
-face_sun.T_in_g    = T_sun      # prescribed solar temperature
-face_sun.q_in_g    = 0.0
-face_sun.T_in_w    = [0.0, 0.0, 0.0, 0.0]
-face_sun.q_in_w    = [0.0, 0.0, 0.0, 0.0]
+face_sun.kappa_g   = fill(κ_sun, n_bins) # spectrally uniform absorption coefficient
+face_sun.sigma_s_g = fill(0.0, n_bins) # local spectral scattering coefficients
+face_sun.epsilon   = [fill(1.0, n_bins) for _ in 1:4] # black space (fully absorbing)
+face_sun.T_in_g    = T_sun # prescribed solar temperature
+face_sun.q_in_g    = 0.0 # uses temperature
+face_sun.T_in_w    = [0.0, 0.0, 0.0, 0.0] # cold space behind the sun (fully absorbing)
+face_sun.q_in_w    = [0.0, 0.0, 0.0, 0.0] # uses temperature
 
 push!(faces, face_sun);
-push!(divisions, (1, 2));
+push!(divisions, (1, 2)); # each layer must be divided for the ray tracer to work
 
-mesh = RayTracingDomain2D(faces, divisions);
-mesh.wavelength_band_limits = λ_edges
+mesh = RayTracingDomain2D(faces, divisions); # mesh the domain
+mesh.wavelength_band_limits = λ_edges # spectral limits
 ```
 
 ### Step 5: Ray trace and solve
@@ -286,7 +287,7 @@ solveEquilibrium!(mesh, mesh.F_smooth;
     max_iterations = 10_000, convergence_tol = 1e-12)
 ```
 
-Ray tracing is performed independently for each spectral bin, computing separate exchange factor matrices that reflect the wavelength-dependent extinction. The spectral equilibrium solver then iterates to find the temperature distribution that simultaneously satisfies energy conservation across all bins.
+Ray tracing is performed independently for each spectral bin, computing separate exchange factor matrices that represent the wavelength-dependent extinction. The spectral equilibrium solver then iterates to find the temperature distribution that simultaneously satisfies energy conservation across all bins.
 
 ### Step 6: Extract and plot the temperature profile
 
@@ -301,7 +302,7 @@ push!(altitudes, 0.0)
 
 for j in 1:N_layers
     for k in 1:2
-        push!(gas_temps, mesh.fine_mesh[j][k].T_g)
+        push!(gas_temps, mesh.fine_mesh[j][k].T_g) # gas temperatures
         push!(altitudes, mesh.fine_mesh[j][k].midPoint[2] * L)
     end
 end
@@ -321,7 +322,7 @@ display(p)
 
 ![Spectral greenhouse atmosphere](fig/spectral_greenhouse.png)
 
-The surface temperature emerges well above the bare blackbody equilibrium — a direct consequence of the spectral asymmetry between incoming (visible) and outgoing (infrared) radiation. Temperature decreases monotonically with altitude as the atmosphere thins and becomes transparent.
+The surface temperature emerges well above the bare blackbody equilibrium; a direct consequence of the spectral asymmetry between incoming (visible) and outgoing (infrared) radiation. Temperature decreases monotonically with altitude as the atmosphere thins and becomes transparent.
 
 > **Note:** This is a simplified radiative equilibrium model without convection, latent heat, or detailed molecular absorption bands. Nevertheless, it captures the essential greenhouse mechanism from first principles: the spectral solver enforces energy conservation across the full spectrum to machine precision, and the temperature profile emerges purely from the exchange of radiation between layers.
 
@@ -331,7 +332,7 @@ The spectral solver is an unpublished extension of the grey GERT method describe
 
 ## Example 3 — 3D Surface Enclosure
 
-This example solves radiative equilibrium in a unit cube with transparent (non-participating) media. Two opposing faces have prescribed temperatures (1000 K and 0 K); the four side walls are in radiative equilibrium (unknown temperature, zero net heat flux). All surfaces are black (ε = 1). View factors are computed analytically using the method of Narayanaswamy (2015) — no ray tracing is needed.
+This example solves radiative equilibrium in a unit cube with transparent (non-participating) media. Two opposing faces have prescribed temperatures (1000 K and 0 K); the four side walls are in radiative equilibrium (unknown temperature, zero net heat flux). All surfaces are black (ε = 1). View factors are computed analytically using the method of Narayanaswamy (2015), which means no ray tracing is needed.
 
 ### Step 1: Define the cube geometry
 
@@ -371,7 +372,7 @@ epsilon = ones(size(faces, 1))                     # black surfaces
 q_in_w  = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]           # zero net heat flux on sides
 T_in_w  = [1000.0, 0.0, -1.0, -1.0, -1.0, -1.0]    # hot, cold, four unknown
 
-domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon);
+domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon); # mesh domain and calculate view factors
 ```
 
 Faces 1 and 2 are the hot and cold walls at opposing ends of the cube. The four side faces have `T_in_w = -1.0` (unknown) and `q_in_w = 0.0` (radiative equilibrium), so their temperature distributions emerge from the solution.
