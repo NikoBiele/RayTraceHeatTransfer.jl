@@ -153,7 +153,7 @@ The top panel shows the 2D temperature field; the bottom panel compares the comp
 
 > Crosbie, A. L. & Schrenker, R. G. (1984). "Radiative transfer in a two-dimensional rectangular medium exposed to diffuse radiation." *Journal of Quantitative Spectroscopy and Radiative Transfer*, 31(4), 339–372.
 
-> Bielefeld, N. M. (2025). "Graph Equilibrium Radiative Transfer." *arXiv preprint*, [arXiv:2512.22157](https://arxiv.org/abs/2512.22157).
+> Bielefeld, N. M. (2025). "A Radiation Exchange Factor Transformation with Proven Convergence, Non-Negativity, and Energy Conservation" *arXiv preprint*, [arXiv:2512.22157](https://arxiv.org/abs/2512.22157).
 
 ---
 
