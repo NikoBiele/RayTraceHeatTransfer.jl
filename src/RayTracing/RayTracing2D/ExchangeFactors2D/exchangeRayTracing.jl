@@ -1,5 +1,6 @@
 function exchangeRayTracing!(rtm::RayTracingDomain2D, rays_tot::P, tol::T, 
-                              nudge::G, check_interval::P, stagnation_threshold::G, verbose::Bool) where {G, P<:Integer, T}
+                              nudge::G, max_iters, check_interval::P,
+                              stagnation_threshold::G, verbose::Bool) where {G, P<:Integer, T}
     
     # Ray trace domain - returns different types based on spectral mode
     F_raw, rays_per_emitter = parallelRayTracing(rtm, rays_tot, nudge, verbose)
@@ -15,7 +16,7 @@ function exchangeRayTracing!(rtm::RayTracingDomain2D, rays_tot::P, tol::T,
             verbose && println("Smoothing F matrix for spectral bin $bin/$(rtm.n_spectral_bins)")
             F_smooth_bin = smoothExchangeFactors!(
                 F_raw[bin], rtm, rays_per_emitter, 
-                bin; max_iterations=1000, tolerance=tol,
+                bin; max_iterations=max_iters, tolerance=tol,
                 check_interval=check_interval,
                 stagnation_threshold=stagnation_threshold,
                 verbose=verbose
@@ -36,7 +37,7 @@ function exchangeRayTracing!(rtm::RayTracingDomain2D, rays_tot::P, tol::T,
         end
         
         F_smooth = smoothExchangeFactors!(
-            F_raw, rtm, rays_per_emitter, 1; max_iterations=1000,
+            F_raw, rtm, rays_per_emitter, 1; max_iterations=max_iters,
             tolerance=tol,
             check_interval=check_interval,
             stagnation_threshold=stagnation_threshold,

@@ -1,5 +1,5 @@
 function (rtm::RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; method::Symbol=:exchange,
-                                nudge=nothing, smooth_tol=nothing,
+                                nudge=nothing, smooth_tol=nothing, max_iters::P=10_000,
                                 check_interval=2, stagnation_threshold=1e-4, verbose=true) where
                                 {VPF,VVPF,MT,VT,DIII,DII,P<:Integer,GRID}
     
@@ -16,7 +16,7 @@ function (rtm::RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; me
     end
 
     if method == :exchange
-        exchangeRayTracing!(rtm, rays_tot, smooth_rtol, trace_nudge,
+        exchangeRayTracing!(rtm, rays_tot, smooth_rtol, trace_nudge, max_iters,
                             check_interval, stagnation_threshold, verbose)
     elseif method == :direct
         directRayTracing!(rtm, rays_tot, trace_nudge, verbose)
