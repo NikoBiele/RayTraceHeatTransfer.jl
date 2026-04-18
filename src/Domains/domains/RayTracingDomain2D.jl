@@ -1,5 +1,5 @@
 # Updated constructor from existing RayTracingMesh - now with spectral support
-function RayTracingDomain2D(rtm::IntermediateMesh2D)
+function RayTracingDomain2D(rtm::IntermediateMesh2D, verbose::Bool)
     # Extract the type parameters from the input
     VPF = typeof(rtm.coarse_mesh)
     VVPF = typeof(rtm.fine_mesh)
@@ -96,10 +96,10 @@ function RayTracingDomain2D(rtm::IntermediateMesh2D)
         nothing   # energy_error
     )
 
-    rtm_optim.uniform_extinction = validateExtinctionUniformity!(rtm_optim)
+    rtm_optim.uniform_extinction = validateExtinctionUniformity!(rtm_optim; verbose=verbose)
 
     # Update spectral mode based on uniformity
-    if validateSpectralUniformity!(rtm_optim) && is_spectral
+    if validateSpectralUniformity!(rtm_optim; verbose=verbose) && is_spectral
         rtm_optim.spectral_mode = :spectral_uniform
     elseif is_spectral
         rtm_optim.spectral_mode = :spectral_variable
@@ -111,14 +111,18 @@ function RayTracingDomain2D(rtm::IntermediateMesh2D)
 end
 
 # Updated constructor that builds from scratch (for new meshes) - now with spectral support  
-function RayTracingDomain2D(faces::Vector{PolyVolume2D{G}}, Ndiv::Vector{Tuple{P,P}}) where {G, P<:Integer}
+function RayTracingDomain2D(faces::Vector{PolyVolume2D{G}}, Ndiv::Vector{Tuple{P,P}};
+                            verbose::Bool=true) where {G, P<:Integer}
     # First create the standard RayTracingMesh
+    verbose && println("Building intermediate mesh...")
     standardMesh = IntermediateMesh2D(faces, Ndiv)
     
     # Then convert to optimized version with spectral support
-    optimMesh = RayTracingDomain2D(standardMesh)
+    verbose && println("Optimizing mesh...")
+    optimMesh = RayTracingDomain2D(standardMesh, verbose)
 
     # Build spatial acceleration
+    verbose && println("Building spatial acceleration structures...")
     buildSpatialAcceleration!(optimMesh)
 
     return optimMesh

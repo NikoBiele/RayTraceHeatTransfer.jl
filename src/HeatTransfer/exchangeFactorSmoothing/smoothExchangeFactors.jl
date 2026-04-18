@@ -9,6 +9,26 @@ function step1_scale_rows_inplace!(F::Matrix{T}, scaling_factors::Vector{T}) whe
     end
 end
 
+# Step 1: F = E * F (row scaling), fused with convergence measure
+# Computes d = ||X1 - X1'||_F where X1 = E*F, using skew-symmetry.
+function step1_scale_rows_with_conv!(F::Matrix{T}, scaling_factors::Vector{T}) where T
+    n = size(F, 1)
+    d_squared = zero(T)
+    @inbounds for i in 1:n
+        scale_i = scaling_factors[i]
+        for j in (i+1):n
+            x_ij = scale_i * F[i, j]
+            x_ji = scaling_factors[j] * F[j, i]
+            diff = x_ij - x_ji
+            d_squared += diff * diff
+            F[i, j] = x_ij
+            F[j, i] = x_ji
+        end
+        F[i, i] = scale_i * F[i, i]
+    end
+    return sqrt(2 * d_squared)
+end
+
 # Step 2: F = 0.5 * (F + F^T) - symmetrization IN-PLACE
 function step2_symmetrize_inplace!(F::Matrix{T}) where T
     n = size(F, 1)
@@ -55,28 +75,6 @@ function step4_normalize_rows_inplace!(F::Matrix{T}) where T
     end
 end
 
-# Convergence check: compute d = ||E*F - F^T*E||_F using only scalars
-function compute_convergence_metric(F::Matrix{T}, scaling_factors::Vector{T}) where T
-    n = size(F, 1)
-    d_squared = zero(T)
-    
-    @inbounds for i in 1:n
-        for j in 1:n
-            # (E*F)[i,j] = scaling_factors[i] * F[i,j]
-            EF_ij = scaling_factors[i] * F[i, j]
-            
-            # (F^T*E)[i,j] = F[j,i] * scaling_factors[j]
-            FTE_ij = F[j, i] * scaling_factors[j]
-            
-            # ||E*F - F^T*E||_F^2 = sum_{i,j} (EF_ij - FTE_ij)^2
-            diff = EF_ij - FTE_ij
-            d_squared += diff * diff
-        end
-    end
-    
-    return sqrt(d_squared)
-end
-
 # Parallel versions
 function step1_scale_rows_inplace_parallel!(F::Matrix{T}, scaling_factors::Vector{T}) where T
     n = size(F, 1)
@@ -87,6 +85,27 @@ function step1_scale_rows_inplace_parallel!(F::Matrix{T}, scaling_factors::Vecto
         end
     end
 end
+
+# Parallel version
+function step1_scale_rows_with_conv_parallel!(F::Matrix{T}, scaling_factors::Vector{T}) where T
+    n = size(F, 1)
+    d_squared = Threads.Atomic{T}(zero(T))
+    Threads.@threads for i in 1:n
+        scale_i = scaling_factors[i]
+        local_sum = zero(T)
+        @inbounds for j in (i+1):n
+            x_ij = scale_i * F[i, j]
+            x_ji = scaling_factors[j] * F[j, i]
+            diff = x_ij - x_ji
+            local_sum += diff * diff
+            F[i, j] = x_ij
+            F[j, i] = x_ji
+        end
+        @inbounds F[i, i] = scale_i * F[i, i]
+        Threads.atomic_add!(d_squared, local_sum)
+    end
+    return sqrt(2 * d_squared[])
+end    
 
 function step2_symmetrize_inplace_parallel!(F::Matrix{T}) where T
     n = size(F, 1)
@@ -126,32 +145,15 @@ function step4_normalize_rows_inplace_parallel!(F::Matrix{T}) where T
     end
 end
 
-function compute_convergence_metric_parallel(F::Matrix{T}, scaling_factors::Vector{T}) where T
-    n = size(F, 1)
-    
-    # Parallel reduction for d_squared
-    d_squared = Threads.Atomic{T}(zero(T))
-    
-    @threads for i in 1:n
-        local_sum = zero(T)
-        @inbounds for j in 1:n
-            EF_ij = scaling_factors[i] * F[i, j]
-            FTE_ij = F[j, i] * scaling_factors[j]
-            diff = EF_ij - FTE_ij
-            local_sum += diff * diff
-        end
-        # Atomic add to global sum
-        Threads.atomic_add!(d_squared, local_sum)
-    end
-    
-    return sqrt(d_squared[])
-end
-
 # Updated smoothing algorithm - reads extinction directly from faces for specific spectral bin
 function smoothExchangeFactors!(F::Matrix{T}, rtm::RayTracingDomain2D, 
                                  rays_per_emitter::Int,
                                  spectral_bin::Int=1; 
-                                 max_iterations::Int=1000, tolerance=nothing) where {T}
+                                 max_iterations::Int=10_000,
+                                 tolerance=nothing,
+                                 check_interval::Int=2,
+                                 stagnation_threshold=1e-4,
+                                 verbose::Bool=true) where {T}
     
     num_surfaces = length(rtm.surface_mapping)
     num_volumes = length(rtm.volume_mapping)
@@ -184,13 +186,20 @@ function smoothExchangeFactors!(F::Matrix{T}, rtm::RayTracingDomain2D,
     return smoothExchangeFactorsUltimate!(F, surface_areas, volumes, volume_betas, 
                                            rays_per_emitter; 
                                            max_iterations=max_iterations, 
-                                           tolerance=tolerance)
+                                           tolerance=tolerance,
+                                           check_interval=check_interval,
+                                           stagnation_threshold=stagnation_threshold,
+                                           verbose=verbose)
 end
 
 function smoothExchangeFactorsUltimate!(F::Matrix{T}, surface_areas::Vector{P}, 
                                          volumes::Vector{P}, volume_betas::Vector{P},
                                          rays_per_emitter::Int; 
-                                         max_iterations::Int=1000, tolerance=nothing) where {T, P}
+                                         max_iterations::Int=10_000,
+                                         tolerance=nothing,
+                                         check_interval::Int=2,
+                                         stagnation_threshold=1e-4,
+                                         verbose::Bool=true) where {T, P}
     
     num_surfaces = length(surface_areas)
     num_volumes = length(volumes)
@@ -209,17 +218,6 @@ function smoothExchangeFactorsUltimate!(F::Matrix{T}, surface_areas::Vector{P},
         P
     end
     
-    # Adaptive tolerance based on input type
-    numeric_tolerance = if tolerance === nothing
-        eps(NumericT)
-    else
-        if typeof(tolerance) <: Measurement
-            Measurements.value(tolerance)
-        else
-            tolerance
-        end
-    end
-    
     # Extract numeric values from input matrix
     F_work = Matrix{NumericT}(undef, size(F))
     for i in 1:size(F, 1), j in 1:size(F, 2)
@@ -229,13 +227,6 @@ function smoothExchangeFactorsUltimate!(F::Matrix{T}, surface_areas::Vector{P},
             F[i, j]
         end
     end
-    
-    # Choose parallel strategy
-    use_parallel = num_elements > 1000 && Threads.nthreads() > 1
-    
-    println("Matrix size: $(num_elements)×$(num_elements)")
-    println("Strategy: $(use_parallel ? "Parallel" : "Serial")")
-    println("Tolerance: $numeric_tolerance")
 
     # Pre-compute scaling factors with local extinction
     scaling_factors = Vector{NumericT}(undef, num_elements)
@@ -265,51 +256,90 @@ function smoothExchangeFactorsUltimate!(F::Matrix{T}, surface_areas::Vector{P},
             scaling_factors[i] = 4 * beta_numeric * vol_numeric
         end
     end
-    
-    # Choose function implementations based on parallel strategy
-    if use_parallel
-        scale_rows! = step1_scale_rows_inplace_parallel!
-        symmetrize! = step2_symmetrize_inplace_parallel!
-        scale_rows_inverse! = step3_scale_rows_inverse_inplace_parallel!
-        normalize_rows! = step4_normalize_rows_inplace_parallel!
-        convergence_metric = compute_convergence_metric_parallel
+
+    # Adaptive tolerance based on input type
+    numeric_tolerance = if tolerance === nothing
+        κ = maximum(scaling_factors) / minimum(scaling_factors)
+        sqrt(eps(NumericT)) * κ * sqrt(num_elements / rays_per_emitter)
     else
-        scale_rows! = step1_scale_rows_inplace!
-        symmetrize! = step2_symmetrize_inplace!
-        scale_rows_inverse! = step3_scale_rows_inverse_inplace!
-        normalize_rows! = step4_normalize_rows_inplace!
-        convergence_metric = compute_convergence_metric
+        if typeof(tolerance) <: Measurement
+            Measurements.value(tolerance)
+        else
+            NumericT(tolerance)
+        end
+    end
+
+    # Choose parallel strategy
+    use_parallel = num_elements > 1000 && Threads.nthreads() > 1
+    
+    verbose && println("Matrix size: $(num_elements)×$(num_elements)")
+    verbose && println("Strategy: $(use_parallel ? "Parallel" : "Serial")")
+    verbose && println("Tolerance: $numeric_tolerance")
+
+    # Pre-loop convergence check (sufficient condition from Algorithm 1)
+    if num_volumes > 0
+        Es_max = maximum(view(scaling_factors, 1:num_surfaces))
+        Eg_min = minimum(view(scaling_factors, num_surfaces+1:num_elements))
+        check_passed = Es_max < Eg_min
+        if !check_passed && verbose
+            @warn "Algorithm 1 convergence check failed: max surface E ($Es_max) ≥ min gas E ($Eg_min); convergence not guaranteed, consider refining the mesh"
+        end
+    else
+        E_max = maximum(scaling_factors)
+        E_sum = sum(scaling_factors)
+        check_passed = E_max < 0.5 * E_sum
+        if !check_passed && verbose
+            @warn "Algorithm 1 convergence check failed: max surface E ($E_max) ≥ half of total E ($(E_sum/2)); convergence not guaranteed, consider refining the mesh"
+        end
     end
     
-    for iteration in 1:max_iterations
-        # Step 1: F = E * F (overwrites F_work)
-        scale_rows!(F_work, scaling_factors)
-        
-        # Step 2: F = 0.5 * (F + F^T) (overwrites F_work)
+    # Dispatch (now both Step 1 variants)
+    if use_parallel
+        step1_plain! = step1_scale_rows_inplace_parallel!
+        step1_conv!  = step1_scale_rows_with_conv_parallel!
+        symmetrize!  = step2_symmetrize_inplace_parallel!
+        scale_rows_inverse! = step3_scale_rows_inverse_inplace_parallel!
+        normalize_rows!     = step4_normalize_rows_inplace_parallel!
+    else
+        step1_plain! = step1_scale_rows_inplace!
+        step1_conv!  = step1_scale_rows_with_conv!
+        symmetrize!  = step2_symmetrize_inplace!
+        scale_rows_inverse! = step3_scale_rows_inverse_inplace!
+        normalize_rows!     = step4_normalize_rows_inplace!
+    end
+
+    d = Inf
+    d_prev = Inf
+    k = 0
+    stagnated = false
+
+    while d > numeric_tolerance && k < max_iterations
+        if k % check_interval == 0
+            d_prev = d
+            d = step1_conv!(F_work, scaling_factors)
+        else
+            step1_plain!(F_work, scaling_factors)
+        end
         symmetrize!(F_work)
-        
-        # Step 3: F = E^(-1) * F (overwrites F_work)
         scale_rows_inverse!(F_work, scaling_factors)
-        
-        # Step 4: F = row_normalize(F) (overwrites F_work)
         normalize_rows!(F_work)
 
-        # Check convergence: d = ||E*F - F^T*E||_F
-        d = convergence_metric(F_work, scaling_factors)
-
-        if d < numeric_tolerance
-            println("Converged after $iteration iterations. d = $d")
-            break
+        # Stagnation check: after at least two d samples, if d isn't shrinking
+        if k > 2 * check_interval && d > numeric_tolerance && isfinite(d_prev) && d_prev > 0
+            if (d_prev - d) / d_prev < stagnation_threshold
+                stagnated = true
+                @warn "No convergence progress detected at iteration $k; norm(E*F-F'*E) = $d. Stopping."
+                break
+            end
         end
+        k += 1
+        verbose && (k == 1 || k % 10 == 0) && println("Iteration $k: norm(E*F-F'*E) = $d")
+    end
 
-        # Progress reporting
-        if iteration == 1 || iteration % 10 == 0
-            println("Iteration $iteration: d = $d")
-        end
-
-        if iteration == max_iterations
-            println("Warning: Maximum iterations reached. Final d = $d")
-        end
+    if !stagnated && d < numeric_tolerance
+        verbose && println("Converged after $k iterations. norm(E*F-F'*E) = $d")
+    elseif !stagnated && k >= max_iterations && d > numeric_tolerance
+        @warn "Max iterations ($max_iterations) reached without convergence. norm(E*F-F'*E) = $d"
     end
 
     # Handle uncertainty calculation if needed

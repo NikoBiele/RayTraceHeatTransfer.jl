@@ -1,5 +1,5 @@
 function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P, 
-                                        nudge::G) where {P<:Integer, G}
+                                        nudge::G, verbose::Bool) where {P<:Integer, G}
 
     surface_mapping, volume_mapping, num_surfaces, num_volumes = createIndexMapping(rtm, rays_total)
     num_emitters = num_surfaces + num_volumes
@@ -11,16 +11,17 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
     
     if rtm.spectral_mode == :spectral_variable
         # Variable spectral - need separate F matrix for each bin
-        println("Computing $n_bins separate F matrices for variable spectral extinction")
+        verbose && println("Computing $n_bins separate F matrices for variable spectral extinction")
         F_raw_vector = Matrix{G}[]
         # F_raw_uncertain_vector = Matrix{Measurements.Measurement{G}}[]
         
         for bin in 1:n_bins
-            println("Computing F matrix for spectral bin $bin/$n_bins")
+            verbose && println("Computing F matrix for spectral bin $bin/$n_bins")
             F_raw_bin = #, F_raw_uncertain_bin = 
                 computeExchangeFactorsBin(
                 rtm, rays_per_emitter, nudge, bin,
-                surface_mapping, volume_mapping, num_surfaces, num_volumes, num_emitters
+                surface_mapping, volume_mapping, num_surfaces,
+                num_volumes, num_emitters, verbose
             )
             push!(F_raw_vector, F_raw_bin)
             # push!(F_raw_uncertain_vector, F_raw_uncertain_bin)
@@ -31,14 +32,15 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
     else
         # Grey or uniform spectral - single F matrix works for all bins
         if is_spectral
-            println("Computing single F matrix for uniform spectral extinction ($n_bins bins)")
+            verbose && println("Computing single F matrix for uniform spectral extinction ($n_bins bins)")
         else
-            println("Computing single F matrix for grey extinction")
+            verbose && println("Computing single F matrix for grey extinction")
         end
         
         F_raw = computeExchangeFactorsBin(
             rtm, rays_per_emitter, nudge, 1,  # Use bin 1 (doesn't matter for uniform)
-            surface_mapping, volume_mapping, num_surfaces, num_volumes, num_emitters
+            surface_mapping, volume_mapping, num_surfaces,
+            num_volumes, num_emitters, verbose
         )
         
         return F_raw, rays_per_emitter # F_raw_uncertain,
@@ -47,7 +49,8 @@ end
 
 function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P, 
                                  nudge::G, spectral_bin::P,
-                                 surface_mapping, volume_mapping, num_surfaces, num_volumes, num_emitters) where {P<:Integer, G}
+                                 surface_mapping, volume_mapping, num_surfaces,
+                                 num_volumes, num_emitters, verbose) where {P<:Integer, G}
     
     # Pre-allocate result matrix
     F_counts = zeros(Int, num_emitters, num_emitters)
@@ -65,7 +68,7 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P,
     sort!(all_emitters, by=x->x[2])
     
     nthreads = Threads.nthreads()
-    println("  Using $nthreads threads for spectral bin $spectral_bin")
+    verbose && println("  Using $nthreads threads for spectral bin $spectral_bin")
     
     # Divide emitters among threads
     emitters_per_thread = div(num_emitters, nthreads)

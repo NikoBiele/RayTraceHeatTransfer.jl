@@ -1,14 +1,14 @@
-function directRayTracing!(rtm::RayTracingDomain2D, rays_tot::P, nudge::G) where {G, P<:Integer}
+function directRayTracing!(rtm::RayTracingDomain2D, rays_tot::P, nudge::G, verbose::Bool) where {G, P<:Integer}
     
     if rtm.spectral_mode != :grey
-        println("Running direct ray tracing for $(rtm.n_spectral_bins) spectral bins")
+        verbose && println("Running direct ray tracing for $(rtm.n_spectral_bins) spectral bins")
         # Run direct ray tracing for each spectral bin
         for bin in 1:rtm.n_spectral_bins
-            println("Processing spectral bin $bin/$(rtm.n_spectral_bins)")
+            verbose && println("Processing spectral bin $bin/$(rtm.n_spectral_bins)")
             directRayTracingSingleBin!(rtm, rays_tot, nudge, bin)
         end
     else
-        println("Running direct ray tracing for grey extinction")
+        verbose && println("Running direct ray tracing for grey extinction")
         directRayTracingSingleBin!(rtm, rays_tot, nudge, 1)  # bin=1 for grey
     end
 

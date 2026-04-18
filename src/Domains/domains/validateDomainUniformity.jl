@@ -1,4 +1,4 @@
-function validateSpectralUniformity!(rtm::RayTracingDomain2D; atol=1e-5)
+function validateSpectralUniformity!(rtm::RayTracingDomain2D; atol=1e-5, verbose=true)
     """
     Checks if spectral properties are uniform across all faces and spectral bins.
     """
@@ -12,13 +12,13 @@ function validateSpectralUniformity!(rtm::RayTracingDomain2D; atol=1e-5)
             else
                 epsilon = face.epsilon[wall_index][bin]
                 if abs(epsilon - first_epsilon) > atol
-                    println("Spectral variation detected across walls, using spectral solver")
+                    verbose && println("Spectral variation detected across walls, using spectral solver")
                     return false
                 end
             end
         end        
     end
-    println("No spectral variation detected across walls")
+    verbose && println("No spectral variation detected across walls")
     
     for ((coarse_face, fine_face), volume_index) in rtm.volume_mapping        
         face = rtm.fine_mesh[coarse_face][fine_face]
@@ -32,19 +32,19 @@ function validateSpectralUniformity!(rtm::RayTracingDomain2D; atol=1e-5)
                 kappa_g = face.kappa_g[bin]
                 sigma_s_g = face.sigma_s_g[bin]
                 if abs(kappa_g - first_kappa_g) > atol || abs(sigma_s_g - first_sigma_s_g) > atol
-                    println("Spectral variation detected across volumes, using spectral solver")
+                    verbose && println("Spectral variation detected across volumes, using spectral solver")
                     return false
                 end
             end
         end
     end
-    println("No spectral variation detected across volumes")
+    verbose && println("No spectral variation detected across volumes")
     
-    println("No spectral variation detected across mesh, using efficient grey solver")
+    verbose && println("No spectral variation detected across mesh, using efficient grey solver")
     return true
 end
 
-function validateExtinctionUniformity!(rtm::RayTracingDomain2D; atol=1e-5)
+function validateExtinctionUniformity!(rtm::RayTracingDomain2D; atol=1e-5, verbose=true)
     """
     Checks if extinction properties are uniform across all faces and spectral bins.
     """
@@ -56,14 +56,14 @@ function validateExtinctionUniformity!(rtm::RayTracingDomain2D; atol=1e-5)
                 first_beta = face.kappa_g[bin] + face.sigma_s_g[bin]
             else
                 if abs(first_beta - (face.kappa_g[bin] + face.sigma_s_g[bin])) > atol
-                    println("Extinction variation detected across the spectrum, ray tracing each spectral bin separately")
+                    verbose && println("Extinction variation detected across the spectrum, ray tracing each spectral bin separately")
                     return false
                 end
             end
         end
     end
     
-    println("No extinction variation detected across the spectrum, ray tracing grey domain only")
+    verbose && println("No extinction variation detected across the spectrum, ray tracing grey domain only")
     return true
 end
 

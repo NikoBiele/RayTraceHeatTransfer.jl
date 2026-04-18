@@ -90,14 +90,11 @@ end
 
 # Main function to build all spatial acceleration structures
 function buildSpatialAcceleration!(domain::RayTracingDomain2D)
-    println("Building spatial acceleration structures...")
     
     # Build for coarse mesh
-    println("  Building coarse mesh acceleration...")
     domain.coarse_grid_opt, domain.coarse_bboxes_opt = buildOptimizedSpatialStructure(domain.coarse_mesh)
     
     # Build for each fine domain
-    println("  Building fine domain acceleration...")
     domain.fine_grids_opt = Vector{Union{Nothing, UniformGrid}}(undef, length(domain.fine_mesh))
     domain.fine_bboxes_opt = Vector{Union{Nothing, Vector{BoundingBox2D}}}(undef, length(domain.fine_mesh))
     
@@ -105,7 +102,6 @@ function buildSpatialAcceleration!(domain::RayTracingDomain2D)
         domain.fine_grids_opt[i], domain.fine_bboxes_opt[i] = buildOptimizedSpatialStructure(domain.fine_mesh[i])
     end
     
-    println("Spatial acceleration structures built!")
     return domain
 end
 
