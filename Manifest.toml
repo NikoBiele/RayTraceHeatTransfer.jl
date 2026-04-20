@@ -270,7 +270,7 @@ version = "1.11.0"
 deps = ["GeometryBasics", "LinearAlgebra", "Measurements", "ProgressMeter", "Random", "SparseArrays", "StaticArrays", "StatsBase"]
 path = "."
 uuid = "7cf1493d-886e-405c-b582-53b49fa147b6"
-version = "0.7.0"
+version = "0.8.0"
 
     [deps.RayTraceHeatTransfer.extensions]
     RayTraceHeatTransferMakieExt = "Makie"

@@ -180,7 +180,7 @@ function meshTriangle(face::Vector{Vector{G}}, Nx::P, Ny::P) where {G,P<:Integer
     point2 = Point3[]
     point3 = Point3[]
     point4 = Point3[]
-    for subface in face2.subFaces
+    for subface in face2.subVolumes
         # check the direction of the subface, as compared to the diagonal
         costheta_subface_triMidpoint = dot(triangle_midPoint[1:2]-nearest_point, subface.midPoint-nearest_point) # if > 0, same direction
         # costheta_diagonal = dot(startpoint-nearest_point, subface.midPoint-nearest_point)
