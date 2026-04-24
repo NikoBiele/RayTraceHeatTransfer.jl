@@ -58,12 +58,13 @@ function RayTraceHeatTransfer.plotMesh(ax, domain::RayTracingDomain2D; supervolu
 end
 
 # 3d plotMesh
-function RayTraceHeatTransfer.plotMesh(ax1, domain::Union{ViewFactorDomain3D,Vector{PolyFace3D{G}}}; superfaces::Bool=false) where {G}
+function RayTraceHeatTransfer.plotMesh(ax1, domain::Union{ViewFactorDomain3D{G,P},Vector{PolyFace3D{G}}};
+                                        superfaces::Bool=false) where {G,P}
 
     # get vector of superfaces
-    if typeof(domain) == Vector{PolyFace3D{G}}
+    if typeof(domain) <: Vector{PolyFace3D}
         facesVector = domain
-    elseif typeof(domain) == ViewFactorDomain3D
+    elseif typeof(domain) <: ViewFactorDomain3D
         facesVector = domain.facesMesh
     end
 

@@ -44,6 +44,7 @@ println("-"^60)
     T_in_w = fill(T_iso, 6)
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain3D()
     solveEquilibrium!(domain3D, domain3D.F_smooth)
     
     # Extract temperatures from all subfaces
@@ -93,6 +94,7 @@ end
     q_in_w = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain3D()
     solveEquilibrium!(domain3D, domain3D.F_smooth)
     
     # Check that specified temperatures are maintained
@@ -147,6 +149,7 @@ end
     q_in_w = [0.0, 0.0, q_heating, q_heating, 0.0, 0.0]
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain3D()
     solveEquilibrium!(domain3D, domain3D.F_smooth)
     
     # Calculate total energy balance
@@ -225,6 +228,7 @@ end
     q_in_w = zeros(6)
     
     domain_base = ViewFactorDomain3D(points_base, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain_base()
     solveEquilibrium!(domain_base, domain_base.F_smooth)
     
     # Get temperature statistics from base case
@@ -244,6 +248,7 @@ end
             points_rot = rotatePoints3D(points_base, axis, angle)
             
             domain_rot = ViewFactorDomain3D(points_rot, faces, Ndim, q_in_w, T_in_w, epsilon)
+            domain_rot()
             solveEquilibrium!(domain_rot, domain_rot.F_smooth)
             
             # Temperature statistics should be invariant
@@ -295,6 +300,7 @@ end
     q_in_w = zeros(6)
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain3D()
     solveEquilibrium!(domain3D, domain3D.F_smooth)
     
     # Solution should still exist and be physically reasonable

@@ -1,6 +1,6 @@
 # This file is machine-generated - editing it directly is not advised
 
-julia_version = "1.12.5"
+julia_version = "1.12.6"
 manifest_format = "2.0"
 project_hash = "4a5142e09e374592bbea7493f093494385e495bc"
 
@@ -270,7 +270,7 @@ version = "1.11.0"
 deps = ["GeometryBasics", "LinearAlgebra", "Measurements", "ProgressMeter", "Random", "SparseArrays", "StaticArrays", "StatsBase"]
 path = "."
 uuid = "7cf1493d-886e-405c-b582-53b49fa147b6"
-version = "0.8.0"
+version = "0.9.0"
 
     [deps.RayTraceHeatTransfer.extensions]
     RayTraceHeatTransferMakieExt = "Makie"

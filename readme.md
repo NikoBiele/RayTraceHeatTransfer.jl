@@ -363,7 +363,7 @@ faces = [
 ]
 ```
 
-### Step 2: Set boundary conditions and build the domain
+### Step 2: Set boundary conditions and mesh the domain
 
 ```julia
 Ndim = 11  # 11 × 11 subdivisions per face
@@ -372,12 +372,27 @@ epsilon = ones(size(faces, 1))                     # black surfaces
 q_in_w  = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]           # zero net heat flux on sides
 T_in_w  = [1000.0, 0.0, -1.0, -1.0, -1.0, -1.0]    # hot, cold, four unknown
 
-domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon); # mesh domain and calculate view factors
+domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon); # mesh domain
 ```
-
 Faces 1 and 2 are the hot and cold walls at opposing ends of the cube. The four side faces have `T_in_w = -1.0` (unknown) and `q_in_w = 0.0` (radiative equilibrium), so their temperature distributions emerge from the solution.
 
-### Step 3: Solve and visualise
+### Step 3: visualize the domain for validation
+
+```julia
+fig = Figure(size = (800, 700))
+ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
+plotMesh(ax, domain3D)
+```
+
+### Step 4: Calculate view factors
+
+Calculate analytical view factors directly on the mesh object (requires a convex domain):
+
+```julia
+domain3D(; parallel=true, tol=10*eps(Float64))
+```
+
+### Step 5: Solve and visualise
 
 ```julia
 solveEquilibrium!(domain3D, domain3D.F_smooth)
@@ -396,6 +411,210 @@ The temperature field shows a smooth gradient from the hot face (1000 K) to the 
 ### Reference
 
 > Narayanaswamy, A. (2015). "An analytic expression for radiation view factor between two arbitrarily oriented planar polygons." *International Journal of Heat and Mass Transfer*, 91, 841–847.
+
+---
+
+## Example 4 — Triangulated Icosphere
+
+This example extends Example 3 from axis-aligned quads to an arbitrary convex triangulated geometry: a unit sphere approximated by recursively subdividing a regular icosahedron. A small hot cap of triangles is placed at the north pole and a matching cold cap at the south pole; all remaining triangles are in radiative equilibrium.
+
+This example demonstrates two features of the package: arbitrary triangulated geometry (view factors are still computed analytically via Narayanaswamy (2015), for any closed convex polyhedron built from planar triangles), and the separate mesh / view factor / solve steps that let the user inspect the mesh before committing to the expensive view factor computation.
+
+### Step 1: Build and inspect the mesh
+
+The icosphere is constructed by a helper function `icosphere_mesh(level)` that returns `(points, faces)` at the requested subdivision level. The mesh is then passed to `ViewFactorDomain3D` along with boundary conditions: at this point the domain holds the geometry and boundary conditions but not yet any view factors.
+
+```julia
+using RayTraceHeatTransfer
+using GLMakie
+using LinearAlgebra
+
+"""
+    icosphere_mesh(subdivision_level)
+
+Build a triangulated unit sphere by recursively subdividing a regular
+icosahedron `subdivision_level` times and projecting new vertices onto
+the unit sphere.
+
+Level 0 → 20 triangles, 1 → 80, 2 → 320, 3 → 1280.
+"""
+function icosphere_mesh(subdivision_level::Int)
+    φ = (1 + sqrt(5)) / 2
+
+    ico_points_raw = [
+         0.0   1.0    φ;    0.0   1.0   -φ;
+         0.0  -1.0    φ;    0.0  -1.0   -φ;
+         1.0    φ   0.0;    1.0   -φ   0.0;
+        -1.0    φ   0.0;   -1.0   -φ   0.0;
+           φ  0.0   1.0;      φ  0.0  -1.0;
+          -φ  0.0   1.0;     -φ  0.0  -1.0
+    ]
+
+    points = similar(ico_points_raw)
+    for i in 1:size(ico_points_raw, 1)
+        v = ico_points_raw[i, :]
+        points[i, :] = v / norm(v)
+    end
+
+    faces = [
+         1  3  9;   1  9  5;   1  5  7;   1  7 11;   1 11  3;
+         4  2 10;   4 10  6;   4  6  8;   4  8 12;   4 12  2;
+         3  6  9;   9  6 10;   9 10  5;   5 10  2;   5  2  7;
+         7  2 12;   7 12 11;  11 12  8;  11  8  3;   3  8  6
+    ]
+
+    for _ in 1:subdivision_level
+        midpoint_cache = Dict{Tuple{Int,Int},Int}()
+        new_points = [points[i, :] for i in 1:size(points, 1)]
+
+        function get_midpoint(i::Int, j::Int)
+            key = (min(i, j), max(i, j))
+            haskey(midpoint_cache, key) && return midpoint_cache[key]
+            m = (points[i, :] + points[j, :]) / 2
+            m = m / norm(m)
+            push!(new_points, m)
+            midpoint_cache[key] = length(new_points)
+            return length(new_points)
+        end
+
+        n_faces = size(faces, 1)
+        new_faces = Matrix{Int}(undef, 4 * n_faces, 3)
+        for k in 1:n_faces
+            a, b, c = faces[k, 1], faces[k, 2], faces[k, 3]
+            ab = get_midpoint(a, b)
+            bc = get_midpoint(b, c)
+            ca = get_midpoint(c, a)
+            new_faces[4k - 3, :] = [a,  ab, ca]
+            new_faces[4k - 2, :] = [ab, b,  bc]
+            new_faces[4k - 1, :] = [ca, bc, c ]
+            new_faces[4k,     :] = [ab, bc, ca]
+        end
+
+        points = reduce(vcat, (p' for p in new_points))
+        faces  = new_faces
+    end
+
+    return points, faces
+end
+
+subdivision_level = 2       # → 320 triangles
+points, faces = icosphere_mesh(subdivision_level)
+n_tri = size(faces, 1)
+
+# Mark the n_cap triangles nearest each pole as hot / cold caps
+n_cap = 6
+centroids   = [sum(points[faces[i, :], :], dims = 1)[:] ./ 3 for i in 1:n_tri]
+z_centroids = [c[3] for c in centroids]
+hot_ids  = partialsortperm(z_centroids, 1:n_cap, rev = true)
+cold_ids = partialsortperm(z_centroids, 1:n_cap)
+
+epsilon = ones(n_tri)
+q_in_w  = zeros(n_tri)
+T_in_w  = fill(-1.0, n_tri)
+T_in_w[hot_ids]  .= 1000.0
+T_in_w[cold_ids] .=    0.0
+
+Ndim = 1
+domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon);
+
+fig = Figure(size = (800, 700))
+ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
+plotMesh(ax, domain3D)
+fig
+
+save("fig/icosphere_mesh.png", fig, px_per_unit=3)
+```
+
+![Icosphere Mesh](fig/icosphere_mesh.png)
+
+
+Inspecting the mesh before committing to the view factor computation is especially valuable for triangulated geometries, where the subcell count scales as `n_triangles²`, i.e. it grows quadratically with the number geometric triangle elements.
+
+### Step 2: Compute view factors
+
+Once the mesh looks right, view factors are computed by calling the domain as a functor:
+
+```julia
+domain3D(; parallel=true, tol=10*eps(Float64))
+```
+
+This step performs analytical view factor computation for every pair of subcells, followed by iterative reciprocity smoothing to machine precision. It is typically the most expensive step in the workflow.
+
+### Step 3: Solve and visualise
+
+```julia
+solveEquilibrium!(domain3D, domain3D.F_smooth)
+
+fig = Figure(size = (800, 700))
+ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
+plotField(ax, domain3D; field = :T)
+fig
+```
+
+The resulting temperature field shows a bright hot cap at the north pole, a dark cold cap at the south, and a nearly isothermal bulk throughout most of the sphere — as expected when a small hot source and a small cold sink are embedded in a highly concave enclosure.
+
+### Machine-precision agreement with the analytical limit
+
+For equal-area hot and cold caps on a sphere, the symmetry of the geometry forces every equilibrium triangle to see the hot and cold caps in the same proportion. The equilibrium temperature is therefore the same everywhere in the bulk, set by the `T⁴`-averaged balance between the two caps:
+
+$$
+T_{\text{limit}} = \left(\frac{T_{\text{hot}}^4 + T_{\text{cold}}^4}{2}\right)^{1/4}
+$$
+
+For `T_hot = 1000 K` and `T_cold = 0 K`, this gives `T_limit ≈ 840.896 K`.
+
+Because `icosphere_mesh` is parameterised by subdivision level, the full pipeline can be run at multiple resolutions to check the computed equator temperature against this limit:
+
+```julia
+T_hot   = 1000.0
+T_cold  =    0.0
+T_limit = ((T_hot^4 + T_cold^4) / 2)^(1/4)
+
+levels    = 0:3
+n_cap     = 6
+Ndim      = 1
+
+for level in levels
+    points, faces = icosphere_mesh(level)
+    n_tri = size(faces, 1)
+    n_cap_effective = min(n_cap, n_tri ÷ 4)
+
+    centroids   = [sum(points[faces[i, :], :], dims = 1)[:] ./ 3 for i in 1:n_tri]
+    z_centroids = [c[3] for c in centroids]
+    hot_ids  = partialsortperm(z_centroids, 1:n_cap_effective, rev = true)
+    cold_ids = partialsortperm(z_centroids, 1:n_cap_effective)
+
+    epsilon = ones(n_tri)
+    q_in_w  = zeros(n_tri)
+    T_in_w  = fill(-1.0, n_tri)
+    T_in_w[hot_ids]  .= T_hot
+    T_in_w[cold_ids] .= T_cold
+
+    domain = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
+    domain()
+    solveEquilibrium!(domain, domain.F_smooth)
+
+    equilibrium_ids = setdiff(1:n_tri, hot_ids, cold_ids)
+    equator_id = equilibrium_ids[argmin(abs.(z_centroids[equilibrium_ids]))]
+    T_eq = domain.facesMesh[equator_id].subFaces[1].T_w
+    error = abs(T_limit - T_eq)
+
+    println("Level $level: $n_tri triangles → error = $(round(error, digits = 15)) K")
+end
+```
+
+| Level | Triangles | \|T_equator − T_limit\| (K) |
+|:-----:|:---------:|:----------------------------:|
+|   0   |     20    | 6.8e-2                       |
+|   1   |     80    | 1.1e-13                      |
+|   2   |    320    | 2.0e-11                      |
+|   3   |   1280    | 6.2e-11                      |
+
+At level 0 the 6+6 cap triangles occupy over half of the sphere's 20-triangle surface, so the equal-proportion-of-caps symmetry that pins every equilibrium triangle to `T_limit` does not hold cleanly: only 8 triangles remain in equilibrium, and the computed equator temperature differs from the limit by about 0.07 K. From level 1 onward the symmetry is well-resolved, and the computed equator temperature matches the analytical limit to machine precision. The residual error grows very slowly with mesh size (from 10⁻¹³ K to 10⁻¹¹ K across a 16× refinement), reflecting accumulated floating-point roundoff in progressively larger linear systems rather than discretisation error. With analytical view factors smoothed to machine precision and machine-precision linear solves, the method carries no meaningful discretisation error beyond floating-point roundoff.
+
+### Reference
+
+Narayanaswamy, A. (2015). "An analytic expression for radiation view factor between two arbitrarily oriented planar polygons." *International Journal of Heat and Mass Transfer*, 91, 841–847.
 
 ---
 
