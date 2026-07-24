@@ -66,7 +66,7 @@ function meshTriangle(face::PolyVolume2D{G}, Ndim::P) where {G, P<:Integer}
     t = clamp(t, 0, 1) # Clamp t to [0, 1] to ensure the nearest point is on the line segment
     nearest_point = startpoint + t * line # Calculate the nearest point
 
-    for subface in face2.subFaces
+    for subface in face2.subVolumes
         # check the direction of the subface, as compared to the diagonal
         costheta_subface_triMidpoint = dot(triangle_midPoint-nearest_point, subface.midPoint-nearest_point) # if > 0, same direction
         # costheta_diagonal = dot(startpoint-nearest_point, subface.midPoint-nearest_point)
@@ -83,15 +83,14 @@ function meshTriangle(face::PolyVolume2D{G}, Ndim::P) where {G, P<:Integer}
             subface_points = SVector{3}(subface.vertices[tria_ids]...)
             subface_solid = SVector{3}(walls_solid...)
             subface_keeper = PolyVolume2D{G}(subface_points, subface_solid, n_bins, kappa_default, sigma_s_default)
-            addSubFace!(face, subface_keeper)
+            addSubVolume!(face, subface_keeper)
         else
             # subface is not on the diagonal
             costheta_diagonal_subface = dot(subface.midPoint-nearest_point, triangle_midPoint-nearest_point)
             # costheta_diagonal_triangle = dot(startpoint-nearest_point, triangle_midPoint-nearest_point)
             if costheta_diagonal_subface > 0.0 - 1e-6
                 # keep subface
-                # push!(face3.subFaces, subface)
-                addSubFace!(face, subface) # add the subface
+                addSubVolume!(face, subface) # add the subface
             else
                 # delete subface
                 continue

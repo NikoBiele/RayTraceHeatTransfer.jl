@@ -12,22 +12,36 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
     if rtm.spectral_mode == :spectral_variable
         # Variable spectral - need separate F matrix for each bin
         verbose && println("Computing $n_bins separate F matrices for variable spectral extinction")
-        F_raw_vector = Matrix{G}[]
-        # F_raw_uncertain_vector = Matrix{Measurements.Measurement{G}}[]
-        
-        for bin in 1:n_bins
-            verbose && println("Computing F matrix for spectral bin $bin/$n_bins")
-            F_raw_bin = #, F_raw_uncertain_bin = 
-                computeExchangeFactorsBin(
+        F_raw_vector = Vector{AbstractMatrix}(undef, n_bins)
+                
+        groups, reps, nonuniform = group_uniform_bins(rtm.uniform_across_bin)
+
+        # loop over nonuniform
+        for bin in nonuniform
+            verbose && println("Computing F matrix for nonuniform spectral bin $bin/$n_bins")
+            F_raw_bin = computeExchangeFactorsBin(
                 rtm, rays_per_emitter, nudge, bin,
                 surface_mapping, volume_mapping, num_surfaces,
                 num_volumes, num_emitters, verbose
             )
-            push!(F_raw_vector, F_raw_bin)
-            # push!(F_raw_uncertain_vector, F_raw_uncertain_bin)
+            F_raw_vector[bin] = F_raw_bin
         end
-        
-        return F_raw_vector, rays_per_emitter # F_raw_uncertain_vector,
+
+        # loop over groups
+        for (k, idx_group) in pairs(groups)
+            representative_bin = first(idx_group)
+            verbose && println("Computing F matrix for uniform spectral bin $representative_bin/$n_bins")
+            F_raw_bin = computeExchangeFactorsBin(
+                rtm, rays_per_emitter, nudge, representative_bin,
+                surface_mapping, volume_mapping, num_surfaces,
+                num_volumes, num_emitters, verbose
+            )
+            for j in idx_group
+                F_raw_vector[j] = F_raw_bin
+            end
+        end
+
+        return F_raw_vector, rays_per_emitter
         
     else
         # Grey or uniform spectral - single F matrix works for all bins
@@ -43,139 +57,126 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
             num_volumes, num_emitters, verbose
         )
         
-        return F_raw, rays_per_emitter # F_raw_uncertain,
+        return F_raw, rays_per_emitter
     end
 end
 
-function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P, 
+function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P,
                                  nudge::G, spectral_bin::P,
                                  surface_mapping, volume_mapping, num_surfaces,
                                  num_volumes, num_emitters, verbose) where {P<:Integer, G}
-    
-    # Pre-allocate result matrix
-    F_counts = zeros(Int, num_emitters, num_emitters)
-    
-    # Create combined emitter list
+
+    # Combined, globally-sorted emitter list
     all_emitters = Vector{Tuple{Any, Int}}()
-    for emitter_key in keys(surface_mapping)
-        global_idx = surface_mapping[emitter_key]
-        push!(all_emitters, (emitter_key, global_idx))
+    for k in keys(surface_mapping)
+        push!(all_emitters, (k, surface_mapping[k]))
     end
-    for emitter_key in keys(volume_mapping)
-        global_idx = num_surfaces + volume_mapping[emitter_key]
-        push!(all_emitters, (emitter_key, global_idx))
+    for k in keys(volume_mapping)
+        push!(all_emitters, (k, num_surfaces + volume_mapping[k]))
     end
-    sort!(all_emitters, by=x->x[2])
-    
+    sort!(all_emitters, by = x -> x[2])
+
     nthreads = Threads.nthreads()
     verbose && println("  Using $nthreads threads for spectral bin $spectral_bin")
-    
-    # Divide emitters among threads
+
+    # Partition emitters across threads — disjoint ranges, so each thread is independent
     emitters_per_thread = div(num_emitters, nthreads)
     remainder = num_emitters % nthreads
-    
     thread_assignments = Vector{UnitRange{Int}}(undef, nthreads)
     start_idx = 1
     for tid in 1:nthreads
         thread_size = emitters_per_thread + (tid <= remainder ? 1 : 0)
-        end_idx = start_idx + thread_size - 1
-        thread_assignments[tid] = start_idx:end_idx
-        start_idx = end_idx + 1
+        thread_assignments[tid] = start_idx:(start_idx + thread_size - 1)
+        start_idx += thread_size
     end
-    
-    # Progress tracking
-    progress = Progress(num_emitters; dt = 1, desc = "  Bin $spectral_bin progress: ")
-    completed_work = Threads.Atomic{Int}(0)
-    
-    # Thread-safe locks for writing to F_counts
-    row_locks = [Threads.SpinLock() for _ in 1:num_emitters]
-    
-    # Parallel ray tracing for this spectral bin
+
+    # Per-thread COO buffers
+    Is = [Int[] for _ in 1:nthreads]
+    Js = [Int[] for _ in 1:nthreads]
+    Vs = [Float64[] for _ in 1:nthreads]
+
+    progress  = Progress(num_emitters; dt = 1, desc = "  Bin $spectral_bin progress: ")
+    completed = Threads.Atomic{Int}(0)
+    inv_rays  = 1.0 / rays_per_emitter
+
     @threads for tid in 1:nthreads
-        emitter_range = thread_assignments[tid]
-        
-        for global_emitter_idx in emitter_range
+        Il, Jl, Vl = Is[tid], Js[tid], Vs[tid]
+        row = Dict{Int,Int}()                      # absorber → count, reused per emitter
+
+        for global_emitter_idx in thread_assignments[tid]
             emitter_key, global_idx = all_emitters[global_emitter_idx]
-            
-            # Determine emitter type and process rays
-            is_surface_emitter = global_idx <= num_surfaces
-            
-            # Temporary storage for this emitter's results
-            temp_row = zeros(Int, num_emitters)
-            
-            if is_surface_emitter
+            empty!(row)
+
+            if global_idx <= num_surfaces
                 coarse_index, fine_index, wall_index = emitter_key
                 face = rtm.fine_mesh[coarse_index][fine_index]
-                
                 for _ in 1:rays_per_emitter
                     p_emit, dir_emit = emitSurfaceRay2D(face, wall_index, nudge)
-                    # Pass spectral bin to trace_ray
                     result = traceRay(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin)
-                    
-                    if result !== nothing
-                        absorber_index = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result...)
-                        if absorber_index != -1
-                            temp_row[absorber_index] += 1
-                        end
-                    end
+                    result === nothing && continue
+                    a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result...)
+                    a == -1 && continue
+                    row[a] = get(row, a, 0) + 1
                 end
             else
                 coarse_index, fine_index = emitter_key
                 face = rtm.fine_mesh[coarse_index][fine_index]
-                
                 for _ in 1:rays_per_emitter
                     p_emit, dir_emit = emitVolumeRay2D(face, nudge)
-                    # Pass spectral bin to trace_ray
                     result = traceRay(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin)
-                    
-                    if result !== nothing
-                        absorber_index = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result...)
-                        if absorber_index != -1
-                            temp_row[absorber_index] += 1
-                        end
-                    end
+                    result === nothing && continue
+                    a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result...)
+                    a == -1 && continue
+                    row[a] = get(row, a, 0) + 1
                 end
             end
-            
-            # Write results to final matrix (thread-safe)
-            Threads.lock(row_locks[global_idx]) do
-                for j in 1:num_emitters
-                    F_counts[global_idx, j] += temp_row[j]
-                end
+
+            # Flush this emitter's row into the thread's COO buffers, already normalized to F
+            for (j, c) in row
+                push!(Il, global_idx); push!(Jl, j); push!(Vl, c * inv_rays)
             end
-            
-            # Update progress
-            Threads.atomic_add!(completed_work, 1)
-            if tid == 1
-                update!(progress, completed_work[])
-            end
+
+            Threads.atomic_add!(completed, 1)
+            tid == 1 && update!(progress, completed[])
         end
     end
     finish!(progress)
-    
-    # Convert to exchange factors
-    F_raw = zeros(G, num_emitters, num_emitters)
-    # F_raw_uncertain = zeros(G, num_emitters, num_emitters)
 
-    progress_f = Progress(num_emitters^2; dt = 1, desc = "  Calculating F for bin $spectral_bin: ")
-    calculated = 0
-    
-    for i in 1:num_emitters
-        for j in 1:num_emitters
-            if F_counts[i, j] > 0
-                if G <: Measurement
-                    F_raw[i, j] = (F_counts[i, j] / rays_per_emitter) ± (sqrt(F_counts[i, j]) / rays_per_emitter)
-                else
-                    F_raw[i, j] = F_counts[i, j] / rays_per_emitter
-                end
-            end
-            calculated += 1
-            if calculated % 1000 == 0
-                update!(progress_f, calculated)
-            end
+    F_raw = sparse(reduce(vcat, Is), reduce(vcat, Js), reduce(vcat, Vs),
+               num_emitters, num_emitters)
+    empty!.(Is); empty!.(Js); empty!.(Vs)    # drop the live buffers
+    GC.gc()                                  # now they're dead, so this actually reclaims
+    return row_normalize!(F_raw, rays_per_emitter)
+end
+
+function row_normalize!(F::SparseMatrixCSC, rays_per_emitter::Int)
+    rs = vec(sum(F, dims = 2))          # row sums, O(nnz)
+    println("Maximum ray tracing ray loss per emitter: $(round(Int, rays_per_emitter*maximum(abs, 1 .- rs)))/$rays_per_emitter")
+    rv = rowvals(F); nz = nonzeros(F)
+    @inbounds for k in eachindex(nz)
+        nz[k] /= rs[rv[k]]
+    end
+    return F
+end
+
+function group_uniform_bins(uniform_across_bin::Vector{T}; atol=1e-8, rtol=1e-8) where T
+    groups = Vector{Vector{Int}}()  # each entry: indices belonging to one group
+    reps   = T[]                     # representative extinction value for each group
+    nonuniform = Int[]               # bins flagged -1
+
+    for (i, v) in pairs(uniform_across_bin)
+        if v < -0.1
+            push!(nonuniform, i)
+            continue
+        end
+        # find an existing group within tolerance
+        idx = findfirst(r -> isapprox(r, v; atol=atol, rtol=rtol), reps)
+        if idx === nothing
+            push!(reps, v)
+            push!(groups, [i])
+        else
+            push!(groups[idx], i)
         end
     end
-    finish!(progress_f)
-
-    return F_raw
+    return groups, reps, nonuniform
 end

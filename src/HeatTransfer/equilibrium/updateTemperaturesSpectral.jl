@@ -1,5 +1,5 @@
-function updateTemperaturesSpectral!(rtm::RayTracingDomain2D, emissive::Vector{G}, emitFrac::Matrix{G}) where {G}
-    
+function updateTemperaturesSpectral!(rtm::RayTracingDomain2D, emissive::Vector{G}, planckFrac::Matrix{G}) where {G}
+
     num_surfaces = length(rtm.surface_mapping)
     num_volumes = length(rtm.volume_mapping)
     temperatures = zeros(G, num_surfaces + num_volumes)
@@ -13,8 +13,8 @@ function updateTemperaturesSpectral!(rtm::RayTracingDomain2D, emissive::Vector{G
             area_val = face.area[wall_idx]
             
             # Weighted epsilon based on this element's emission fractions
-            weighted_epsilon = sum([epsilon_vals[j] * emitFrac[surface_idx, j] for j in 1:rtm.n_spectral_bins])
-            
+            weighted_epsilon = sum([epsilon_vals[j] * planckFrac[surface_idx, j] for j in 1:rtm.n_spectral_bins])
+
             # Compute temperature from emissive power
             T_computed = (emissive[surface_idx] / (weighted_epsilon * STEFAN_BOLTZMANN * area_val))^(1/4)
             
@@ -31,14 +31,14 @@ function updateTemperaturesSpectral!(rtm::RayTracingDomain2D, emissive::Vector{G
     for ((coarse_idx, fine_idx), volume_idx) in rtm.volume_mapping
         face = rtm.fine_mesh[coarse_idx][fine_idx]
         element_idx = num_surfaces + volume_idx
-        
+
         if face.T_in_g < -0.1  # Radiative equilibrium (unknown temperature)
             kappa_vals = face.kappa_g
             volume_val = face.volume
             
             # Weighted kappa based on this element's emission fractions
-            weighted_kappa = sum([kappa_vals[j] * emitFrac[element_idx, j] for j in 1:rtm.n_spectral_bins])
-            
+            weighted_kappa = sum([kappa_vals[j] * planckFrac[element_idx, j] for j in 1:rtm.n_spectral_bins])
+
             # Compute temperature from emissive power
             T_computed = (emissive[element_idx] / (4 * STEFAN_BOLTZMANN * weighted_kappa * volume_val))^(1/4)
             
@@ -56,7 +56,7 @@ end
 
 function updateTemperaturesSpectral!(domain::ViewFactorDomain3D{G,P}, 
                                        emissive::Vector{G}, 
-                                       emitFrac::Matrix{G}) where {G,P}
+                                       planckFrac::Matrix{G}) where {G,P}
     
     N_surfs = sum([length(superface.subFaces) for superface in domain.facesMesh])
     temperatures = zeros(G, N_surfs)
@@ -69,9 +69,9 @@ function updateTemperaturesSpectral!(domain::ViewFactorDomain3D{G,P},
             if subface.T_in_w < -0.1
                 # Radiative equilibrium - solve for scalar temperature
                 epsilon_vals = isa(subface.epsilon, Vector) ? subface.epsilon : [subface.epsilon]
-                weighted_epsilon = sum([epsilon_vals[j] * emitFrac[surf_count, j] 
+                weighted_epsilon = sum([epsilon_vals[j] * planckFrac[surf_count, j] 
                                        for j in 1:domain.n_spectral_bins])
-                
+                                       
                 # Update scalar temperature
                 subface.T_w = (emissive[surf_count] / 
                               (weighted_epsilon * STEFAN_BOLTZMANN * subface.area))^(1/4)

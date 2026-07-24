@@ -10,6 +10,19 @@ println("\n" * "-"^60)
 println("Testing Spectral Consistency")
 println("-"^60)
 
+using RayTraceHeatTransfer
+using Test
+using LinearAlgebra
+using StatsBase
+using StaticArrays
+using GeometryBasics
+using SparseArrays
+using ConvolutionInterpolations
+
+TEMP_TOLERANCE = 5.0  # K, Tolerance for absolute temperature
+ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
+CONSISTENCY_TOLERANCE = 0.05  # 5% tolerance for consistency checks (ray tracing vs. exchange factors)
+
 #############################################################################
 ### TEST 1: 3D SPECTRAL vs GREY (Black Uniform Surfaces) ##################
 #############################################################################
@@ -159,36 +172,36 @@ end
     # Check that spectral results integrate properly
     for fine_face in mesh.fine_mesh[1]
         # Volume radiosity
-        if isa(fine_face.j_g, Vector)
-            j_total_integrated = sum(fine_face.j_g)
-            
-            # This should equal the scalar total (if stored)
-            # At minimum, check it's positive and finite
-            @test j_total_integrated >= 0.0
-            @test isfinite(j_total_integrated)
-            
-            # Emission should approximately equal absorption in equilibrium
-            e_total = sum(fine_face.e_g)
-            ga_total = sum(fine_face.g_a_g)
-            
-            if e_total > 1e-10
-                abs_diff = abs(e_total - ga_total)
-                @test abs_diff < ENERGY_TOLERANCE # small tolerance
-            end
+        @test fine_face.j_g isa Vector
+        @test length(fine_face.j_g) == n_bins
+        j_total_integrated = sum(fine_face.j_g)
+        
+        # This should equal the scalar total (if stored)
+        # At minimum, check it's positive and finite
+        @test j_total_integrated >= 0.0
+        @test isfinite(j_total_integrated)
+        
+        # Emission should approximately equal absorption in equilibrium
+        e_total = sum(fine_face.e_g)
+        ga_total = sum(fine_face.g_a_g)
+        
+        if e_total > 1e-10
+            abs_diff = abs(e_total - ga_total)
+            @test abs_diff < ENERGY_TOLERANCE # small tolerance
         end
         
         # Wall radiosity
         for wall_idx in 1:4
-            if isa(fine_face.j_w[wall_idx], Vector)
-                j_w_total = sum(fine_face.j_w[wall_idx])
-                @test isfinite(j_w_total)
-                
-                # Energy balance: j = e + r
-                e_w_total = sum(fine_face.e_w[wall_idx])
-                r_w_total = sum(fine_face.r_w[wall_idx])
-                
-                @test isapprox(j_w_total, e_w_total + r_w_total, atol=ENERGY_TOLERANCE)
-            end
+            @test fine_face.j_w[wall_idx] isa Vector
+            @test length(fine_face.j_w[wall_idx]) == n_bins
+            j_w_total = sum(fine_face.j_w[wall_idx])
+            @test isfinite(j_w_total)
+            
+            # Energy balance: j = e + r
+            e_w_total = sum(fine_face.e_w[wall_idx])
+            r_w_total = sum(fine_face.r_w[wall_idx])
+            
+            @test isapprox(j_w_total, e_w_total + r_w_total, atol=ENERGY_TOLERANCE)
         end
     end
 end
@@ -350,35 +363,27 @@ end
     # Check energy balance for each spectral bin separately
     # and for the integrated total
     
-    total_q_per_bin = zeros(n_bins)
-    
     for i in 1:6
         for subface in domain.facesMesh[i].subFaces
-            # If q_w is spectral (vector), check each bin
-            # Otherwise it's already integrated
-            if isa(subface.q_w, Number)
-                # Scalar - this is the integrated total
-                # Just check it's finite
-                @test isfinite(subface.q_w)
-            elseif isa(subface.q_w, Vector)
-                # Vector - check each bin
-                for (bin, q_bin) in enumerate(subface.q_w)
-                    @test isfinite(q_bin)
-                    total_q_per_bin[bin] += q_bin
-                end
+            # q_w is always scalar per wall (spectrally integrated)
+            @test isfinite(subface.q_w)
+
+            # Per-bin radiosity identity: j = e + r, exact by definition
+            @test subface.j_w isa Vector
+            @test length(subface.j_w) == n_bins
+            for bin in 1:n_bins
+                @test isapprox(subface.j_w[bin],
+                               subface.e_w[bin] + subface.r_w[bin],
+                               rtol=1e-12)
             end
         end
     end
     
-    # Total heat flux should sum to approximately zero
-    # (what goes in must come out)
-    if !all(iszero, total_q_per_bin)
-        for bin in 1:n_bins
-            @test abs(total_q_per_bin[bin]) < ENERGY_TOLERANCE # Per bin tolerance
-        end
-        
-        @test abs(sum(total_q_per_bin)) < ENERGY_TOLERANCE # Total tolerance
-    end
+    # Global energy balance: at equilibrium the net power over all walls
+    # must vanish (what goes in must come out). q_w is power [W], so an
+    # unweighted sum is the correct aggregate.
+    q_total = sum(subface.q_w for i in 1:6 for subface in domain.facesMesh[i].subFaces)
+    @test abs(q_total) < ENERGY_TOLERANCE
 end
 
 println("✓ Spectral Consistency tests complete")

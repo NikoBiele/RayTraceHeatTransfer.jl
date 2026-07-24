@@ -1,6 +1,7 @@
-function setupBoundaryConditions(rtm::RayTracingDomain2D, F_matrices::Union{Matrix{G}, Vector{Matrix{G}}}) where {G}
-
-    # # Set up surface boundary conditions
+function setupBoundaryConditions(rtm::RayTracingDomain2D, F_matrices::Union{AbstractMatrix, Vector{AbstractMatrix}})
+    G = Float64
+    
+    # Set up surface boundary conditions
     num_surfaces = length(rtm.surface_mapping)
     total_elements = num_surfaces + length(rtm.volume_mapping)
     boundary = zeros(G, total_elements)
@@ -93,7 +94,7 @@ function setupBoundaryConditions(rtm::RayTracingDomain2D, F_matrices::Union{Matr
         for ((coarse_face, fine_face), volume_index) in rtm.volume_mapping
             face = rtm.fine_mesh[coarse_face][fine_face]
             if face.T_in_g > -0.1
-                emissive[num_surfaces + volume_index] = 4*STEFAN_BOLTZMANN*face.kappa_g*face.Volume*face.T_in_g^4
+                emissive[num_surfaces + volume_index] = 4*STEFAN_BOLTZMANN*face.kappa_g*face.volume*face.T_in_g^4
                 boundary[num_surfaces + volume_index] = emissive[num_surfaces + volume_index]
             else
                 emissive[num_surfaces + volume_index] = STEFAN_BOLTZMANN*maximum(temperatures)^4

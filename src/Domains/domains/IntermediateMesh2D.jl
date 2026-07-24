@@ -33,14 +33,14 @@ function IntermediateMesh2D(faces::Vector{PolyVolume2D{G}}, Ndiv::Vector{Tuple{P
     # Initialize F matrices based on spectral mode
     if is_spectral
         # Spectral mode - create vector of matrices (will be populated during ray tracing)
-        F_raw = Matrix{G}[]
-        push!(F_raw, zeros(G, 2, 2))
-        F_smooth = Matrix{G}[]
-        push!(F_smooth, zeros(G, 2, 2))
+        F_raw = AbstractMatrix[]
+        push!(F_raw, spzeros(2, 2))
+        F_smooth = AbstractMatrix[]
+        push!(F_smooth, spzeros(2, 2))
     else
         # Grey mode - single matrices
-        F_raw = zeros(G, 2, 2)
-        F_smooth = zeros(G, 2, 2)
+        F_raw = spzeros(2, 2)
+        F_smooth = spzeros(2, 2)
     end
     
     rtm = IntermediateMesh2D(

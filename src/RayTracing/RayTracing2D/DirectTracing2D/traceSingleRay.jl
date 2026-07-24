@@ -1,10 +1,10 @@
 function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
                         direction::Point2{G}, nudge::G,
-                        current_coarse_index::P, spectral_bin::P=1, max_iterations::P=10_000) where {G, P<:Integer}
+                        current_coarse_index::P, spectral_bin::P=1, max_iters::P=10_000) where {G, P<:Integer}
     path = []
     iteration_count = 0
     
-    while iteration_count < max_iterations
+    while iteration_count < max_iters
         iteration_count += 1
         
         # Russian Roulette termination for long rays

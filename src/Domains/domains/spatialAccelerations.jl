@@ -106,17 +106,9 @@ function buildSpatialAcceleration!(domain::RayTracingDomain2D)
 end
 
 function buildSpatialGrid(mesh::Vector{PolyVolume2D{G}}, ncells::P) where {G,P<:Integer}
-    # Get the underlying numeric type from Measurement type
-    numeric_type = if G <: Measurement
-        # For Measurement{Float64}, this gives Float64
-        G.parameters[1]  # or use: eltype(G)
-    else
-        G
-    end
-
     # Find bounds of mesh
-    min_x = min_y = typemax(numeric_type)
-    max_x = max_y = typemin(numeric_type)
+    min_x = min_y = typemax(G)
+    max_x = max_y = typemin(G)
     
     for face in mesh
         for vertex in face.vertices
@@ -159,73 +151,3 @@ function buildSpatialGrid(mesh::Vector{PolyVolume2D{G}}, ncells::P) where {G,P<:
     
     SpatialGrid(cells, cell_size, min_point, max_point, (ncells, ncells))
 end
-
-# # Build uniform grid from volumes
-# function buildUniformGrid3D(volumes::Vector{PolyVolume3D{G}}, 
-#                             cell_size::G) where {G}
-#     # Find domain bounds
-#     all_vertices = reduce(vcat, [vol.vertices for vol in volumes])
-    
-#     min_x = minimum(v[1] for v in all_vertices)
-#     max_x = maximum(v[1] for v in all_vertices)
-#     min_y = minimum(v[2] for v in all_vertices)
-#     max_y = maximum(v[2] for v in all_vertices)
-#     min_z = minimum(v[3] for v in all_vertices)
-#     max_z = maximum(v[3] for v in all_vertices)
-    
-#     origin = Point3{G}(min_x, min_y, min_z)
-    
-#     # Calculate grid dimensions
-#     nx = ceil(Int, (max_x - min_x) / cell_size) + 1
-#     ny = ceil(Int, (max_y - min_y) / cell_size) + 1
-#     nz = ceil(Int, (max_z - min_z) / cell_size) + 1
-    
-#     # Initialize empty cells
-#     cells = Array{Vector{Int}, 3}(undef, nx, ny, nz)
-#     for i in 1:nx, j in 1:ny, k in 1:nz
-#         cells[i,j,k] = Int[]
-#     end
-    
-#     # Populate cells with volume indices
-#     inv_cell_size = 1 / cell_size
-#     for (vol_idx, vol) in enumerate(volumes)
-#         # Find grid cells that this volume overlaps
-#         vol_min_x = minimum(v[1] for v in vol.vertices)
-#         vol_max_x = maximum(v[1] for v in vol.vertices)
-#         vol_min_y = minimum(v[2] for v in vol.vertices)
-#         vol_max_y = maximum(v[2] for v in vol.vertices)
-#         vol_min_z = minimum(v[3] for v in vol.vertices)
-#         vol_max_z = maximum(v[3] for v in vol.vertices)
-        
-#         ix_min = max(1, floor(Int, (vol_min_x - min_x) * inv_cell_size) + 1)
-#         ix_max = min(nx, ceil(Int, (vol_max_x - min_x) * inv_cell_size) + 1)
-#         iy_min = max(1, floor(Int, (vol_min_y - min_y) * inv_cell_size) + 1)
-#         iy_max = min(ny, ceil(Int, (vol_max_y - min_y) * inv_cell_size) + 1)
-#         iz_min = max(1, floor(Int, (vol_min_z - min_z) * inv_cell_size) + 1)
-#         iz_max = min(nz, ceil(Int, (vol_max_z - min_z) * inv_cell_size) + 1)
-        
-#         for i in ix_min:ix_max, j in iy_min:iy_max, k in iz_min:iz_max
-#             push!(cells[i,j,k], vol_idx)
-#         end
-#     end
-    
-#     return UniformGrid3D{G}(cells, cell_size, origin, inv_cell_size, nx, ny, nz)
-# end
-
-# # Build bounding boxes for volumes
-# function buildBoundingBoxes3D(volumes::Vector{PolyVolume3D{G}}) where {G}
-#     bboxes = Vector{BoundingBox3D{G}}(undef, length(volumes))
-    
-#     for (i, vol) in enumerate(volumes)
-#         min_x = minimum(v[1] for v in vol.vertices)
-#         max_x = maximum(v[1] for v in vol.vertices)
-#         min_y = minimum(v[2] for v in vol.vertices)
-#         max_y = maximum(v[2] for v in vol.vertices)
-#         min_z = minimum(v[3] for v in vol.vertices)
-#         max_z = maximum(v[3] for v in vol.vertices)
-        
-#         bboxes[i] = BoundingBox3D{G}(min_x, max_x, min_y, max_y, min_z, max_z)
-#     end
-    
-#     return bboxes
-# end

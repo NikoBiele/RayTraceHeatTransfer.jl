@@ -1,12 +1,19 @@
 function updateSpectralEmission!(domain::ViewFactorDomain3D{G,P}, iter::Int, 
-                                   D_matrices::Vector{Matrix{G}}, sol_j::Vector{G}, 
-                                   emitFrac::Matrix{G}, temperatures::Vector{G}, 
+                                   F_matrices::Union{AbstractMatrix, Vector{AbstractMatrix}}, sol_j::Vector{G}, 
+                                   emitFrac::AbstractMatrix, temperatures::Vector{G}, 
                                    emissive::Vector{G}) where {G,P}
-        
+    
+    b = get_b(domain)
+    n = size(b,1)
     if iter > 1
-        # Update from previous iteration
-        Ds_combined = hcat([D_matrices[i] for i in 1:domain.n_spectral_bins]...)
-        emissive .= max.(Ds_combined * sol_j, 10*eps(G))
+        # Update from previous iteration ( using e=sum(D*j) )
+        if isa(F_matrices, AbstractVector)
+            emissive .= max.(sum([(I-Diagonal(b[:,i])*F_matrices[i]')*sol_j[n*(i-1)+1:i*n] for i in 1:domain.n_spectral_bins]), 10*eps(G))
+        elseif isa(F_matrices, AbstractMatrix)
+            emissive .= max.(sum([(I-Diagonal(b[:,i])*F_matrices')*sol_j[n*(i-1)+1:i*n] for i in 1:domain.n_spectral_bins]), 10*eps(G))
+        else
+            error("Incorrect type of 'F_matrices', must be 'Vector{Matrix}' or 'Matrix', got: $(typeof(F_matrices))")
+        end
     else
         surf_count = 0
         for superface in domain.facesMesh
@@ -27,14 +34,15 @@ function updateSpectralEmission!(domain::ViewFactorDomain3D{G,P}, iter::Int,
     return emissive
 end
 
-function updateSpectralEmission!(rtm::RayTracingDomain2D, iter::Int, D_matrices::Vector{Matrix{G}},
-                                sol_j::Vector{G}, emitFrac::Matrix{G}, temperatures::Vector{G}, emissive::Vector{G}) where {G}
+function updateSpectralEmission!(rtm::RayTracingDomain2D, iter::Int, F_matrices::Vector{AbstractMatrix},
+                                sol_j::Vector{G}, emitFrac::AbstractMatrix, temperatures::Vector{G}, emissive::Vector{G}) where {G}
     num_surfaces = length(rtm.surface_mapping)
+    b = get_b(rtm)
+    n = size(b,1)
 
     if iter > 1
-        # Update temperatures from previous iteration results
-        Ds_combined = hcat([D_matrices[i] for i in 1:rtm.n_spectral_bins]...)
-        emissive .= max.(Ds_combined * sol_j, 10*eps(G))
+        # Update from previous iteration ( using e=sum(D*j) )
+        emissive .= max.(sum([(I-Diagonal(b[:,i])*F_matrices[i]')*sol_j[n*(i-1)+1:i*n] for i in 1:rtm.n_spectral_bins]), 10*eps(G))
     else
         for ((coarse_face, fine_face, wall_index), surface_index) in rtm.surface_mapping
             face = rtm.fine_mesh[coarse_face][fine_face]

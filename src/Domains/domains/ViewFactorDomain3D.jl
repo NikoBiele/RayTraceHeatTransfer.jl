@@ -86,14 +86,14 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
     F_raw = Matrix{G}(undef, number_of_elements, number_of_elements)
     F_smooth = Matrix{G}(undef, number_of_elements, number_of_elements)
     return ViewFactorDomain3D{G, P}(points, faces, Ndims, superFaces, F_raw, F_smooth, 
-                                spectral_mode, n_bins, nothing, nothing, uniform_epsilon)
+                                spectral_mode, n_bins, nothing, nothing, uniform_epsilon, true)
 end
     
-function (vfd::ViewFactorDomain3D)(; parallel::Bool=true, tol::G=1e-15) where G
+function (vfd::ViewFactorDomain3D)(; parallel::Bool=true, max_iters::Int=1000)
 
     # Calculate view factors (wavelength-independent!)
     println("Computing view factors (geometry only, wavelength-independent)...")
-    F_raw, F_smooth = enclosureViewFactors3D(vfd.facesMesh, parallel, tol)
+    F_raw, F_smooth = enclosureViewFactors3D(vfd.facesMesh, parallel, max_iters)
     
     vfd.F_raw = F_raw
     vfd.F_smooth = F_smooth

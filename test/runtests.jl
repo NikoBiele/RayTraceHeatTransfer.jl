@@ -1,16 +1,5 @@
 using RayTraceHeatTransfer
 using Test
-using LinearAlgebra
-using StatsBase
-using StaticArrays
-using GeometryBasics
-
-const VF_TOLERANCE = 1e-5 # Tolerance for view factor comparisons
-const TEMP_TOLERANCE = 5.0  # K, Tolerance for absolute temperature
-const ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
-const ANALYTICAL_TOLERANCE = 0.05 # 5% tolerance vs analytical solution (to avoid too much sampling)
-const SPECTRAL_TOLERANCE = 0.05 # 5% tolerance for spectral comparisons
-const CONSISTENCY_TOLERANCE = 0.05  # 5% tolerance for consistency checks (ray tracing vs. exchange factors)
 
 @testset "RayTraceHeatTransfer.jl" begin
     println("\n" * "="^80)
@@ -26,12 +15,39 @@ const CONSISTENCY_TOLERANCE = 0.05  # 5% tolerance for consistency checks (ray t
     # Test 2D participating media
     @testset "2D Participating Media" begin
         include("test_2d_grey.jl")
+        include("test_2d_grey_reflecting.jl")
         include("test_2d_spectral.jl")
     end
     
-    # # Test spectral capabilities
+    # Test spectral capabilities
     @testset "Spectral Radiation" begin
         include("test_spectral_consistency.jl")
+    end
+
+    # Test 2d diffusion (sparse/dense x grey/spectral)
+    @testset "2D Diffusion" begin
+        include("test_2d_diffusion.jl")
+    end
+
+    # Test 2d spectral (sparse/dense)
+    @testset "2D spectral sparse/dense" begin
+        include("test_2d_spectral_dense_sparse.jl")
+    end
+
+    @testset "2D triangular mesh" begin
+        include("test_triangle_mesh.jl")
+    end
+
+    @testset "Shared F grey vs spectral" begin
+        include("test_shared_F_grey_vs_spectral.jl")
+    end
+
+    @testset "Selective emissivity decoupling" begin
+        include("test_selective_emissivity_decoupling.jl")
+    end
+
+    @testset "3D mixed epsilon grey vs spectral" begin
+        include("test_3d_mixed_eps_grey_vs_spectral.jl")
     end
     
     println("\n" * "="^80)

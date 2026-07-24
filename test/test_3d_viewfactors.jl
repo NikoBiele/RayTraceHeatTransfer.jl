@@ -10,6 +10,17 @@ println("\n" * "-"^60)
 println("Testing 3D View Factors")
 println("-"^60)
 
+using RayTraceHeatTransfer
+using Test
+using LinearAlgebra
+using StatsBase
+using StaticArrays
+using GeometryBasics
+using SparseArrays
+using ConvolutionInterpolations
+
+VF_TOLERANCE = 1e-5 # Tolerance for view factor comparisons
+
 #############################################################################
 ### TEST 1: NARAYANASWAMY EXAMPLES (Arbitrary Polygon Pairs) ###############
 #############################################################################

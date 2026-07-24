@@ -123,19 +123,23 @@ function writeResultsToDomainGrey!(domain::RayTracingDomain2D, T::Vector{P}, j::
         fine_face.r_w[wall_idx] = r[surface_idx]
         fine_face.g_w[wall_idx] = Abs[surface_idx] + r[surface_idx]
         fine_face.q_w[wall_idx] = e_surf - Abs[surface_idx]
+        fine_face.i_w[wall_idx] = j[surface_idx]/(pi*fine_face.area[wall_idx])
     end
     N_surfs = length(domain.surface_mapping)
-    for ((coarse_face, fine_face_idx), volume_idx) in domain.volume_mapping
-        fine_face = domain.fine_mesh[coarse_face][fine_face_idx]
-        vol_idx = N_surfs + volume_idx    
-        e_vol = max(j[vol_idx] - r[vol_idx], 0.0)
-        fine_face.T_g = T[vol_idx]
-        fine_face.j_g = j[vol_idx]
-        fine_face.g_a_g = Abs[vol_idx]
-        fine_face.e_g = e_vol
-        fine_face.r_g = r[vol_idx]
-        fine_face.g_g = Abs[vol_idx] + r[vol_idx]
-        fine_face.q_g = e_vol - Abs[vol_idx]
+    if !domain.surfaces_only
+        for ((coarse_face, fine_face_idx), volume_idx) in domain.volume_mapping
+            fine_face = domain.fine_mesh[coarse_face][fine_face_idx]
+            vol_idx = N_surfs + volume_idx    
+            e_vol = max(j[vol_idx] - r[vol_idx], 0.0)
+            fine_face.T_g = T[vol_idx]
+            fine_face.j_g = j[vol_idx]
+            fine_face.g_a_g = Abs[vol_idx]
+            fine_face.e_g = e_vol
+            fine_face.r_g = r[vol_idx]
+            fine_face.g_g = Abs[vol_idx] + r[vol_idx]
+            fine_face.q_g = e_vol - Abs[vol_idx]
+            fine_face.i_g = j[vol_idx]/(4*pi*fine_face.volume)
+        end
     end
 end
 
@@ -154,15 +158,17 @@ function writeResultsToDomainSpectralBin!(domain::RayTracingDomain2D, j::Vector{
         fine_face.r_w[wall_idx][spectral_bin] = r[surface_idx]
         fine_face.g_w[wall_idx][spectral_bin] = Abs[surface_idx] + r[surface_idx]
     end
-    N_surfs = length(domain.surface_mapping)
-    for ((coarse_face, fine_face_idx), volume_idx) in domain.volume_mapping
-        fine_face = domain.fine_mesh[coarse_face][fine_face_idx]
-        vol_idx = N_surfs + volume_idx    
-        e_vol = max(j[vol_idx] - r[vol_idx], 0.0)
-        fine_face.j_g[spectral_bin] = j[vol_idx]
-        fine_face.g_a_g[spectral_bin] = Abs[vol_idx]
-        fine_face.e_g[spectral_bin] = e_vol
-        fine_face.r_g[spectral_bin] = r[vol_idx]
-        fine_face.g_g[spectral_bin] = Abs[vol_idx] + r[vol_idx]
+    if !domain.surfaces_only
+        N_surfs = length(domain.surface_mapping)
+        for ((coarse_face, fine_face_idx), volume_idx) in domain.volume_mapping
+            fine_face = domain.fine_mesh[coarse_face][fine_face_idx]
+            vol_idx = N_surfs + volume_idx    
+            e_vol = max(j[vol_idx] - r[vol_idx], 0.0)
+            fine_face.j_g[spectral_bin] = j[vol_idx]
+            fine_face.g_a_g[spectral_bin] = Abs[vol_idx]
+            fine_face.e_g[spectral_bin] = e_vol
+            fine_face.r_g[spectral_bin] = r[vol_idx]
+            fine_face.g_g[spectral_bin] = Abs[vol_idx] + r[vol_idx]
+        end
     end
 end

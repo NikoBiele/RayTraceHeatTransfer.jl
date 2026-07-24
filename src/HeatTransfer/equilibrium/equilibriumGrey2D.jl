@@ -1,12 +1,16 @@
 # Fixed radiative transfer algorithm
 
 # Updated compute_emissive_powers - use precomputed kappa
-function computeEmissivePowersVariable!(mesh::RayTracingDomain2D, ws::TwoMatrixWorkspace{P},
+function computeEmissivePowersVariable!(mesh::RayTracingDomain2D, ws::OneMatrixWorkspace{P},
                                         E_known::Vector{P}, Q_known::Vector{P}) where {P}
     
     # Build Q_vec_known
-    Q_vec_known = vcat(ws.bin_Qw_known, ws.bin_Qg_known)
-    
+    if mesh.surfaces_only
+        Q_vec_known = vcat(ws.bin_Qw_known)
+    else
+        Q_vec_known = vcat(ws.bin_Qw_known, ws.bin_Qg_known)
+    end
+
     # Surface emissive powers
     N_surfs = length(mesh.surface_mapping)
     for i in 1:N_surfs
@@ -20,21 +24,23 @@ function computeEmissivePowersVariable!(mesh::RayTracingDomain2D, ws::TwoMatrixW
     end
     
     # Volume emissive powers - use precomputed kappa
-    for vol_count in 1:length(mesh.volume_mapping)
-        vol_idx = N_surfs + vol_count
-        
-        if Q_vec_known[vol_idx] == 0
-            E_known[vol_idx] = 4 * ws.kappa_g[vol_count] * STEFAN_BOLTZMANN * ws.Volume[vol_count] * ws.Tg[vol_count]^4
-            Q_known[vol_idx] = 0
-        else
-            E_known[vol_idx] = 0
-            Q_known[vol_idx] = ws.qg[vol_count]
+    if !mesh.surfaces_only
+        for vol_count in 1:length(mesh.volume_mapping)
+            vol_idx = N_surfs + vol_count
+            
+            if Q_vec_known[vol_idx] == 0
+                E_known[vol_idx] = 4 * ws.kappa_g[vol_count] * STEFAN_BOLTZMANN * ws.Volume[vol_count] * ws.Tg[vol_count]^4
+                Q_known[vol_idx] = 0
+            else
+                E_known[vol_idx] = 0
+                Q_known[vol_idx] = ws.qg[vol_count]
+            end
         end
     end
 end
 
 # Updated compute temperatures - use precomputed kappa
-function computeTemperaturesVariable!(mesh::RayTracingDomain2D, ws::TwoMatrixWorkspace{P},
+function computeTemperaturesVariable!(mesh::RayTracingDomain2D, ws::OneMatrixWorkspace{P},
                                     T::Vector{P}, j::Vector{P}, r::Vector{P}) where {P}
     
     # Surface temperatures
@@ -52,34 +58,36 @@ function computeTemperaturesVariable!(mesh::RayTracingDomain2D, ws::TwoMatrixWor
     end
     
     # Volume temperatures - use precomputed kappa
-    for vol_count in 1:length(mesh.volume_mapping)
-        vol_idx = N_surfs + vol_count
-        
-        e_i = max(j[vol_idx] - r[vol_idx], 0.0)
-        if ws.kappa_g[vol_count] > 0.0 && ws.Volume[vol_count] > 0.0
-            T[vol_idx] = (e_i / (4 * ws.kappa_g[vol_count] * ws.Volume[vol_count] * STEFAN_BOLTZMANN))^0.25
-        else
-            T[vol_idx] = 0.0
-        end
-        
-        if isnan(T[vol_idx])
-            T[vol_idx] = 0.0
+    if !mesh.surfaces_only
+        for vol_count in 1:length(mesh.volume_mapping)
+            vol_idx = N_surfs + vol_count
+            
+            e_i = max(j[vol_idx] - r[vol_idx], 0.0)
+            if ws.kappa_g[vol_count] > 0.0 && ws.Volume[vol_count] > 0.0
+                T[vol_idx] = (e_i / (4 * ws.kappa_g[vol_count] * ws.Volume[vol_count] * STEFAN_BOLTZMANN))^0.25
+            else
+                T[vol_idx] = 0.0
+            end
+            
+            if isnan(T[vol_idx])
+                T[vol_idx] = 0.0
+            end
         end
     end
 end
 
 # Main solver - UNCHANGED except using getValueB
-function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::Matrix{P}; spectral_bin::N=1) where {P<:Real, N<:Integer}
+function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::AbstractMatrix; spectral_bin::N=1) where {N<:Integer} # P<:Real, 
     println("=== Variable Extinction Memory-Optimized Steady State Solver ===")
     
     # Count surfaces and volumes
     N_surfs = length(mesh.surface_mapping)
-    N_vols = length(mesh.volume_mapping)
+    N_vols = mesh.surfaces_only ? 0 : length(mesh.volume_mapping)
     n = N_surfs + N_vols
         
     # Allocate workspace
     println("Allocating workspace...")
-    ws = TwoMatrixWorkspace{P}(N_surfs, N_vols)
+    ws = OneMatrixWorkspace{Float64}(N_surfs, N_vols)
     
     # Use work vectors for main arrays
     E_known = ws.work_vec1
@@ -95,8 +103,7 @@ function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::Matrix{P}; spectral_bin
     
     # Step 3: Compute B matrix with variable extinction
     println("Computing B matrix with variable extinction...")
-    B = ws.matrix1
-    fill!(B, zero(P))
+    b = zeros(n)
     
     # Check if we need scattering calculations
     has_scattering = any(ws.omega_g .> 1e-6)
@@ -104,146 +111,88 @@ function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::Matrix{P}; spectral_bin
     
     if has_scattering || has_reflection
         # Surface reflectivity terms
-        for i in 1:n
-            for j in 1:N_surfs
-                B[i, j] = 1.0 - ws.epsw[j]
-            end
+        for j in 1:N_surfs
+            b[j] = 1.0 - ws.epsw[j]
         end
         
         # Volume scattering terms - use precomputed omega
-        for vol_count in 1:N_vols
-            vol_idx = N_surfs + vol_count
-            for i in 1:n
-                B[i, vol_idx] = ws.omega_g[vol_count]
+        if !mesh.surfaces_only
+            for vol_count in 1:N_vols
+                vol_idx = N_surfs + vol_count
+                b[vol_idx] = ws.omega_g[vol_count]
             end
         end
     end
     
-    # Step 4: Compute K matrix in matrix2
-    println("Computing K matrix...")
-    K = ws.matrix2
-    for i in 1:n
-        for j in 1:n
-            if B[i, j] != 0.0 && F[i, j] != 0.0
-                K[i, j] = F[i, j] * B[i, j]
-            else
-                K[i, j] = 0.0
-            end
-        end
-    end
-    
-    # Step 5: Solve for S_infty (overwrite K in matrix2)
-    println("Solving for S_infty...")
-    
-    if !has_scattering
-        copyto!(ws.matrix2, F)  # S_infty = F
-    else
-        # Convert K to (I - K) in matrix2
-        for i in 1:n
-            for j in 1:n
-                if i == j
-                    K[i, j] = 1.0 - K[i, j]
-                else
-                    K[i, j] = -K[i, j]
-                end
-            end
-        end
-        ws.matrix2 .= K \ F  # Solve and store in matrix2
-    end
-    
-    # matrix2 now contains S_infty
-    
-    # Step 6: Build system matrix M directly in matrix1 (overwrite B)
+    # Step 4: Build system matrix M directly in matrix1 (overwrite B)
     println("Assembling linear system...")
-    M = ws.matrix1  # Reuse matrix1 for system matrix
-    b = ws.work_vec3
+    M = ws.matrix1
+    fill!(M, zero(Float64))
+    h = zeros(n)
     
     # Build Q_vec_known and RHS
-    Q_vec_known = vcat(ws.bin_Qw_known, ws.bin_Qg_known)
+    if mesh.surfaces_only
+        Q_vec_known = vcat(ws.bin_Qw_known)
+    else
+        Q_vec_known = vcat(ws.bin_Qw_known, ws.bin_Qg_known)
+    end
     for i in 1:n
         if Q_vec_known[i] == 1
-            b[i] = Q_known[i]
+            h[i] = Q_known[i]
         else
-            b[i] = E_known[i]
+            h[i] = E_known[i]
         end
     end
     
-    # Build system matrix M - NOW using getValueB instead of get_local_omega
-    for i in 1:n
-        for j in 1:n
-            # Get B values using helper (no nested loops!)
-            B_ji = getValueB(ws, j, N_surfs)
-            B_ij = getValueB(ws, i, N_surfs)
-            
-            # A[i,j] = (1 - B[j,i]) * S_infty[i,j] * (1 - B[i,j])
-            # R[i,j] = (1 - B[j,i]) * S_infty[i,j] * B[i,j]
-            common_term = (1.0 - B_ji) * ws.matrix2[i, j]
-            A_ij = common_term * (1.0 - B_ij)
-            R_ij = common_term * B_ij
-            
-            # Build system matrix based on boundary condition
-            if Q_vec_known[i] == 1
-                # M[i,j] = I[i,j] - A'[i,j] - R'[i,j] = I[i,j] - A[j,i] - R[j,i]
-                if i == j
-                    M[i, j] = 1.0 - A_ij - R_ij
-                else
-                    # Need A[j,i] and R[j,i] - compute with swapped indices
-                    B_ij_swap = getValueB(ws, j, N_surfs)
-                    B_ji_swap = getValueB(ws, i, N_surfs)
-                    common_term_swap = (1.0 - B_ji_swap) * ws.matrix2[j, i]
-                    A_ji = common_term_swap * (1.0 - B_ij_swap)
-                    R_ji = common_term_swap * B_ij_swap
-                    M[i, j] = -A_ji - R_ji
-                end
-            else
-                # M[i,j] = I[i,j] - R'[i,j] = I[i,j] - R[j,i]
-                if i == j
-                    M[i, j] = 1.0 - R_ij
-                else
-                    # Need R[j,i]
-                    B_ij_swap = getValueB(ws, j, N_surfs)
-                    B_ji_swap = getValueB(ws, i, N_surfs)
-                    common_term_swap = (1.0 - B_ji_swap) * ws.matrix2[j, i]
-                    R_ji = common_term_swap * B_ij_swap
-                    M[i, j] = -R_ji
-                end
-            end
-        end
-    end
+    # Build system matrix M  ==  I − Diagonal(coeff)·Fᵀ
+    coeff = ifelse.(Q_vec_known .== 1, 1.0, b)
+    M = I - Diagonal(coeff) * permutedims(F)
     
-    # Step 7: Solve linear system
+    # Step 5: Solve linear system
     println("Solving linear system...")
-    j = M \ b
-    
-    # Step 8: Compute Abs = A' * j and r = R' * j
+    if F isa SparseMatrixCSC
+        wkr = GmresWorkspace(M, h; memory = 50)   # GMRES(50): hard cap on the Krylov subspace
+        gmres!(wkr, M, h; restart = true, rtol = 1e-12)
+        j = wkr.x          # solution; ws.stats for residual history / iters
+    else
+        j = M \ h
+    end
+        
+    # Step 6: Compute Abs = A' * j and r = R' * j
     println("Computing absorbed and reflected energies...")
     Abs = ws.work_vec4
     r = ws.work_vec5
-    fill!(Abs, zero(P))
-    fill!(r, zero(P))
+    fill!(Abs, zero(Float64))
+    fill!(r, zero(Float64))
     
-    # Compute matrix-vector products - NOW using getValueB
-    for i in 1:n
-        local_abs = zero(P)
-        local_r = zero(P)
-        
-        for k in 1:n
-            # Get B values using helper
-            B_ik = getValueB(ws, i, N_surfs)
-            B_ki = getValueB(ws, k, N_surfs)
-            
-            common_term = (1.0 - B_ik) * ws.matrix2[k, i]
-            A_ki = common_term * (1.0 - B_ki)
-            R_ki = common_term * B_ki
-            
-            local_abs += A_ki * j[k]
-            local_r += R_ki * j[k]
+    if F isa SparseMatrixCSC
+        # Column sweep over F (CSC-native): column i of F holds F[k,i] for all senders k.
+        # g_i = Σ_k F[k,i]·j[k] is the total incident power on element i.
+        # Receiver i then splits its OWN incident power:
+        #   r[i]   = b[i]     · g_i     (reflected/scattered by receiver i)
+        #   Abs[i] = (1−b[i]) · g_i     (absorbed by receiver i)
+        rows = rowvals(F); vals = nonzeros(F)
+        @inbounds for i in 1:n                 # column i == receiving element
+            g_i = 0.0
+            for idx in nzrange(F, i)
+                k = rows[idx]                  # sending element
+                g_i += vals[idx] * j[k]        # F[k,i]·j[k]
+            end
+            r[i]   = b[i] * g_i
+            Abs[i] = (1.0 - b[i]) * g_i
         end
-        
-        Abs[i] = local_abs
-        r[i] = local_r
+    else
+        # Dense: same receiver-indexed split
+        for i in 1:n
+            g_i = zero(Float64)
+            for k in 1:n
+                g_i += F[k,i] * j[k]
+            end
+            r[i]   = b[i] * g_i
+            Abs[i] = (1.0 - b[i]) * g_i
+        end
     end
-    
+
     # Step 9: Compute temperatures with variable extinction
     println("Computing temperatures with variable extinction...")
     T = ws.work_vec1  # Reuse work_vec1

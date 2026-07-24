@@ -35,7 +35,6 @@ function RayTracingDomain3D(domain2d::RayTracingDomain2D, coarse_mesh::Vector{Po
         surface_areas, #volumes,
         surface_mapping, # volume_mapping,
         :not_yet_set, n_spectral_bins, nothing,  # Spectral fields
-        false,  # uniform_extinction
         # Initialize spatial acceleration as nothing (build later)
         nothing,
         nothing,
@@ -53,7 +52,7 @@ function RayTracingDomain3D(domain2d::RayTracingDomain2D, coarse_mesh::Vector{Po
     )
     
     # Validate extinction uniformity
-    rtm_optim.uniform_extinction = inheritExtinctionUniformity3D!(domain2d) # rtm_optim)
+    rtm_optim.uniform_across_bin = inheritExtinctionUniformity3D!(domain2d) # rtm_optim)
     
     # Validate spectral uniformity
     rtm_optim.spectral_mode = inheritSpectralUniformity3D!(domain2d)

@@ -6,10 +6,11 @@ using StaticArrays
 using LinearAlgebra
 using Random
 using ProgressMeter
-using Measurements
 using Base.Threads
 using StatsBase
 using SparseArrays
+using Krylov
+using ConvolutionInterpolations
 
 # constants
 const xVecGlobal2D = SVector(1.0, 0.0)
@@ -21,7 +22,8 @@ const STEFAN_BOLTZMANN = 5.670374419e-8
 const h_P = 6.626e-34  # Planck constant
 const c0 = 2.998e8     # speed of light  
 const k_B = 1.38e-23   # Boltzmann constant
-const C2 = h_P * c0 / k_B
+const C1 = 1.191042972e-16 # 2 h c^2  [W m^2 / sr]
+const C2 = 1.4387768775039337e-2 # h_P * c0 / k_B
 
 # Declare plotting function names so they can be extended by an extension:
 function plotMesh end
@@ -40,7 +42,14 @@ include(joinpath(@__DIR__, "RayTracing", "rayTracing.jl"))
 include(joinpath(@__DIR__, "HeatTransfer","heatTransfer.jl"))
 
 # export
-export PolyVolume2D, PolyFace3D, RayTracingDomain2D, RayTracingDomain3D, ViewFactorDomain3D, viewFactor3D,
-        buildSystemMatrices!, solveEquilibrium!, plotMesh, plotField
-        
+export PolyVolume2D,
+       PolyFace3D, 
+       RayTracingDomain2D,
+       RayTracingDomain3D,
+       ViewFactorDomain3D,
+       viewFactor3D,
+       buildSystemMatrix,
+       solveEquilibrium!,
+       plotMesh,
+       plotField
 end

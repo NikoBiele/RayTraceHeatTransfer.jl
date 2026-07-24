@@ -92,8 +92,8 @@ mutable struct RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}
     fine_mesh::VVPF
     coarse_grid::GRID
     fine_grids::Vector{GRID}
-    F_raw::Union{MT, Vector{MT}}              # UPDATED: Union for spectral support
-    F_smooth::Union{MT, Vector{MT}}           # UPDATED: Union for spectral support
+    F_raw::Union{AbstractMatrix, Vector{AbstractMatrix}, Vector{AbstractMatrix{Float64}}, Vector{Matrix{Float64}}}              # UPDATED: Union for spectral support
+    F_smooth::Union{AbstractMatrix,  Vector{AbstractMatrix}, Vector{AbstractMatrix{Float64}}, Vector{Matrix{Float64}}}           # UPDATED: Union for spectral support
     surface_areas::VT
     volumes::VT
     surface_mapping::DIII
@@ -103,8 +103,8 @@ mutable struct RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}
     spectral_mode::Symbol        # :grey, :spectral_uniform, :spectral_variable
     n_spectral_bins::Int        # Number of spectral bins (1 for grey)
     wavelength_band_limits::Union{Nothing, Vector{Float64}}  # Wavelength boundaries [μm]
-    uniform_extinction::Bool     # Whether to use uniform exchange factors across all wavelengths
-    
+    surfaces_only::Bool         # indicates if the mesh includes volumes
+    uniform_across_bin::Vector{Float64} # vector of uniform extinction (-1.0 where nonuniform)
     # Optimized cache structures (existing)
     coarse_face_cache::Vector{PolyVolume2D}  # Flattened for direct indexing
     fine_face_cache::Vector{Vector{PolyVolume2D}}  # Pre-allocated fine faces
@@ -156,12 +156,12 @@ mutable struct PolyFace3D{G}
 end
 
 mutable struct ViewFactorDomain3D{G,P<:Integer}
-    points::Matrix{G}
-    faces::Matrix{P}
+    points::AbstractMatrix
+    faces::AbstractMatrix
     Ndims::P
     facesMesh::Vector{PolyFace3D{G}}
-    F_raw::Matrix{G}
-    F_smooth::Matrix{G}  # View factors (wavelength-independent!)
+    F_raw::AbstractMatrix
+    F_smooth::AbstractMatrix  # View factors (wavelength-independent!)
     
     # NEW: Spectral metadata
     spectral_mode::Symbol        # :grey or :spectral
@@ -169,6 +169,7 @@ mutable struct ViewFactorDomain3D{G,P<:Integer}
     wavelength_band_limits::Union{Nothing, Vector{G}}  # Wavelength boundaries [μm]
     energy_error::Union{Nothing, G, Vector{G}}
     uniform_epsilon::Bool        # Whether to use uniform epsilon solver
+    surfaces_only::Bool         # dummy, always true, used for dispatch
 end
 
 #######################
@@ -227,7 +228,6 @@ mutable struct RayTracingDomain3D{G}
     spectral_mode::Symbol              # :grey, :spectral_uniform, :spectral_variable
     n_spectral_bins::Int               # Number of spectral bins (1 for grey)
     wavelength_band_limits::Union{Nothing, Vector{Float64}}  # Wavelength boundaries [μm]
-    uniform_extinction::Bool           # Whether extinction is uniform across domain
 
     # use 2d accelerations since it is extruded 2d (search 2d, then 1d)
 

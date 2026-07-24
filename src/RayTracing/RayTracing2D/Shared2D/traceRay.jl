@@ -1,7 +1,7 @@
 function traceRay(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit::Point2{G}, 
                    nudge::G, current_coarse_index::P, spectral_bin::P=1) where {G, P<:Integer}
     
-    if hmesh.uniform_extinction
+    if hmesh.uniform_across_bin[spectral_bin] > -0.1
         # Use fast uniform ray tracing - extinction is same for all bins
         first_face = hmesh.fine_mesh[1][1]
         if isa(first_face.kappa_g, Vector)

@@ -10,6 +10,18 @@ println("\n" * "-"^60)
 println("Testing 3D Heat Transfer")
 println("-"^60)
 
+using RayTraceHeatTransfer
+using Test
+using LinearAlgebra
+using StatsBase
+using StaticArrays
+using GeometryBasics
+using SparseArrays
+using ConvolutionInterpolations
+
+TEMP_TOLERANCE = 5.0  # K, Tolerance for absolute temperature
+ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
+
 #############################################################################
 ### TEST 1: ISOTHERMAL CUBE (All walls at same temperature) ###############
 #############################################################################

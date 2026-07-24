@@ -14,11 +14,11 @@ function emitFracBlackBodySpectrum(wavelength_bands, temperature, spectral_pos)
         F_0_to_lambda_T = 1.0
     else        
         # Calculate series with overflow protection
-        for m = 1:10
+        for m = 1:100
             exp_term = exp(-m*xi)
             
             # Early termination if term becomes negligible
-            if exp_term < 1e-15
+            if exp_term < 1e-16
                 break
             end
             

@@ -87,8 +87,8 @@ Volume elements are labelled **g*i*** and wall surfaces **w*i***. The indices sh
 ### Step 2: Ray trace and solve
 
 ```julia
-mesh(10_000_000; method = :exchange)         # Monte Carlo ray tracing
-solveEquilibrium!(mesh, mesh.F_smooth)       # solve GERT system
+mesh(10_000_000; method = :exchange);         # Monte Carlo ray tracing
+solveEquilibrium!(mesh, mesh.F_smooth);       # solve GERT system
 ```
 
 ### Step 3: Validate against Crosbie & Schrenker (1984)
@@ -152,7 +152,7 @@ The top panel shows the 2D temperature field; the bottom panel compares the comp
 
 > Crosbie, A. L. & Schrenker, R. G. (1984). "Radiative transfer in a two-dimensional rectangular medium exposed to diffuse radiation." *Journal of Quantitative Spectroscopy and Radiative Transfer*, 31(4), 339–372.
 
-> Bielefeld, N. M. (2025). "A Radiation Exchange Factor Transformation with Proven Convergence, Non-Negativity, and Energy Conservation" *arXiv preprint*, [arXiv:2512.22157](https://arxiv.org/abs/2512.22157).
+> Bielefeld, N. M. (2026). "A Radiation Exchange Factor Formulation with Proven Non-Negativity and Unconditional Energy Conservation" *arXiv preprint*, [arXiv:2512.22157](https://arxiv.org/abs/2512.22157).
 
 ---
 
@@ -276,15 +276,15 @@ push!(faces, face_sun);
 push!(divisions, (1, 2)); # each layer must be divided for the ray tracer to work
 
 mesh = RayTracingDomain2D(faces, divisions); # mesh the domain
-mesh.wavelength_band_limits = λ_edges # spectral limits
+mesh.wavelength_band_limits = λ_edges; # spectral limits
 ```
 
 ### Step 5: Ray trace and solve
 
 ```julia
-mesh(2_000_000; method = :exchange)
+mesh(2_000_000; method = :exchange);
 solveEquilibrium!(mesh, mesh.F_smooth;
-    max_iterations = 10_000, convergence_tol = 1e-12)
+    max_iters = 10_000, convergence_tol = 1e-15);
 ```
 
 Ray tracing is performed independently for each spectral bin, computing separate exchange factor matrices that represent the wavelength-dependent extinction. The spectral equilibrium solver then iterates to find the temperature distribution that simultaneously satisfies energy conservation across all bins.
@@ -330,7 +330,85 @@ The spectral solver is an unpublished extension of the grey GERT method describe
 
 ---
 
-## Example 3 — 3D Surface Enclosure
+## Example 3 — Circular Enclosure from Triangular Elements
+
+The meshing in RayTraceHeatTransfer.jl is not limited to rectangles: domains can be assembled from arbitrary triangular and quadrilateral elements, with any wall of any element declared either solid (radiatively active) or open (transparent to radiation, used to join elements). This example builds a circular enclosure of radius R = 1 m from 16 triangular wedges sharing a center vertex, fills it with an absorbing gas (κ = 1 m⁻¹, no scattering), and heats half the rim to 1000 K while the other half is held at 0 K. All surfaces are black (ε = 1).
+
+At the center of the circle, symmetry provides an analytical limit to validate against: the center element sees the hot and cold half-rims with equal view factors, so in radiative equilibrium its temperature satisfies T⁴ = (T_hot⁴ + T_cold⁴)/2, giving T ≈ 840.90 K. This is the same symmetry argument — and the same formula — as the polar-cap limit in the triangulated icosphere of Example 5; the two examples are 2D and 3D counterparts of one another.
+
+### Step 1: Build the circle from triangular wedges
+
+```julia
+using RayTraceHeatTransfer
+using GeometryBasics, StaticArrays
+
+N_seg = 16;       # number of wedges
+R     = 1.0;      # circle radius (m)
+T_hot = 1000.0;   # hot half-rim temperature (K)
+kappa = 1.0;      # absorption coefficient (m⁻¹)
+
+# j runs one past N_seg at the last wedge; cos/sin wrap, closing the circle.
+rim(j) = Point2(R * cos(2π * (j - 1) / N_seg), R * sin(2π * (j - 1) / N_seg));
+
+faces     = PolyVolume2D{Float64}[];
+divisions = Tuple{Int,Int}[];
+for j in 1:N_seg
+    verts = SVector(Point2(0.0, 0.0), rim(j), rim(j + 1))
+    # Wall order follows vertex order: (spoke, rim, spoke).
+    # Spokes are open — radiation passes freely between wedges —
+    # so only the rim wall is a real surface.
+    solidwalls = SVector(false, true, false)
+    face = PolyVolume2D{Float64}(verts, solidwalls, 1, kappa, 0.0)
+    face.T_in_w  = [0.0, j <= N_seg ÷ 2 ? T_hot : 0.0, 0.0]  # upper half hot
+    face.epsilon = [1.0, 1.0, 1.0]
+    face.T_in_g  = -1.0    # unknown (solve for this)
+    face.q_in_g  = 0.0     # radiative equilibrium
+    push!(faces, face)
+    push!(divisions, (11, 11))
+end;
+
+mesh = RayTracingDomain2D(faces, divisions);
+```
+
+Each wedge is subdivided 11 × 11, exactly as the square in Example 1 — the fine mesh machinery is element-shape agnostic.
+
+### Step 2: Ray trace and solve
+
+```julia
+mesh(10_000_000; method = :exchange);      # Monte Carlo ray tracing
+solveEquilibrium!(mesh, mesh.F_smooth);    # solve GERT system
+```
+
+### Step 3: Visualise and validate against the center limit
+
+```julia
+using Plots
+using StatsBase
+
+p1 = plotField(mesh; field = :T)
+Plots.plot!(p1, guidefontsize=12, tickfontsize=10,
+            left_margin=5Plots.mm, right_margin=10Plots.mm,
+            title = "Half-hot circular enclosure")
+display(p1)
+Plots.savefig(p1, "fig/circle_halfhot.png")
+
+# Center-limit validation: gas elements adjacent to the center vertex
+T_limit = ((T_hot^4 + 0.0^4) / 2)^(1/4)              # ≈ 840.90 K
+T_g_mid = [fine[1].T_g for fine in mesh.fine_mesh]   # first fine element of each wedge
+println("analytical center limit : ", round(T_limit, digits = 2), " K")
+println("computed center mean    : ", round(mean(T_g_mid), digits = 2), " K")
+println("difference              : ", round(abs(T_limit - mean(T_g_mid)), digits = 2), " K")
+```
+
+![Half-hot circle](fig/circle_halfhot.png)
+
+The temperature field shows the smooth gradient from the hot to the cold hemisphere, and the computed center temperature agrees with the analytical limit to 0.02 K at 10⁷ rays (840.88 K computed vs 840.90 K analytical) — at the Monte Carlo noise floor of the exchange factors. Unlike the deterministic view factors of Examples 4 and 5, the 2D exchange factors here are ray-traced, so the comparison carries a statistical component; agreement at the noise floor is the expected result.
+
+The package test suite additionally verifies the isothermal limit on this geometry: with the entire rim at a single temperature, the solved gas field reproduces that temperature everywhere to within 10⁻³ K — a strong global check that the curved, open-spoke meshing introduces no artifacts.
+
+---
+
+## Example 4 — 3D Surface Enclosure
 
 This example solves radiative equilibrium in a unit cube with transparent (non-participating) media. Two opposing faces have prescribed temperatures (1000 K and 0 K); the four side walls are in radiative equilibrium (unknown temperature, zero net heat flux). All surfaces are black (ε = 1). View factors are computed analytically using the method of Narayanaswamy (2015), which means no ray tracing is needed.
 
@@ -382,6 +460,7 @@ Faces 1 and 2 are the hot and cold walls at opposing ends of the cube. The four 
 fig = Figure(size = (800, 700))
 ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
 plotMesh(ax, domain3D)
+fig
 ```
 
 ### Step 4: Calculate view factors
@@ -389,7 +468,7 @@ plotMesh(ax, domain3D)
 Calculate analytical view factors directly on the mesh object (requires a convex domain):
 
 ```julia
-domain3D(; parallel=true, tol=10*eps(Float64))
+domain3D(; parallel=true)
 ```
 
 ### Step 5: Solve and visualise
@@ -414,9 +493,9 @@ The temperature field shows a smooth gradient from the hot face (1000 K) to the 
 
 ---
 
-## Example 4 — Triangulated Icosphere
+## Example 5 — Triangulated Icosphere
 
-This example extends Example 3 from axis-aligned quads to an arbitrary convex triangulated geometry: a unit sphere approximated by recursively subdividing a regular icosahedron. A small hot cap of triangles is placed at the north pole and a matching cold cap at the south pole; all remaining triangles are in radiative equilibrium.
+This example extends Example 4 from axis-aligned quads to an arbitrary convex triangulated geometry: a unit sphere approximated by recursively subdividing a regular icosahedron. A small hot cap of triangles is placed at the north pole and a matching cold cap at the south pole; all remaining triangles are in radiative equilibrium.
 
 This example demonstrates two features of the package: arbitrary triangulated geometry (view factors are still computed analytically via Narayanaswamy (2015), for any closed convex polyhedron built from planar triangles), and the separate mesh / view factor / solve steps that let the user inspect the mesh before committing to the expensive view factor computation.
 
@@ -535,7 +614,7 @@ Inspecting the mesh before committing to the view factor computation is especial
 Once the mesh looks right, view factors are computed by calling the domain as a functor:
 
 ```julia
-domain3D(; parallel=true, tol=10*eps(Float64))
+domain3D(; parallel=true)
 ```
 
 This step performs analytical view factor computation for every pair of subcells, followed by iterative reciprocity smoothing to machine precision. It is typically the most expensive step in the workflow.

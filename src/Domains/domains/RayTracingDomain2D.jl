@@ -83,7 +83,7 @@ function RayTracingDomain2D(rtm::IntermediateMesh2D, verbose::Bool)
         rtm.F_raw, rtm.F_smooth,
         surface_areas, volumes, surface_mapping, volume_mapping,
         :not_yet_set, n_spectral_bins, nothing, # NEW spectral fields
-        false,
+        false, [0.0],
         coarse_face_cache, fine_face_cache,
         coarse_wall_normals, coarse_wall_midpoints,
         fine_wall_normals, fine_wall_midpoints,
@@ -96,7 +96,7 @@ function RayTracingDomain2D(rtm::IntermediateMesh2D, verbose::Bool)
         nothing   # energy_error
     )
 
-    rtm_optim.uniform_extinction = validateExtinctionUniformity!(rtm_optim; verbose=verbose)
+    rtm_optim.uniform_across_bin = validateExtinctionUniformity!(rtm_optim; verbose=verbose)
 
     # Update spectral mode based on uniformity
     if validateSpectralUniformity!(rtm_optim; verbose=verbose) && is_spectral
@@ -120,6 +120,15 @@ function RayTracingDomain2D(faces::Vector{PolyVolume2D{G}}, Ndiv::Vector{Tuple{P
     # Then convert to optimized version with spectral support
     verbose && println("Optimizing mesh...")
     optimMesh = RayTracingDomain2D(standardMesh, verbose)
+
+    surfaces_only = true
+    for face in faces
+        if face.volume*sum(face.kappa_g + face.sigma_s_g)/length(face.kappa_g) > 1e-8
+            surfaces_only = false
+            break
+        end
+    end
+    optimMesh.surfaces_only = surfaces_only
 
     # Build spatial acceleration
     verbose && println("Building spatial acceleration structures...")

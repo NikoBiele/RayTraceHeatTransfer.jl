@@ -1,4 +1,4 @@
-function enclosureViewFactors3D(superFaces::Vector{PolyFace3D{G}}, parallel::Bool, tol::G) where G
+function enclosureViewFactors3D(superFaces::Vector{PolyFace3D{G}}, parallel::Bool, max_iters::Int=1000) where G
     # Calculate dimensions
     num_faces = length(superFaces)
     num_subFaces = length(superFaces[1].subFaces)
@@ -87,11 +87,8 @@ function enclosureViewFactors3D(superFaces::Vector{PolyFace3D{G}}, parallel::Boo
 
     # Apply smoothing
     surface_areas = areas_linear
-    volumes = G[]
-    volume_betas = G[]
-    
-    F_smooth = smoothExchangeFactorsUltimate!(F_raw, surface_areas, volumes, volume_betas, 
-                                           1; max_iterations=200, tolerance=tol)
+
+    F_smooth = smooth_F(F_raw, vcat(surface_areas); max_iters=max_iters, smooth_surfaces_only=true)
     
     return F_raw, F_smooth
 end

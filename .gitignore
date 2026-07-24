@@ -1,9 +1,4 @@
 _old/
 _docs/
 _.github/
-test3d.jl
-tester.jl
-test_valid_write.jl
-test_3d_extruded_2d.jl
-test_negative_j.jl
-test_smoothing_trapping.jl
+/test_scripts

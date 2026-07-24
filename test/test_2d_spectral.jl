@@ -11,6 +11,19 @@ println("\n" * "-"^60)
 println("Testing 2D Spectral Participating Media")
 println("-"^60)
 
+using RayTraceHeatTransfer
+using Test
+using LinearAlgebra
+using StatsBase
+using StaticArrays
+using GeometryBasics
+using SparseArrays
+using ConvolutionInterpolations
+
+SPECTRAL_TOLERANCE = 0.05 # 5% tolerance for spectral comparisons
+ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
+ANALYTICAL_TOLERANCE = 0.05 # 5% tolerance vs analytical solution (to avoid too much sampling)
+
 #############################################################################
 ### HELPER FUNCTIONS #######################################################
 #############################################################################
@@ -63,7 +76,6 @@ function createSpectralUniformMesh(; T_hot=1000.0, T_cold=0.0, kappa=1.0,
     face.epsilon = [epsilon_bins, epsilon_bins, epsilon_bins, epsilon_bins]
     
     mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
-    mesh.spectral_mode = :spectral_uniform
     mesh.n_spectral_bins = n_bins
     
     return mesh
@@ -119,14 +131,13 @@ function createSpectralVariableMesh(; T_hot=1000.0, T_cold=0.0, base_kappa=1.0,
     face.epsilon = [epsilon_bins, epsilon_bins, epsilon_bins, epsilon_bins]
     
     mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
-    mesh.spectral_mode = :spectral_variable
     mesh.n_spectral_bins = n_bins
     
     return mesh
 end
 
 #############################################################################
-### TEST 1: SPECTRAL UNIFORM WITH BLACK WALLS (should match grey) ##########
+### TEST 1a: SPECTRAL UNIFORM WITH BLACK WALLS (should match grey) ##########
 #############################################################################
 
 @testset "Spectral Uniform vs Grey (Black Walls)" begin
@@ -178,6 +189,61 @@ end
     end
     
     # Mean temperature comparison
+    @test isapprox(mean(grey_temps), mean(spectral_temps), rtol=SPECTRAL_TOLERANCE)
+end
+
+#############################################################################
+### TEST 1b: SPECTRAL UNIFORM vs GREY (Non-Black Walls) ####################
+#############################################################################
+
+@testset "Spectral Uniform vs Grey (epsilon = 0.3)" begin
+    T_hot = 1000.0
+    T_cold = 0.0
+    kappa = 1.0
+    sigma_s = 0.0
+    Ndim = 5
+    n_bins = 100
+    N_rays = 10_000_000
+    eps_val = 0.3
+
+    # Grey case with non-black walls
+    vertices = SVector(
+        Point2(0.0, 0.0),
+        Point2(1.0, 0.0),
+        Point2(1.0, 1.0),
+        Point2(0.0, 1.0)
+    )
+    solidWalls = SVector(true, true, true, true)
+    face_grey = PolyVolume2D{Float64}(vertices, solidWalls, 1, kappa, sigma_s)
+    face_grey.T_in_w = [T_hot, T_cold, T_cold, T_cold]
+    face_grey.epsilon = [eps_val, eps_val, eps_val, eps_val]
+    face_grey.T_in_g = -1.0
+
+    mesh_grey = RayTracingDomain2D([face_grey], [(Ndim, Ndim)])
+    mesh_grey(N_rays; method=:exchange)
+    solveEquilibrium!(mesh_grey, mesh_grey.F_smooth)
+
+    grey_temps = [fine_face.T_g for fine_face in mesh_grey.fine_mesh[1]]
+
+    # Spectral case: same emissivity in every bin must reproduce the grey result
+    epsilon_bins = fill(eps_val, n_bins)
+    mesh_spectral = createSpectralUniformMesh(T_hot=T_hot, T_cold=T_cold,
+                                              kappa=kappa, sigma_s=sigma_s,
+                                              epsilon_bins=epsilon_bins,
+                                              Ndim=Ndim, n_bins=n_bins)
+    mesh_spectral.wavelength_band_limits = 10 .^ range(log10(0.000_000_01), log10(0.1), length=n_bins+1)
+    mesh_spectral(N_rays; method=:exchange)
+    solveEquilibrium!(mesh_spectral, mesh_spectral.F_smooth)
+
+    spectral_temps = [fine_face.T_g for fine_face in mesh_spectral.fine_mesh[1]]
+
+    @test length(grey_temps) == length(spectral_temps)
+
+    for (T_grey, T_spec) in zip(grey_temps, spectral_temps)
+        rel_diff = abs(T_grey - T_spec) / max(T_grey, 1.0)
+        @test rel_diff < SPECTRAL_TOLERANCE
+    end
+
     @test isapprox(mean(grey_temps), mean(spectral_temps), rtol=SPECTRAL_TOLERANCE)
 end
 
@@ -288,23 +354,18 @@ end
                                        kappa=kappa, sigma_s=sigma_s,
                                        epsilon_bins=epsilon_bins,
                                        Ndim=Ndim, n_bins=n_bins)
-    mesh.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    mesh.wavelength_band_limits = 10 .^ range(log10(1e-9), log10(1.0), length=n_bins+1)
     mesh(N_rays; method=:exchange)
     solveEquilibrium!(mesh, mesh.F_smooth)
     
-    # Check energy error for each bin if available
-    if !isnothing(mesh.energy_error)
-        if isa(mesh.energy_error, Vector)
-            for (bin, err) in enumerate(mesh.energy_error)
-                @test abs(err) < ENERGY_TOLERANCE  # Small absolute error per bin
-            end
-            
-            # Total error across all bins
-            @test abs(sum(mesh.energy_error)) < ENERGY_TOLERANCE
-        else
-            @test abs(mesh.energy_error) < ENERGY_TOLERANCE
-        end
+    # Energy error must exist after a solve, and be small per bin and in total
+    @test !isnothing(mesh.energy_error)
+    @test mesh.energy_error isa Vector
+    @test length(mesh.energy_error) == n_bins
+    for bin in 1:n_bins
+        @test abs(mesh.energy_error[bin]) < ENERGY_TOLERANCE
     end
+    @test sum(abs.(mesh.energy_error)) < ENERGY_TOLERANCE
 end
 
 #############################################################################

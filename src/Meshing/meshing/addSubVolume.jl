@@ -18,80 +18,40 @@ function addSubVolume!(superVolume::PolyVolume2D{G}, subVolume::PolyVolume2D{G})
     inheritVolumeProperty!(superVolume, subVolume, :T_in_g)
     inheritVolumeProperty!(superVolume, subVolume, :T_g)
 
-    # then for walls
-    for i in 1:length(subVolume.vertices) # loop over walls of subface (same as number of vertices)
-        if (length(superVolume.vertices) == 3 && length(subVolume.vertices) == 4) && subVolume.solidWalls[i] == true
-            # if superVolume is a triangle and subVolume is a quadrilateral
-            # inherits the properties of the superface
-            
-            # two walls of the quadrilateral need to inherit from the diagonal of the triangle
-
-            # find the diagonal (should still work for equilateral triangles)
-            norm1 = norm(superVolume.vertices[1]-superVolume.vertices[2])
-            norm2 = norm(superVolume.vertices[2]-superVolume.vertices[3])
-            norm3 = norm(superVolume.vertices[3]-superVolume.vertices[1])
-            diag_len, diag_index = findmax([norm1, norm2, norm3])
-            diag_normal = superVolume.inwardNormals[diag_index]
-            
-            # check if the outwardNormal of the subface is in the same direction as the diagonal outwardNormal
-            diag_dirs = [dot(subVolume.inwardNormals[j], diag_normal) for j in 1:4] # positive for sides which inherit from the diagonal
-            # and that the diagonal is solid
-            # need to +1 everywhere to account for i=1 is volume
-            if diag_dirs[i] > 0.0 && superVolume.solidWalls[diag_index] == true
-                # inherits the properties of the superface (the diagonal)
-                inheritSurfaceProperties!(superVolume, subVolume; from=diag_index, to=i)
-
-            elseif diag_dirs[i] < 0.0 && superVolume.solidWalls[diag_index] == true
-                # if the quadrilateral subface wall is solid, but should not inherit from the superVolume triangle diagonal
-                # which index to inherit from? There are four cases
-                # 1) subface sides 1 and 2 inherits from diagonal, subface side 3 and 4 inherits from triangle sides 2 and 3, valid
-                if diag_dirs[1] > 0.0 && diag_dirs[2] > 0.0
-                    # subface side 3 inherits from triangle side 2
-                    inheritSurfaceProperties!(superVolume, subVolume; from=2, to=3)
-
-                    # subface side 4 inherits from triangle side 3
-                    inheritSurfaceProperties!(superVolume, subVolume; from=3, to=4)
-                end
-
-                # 2) subface sides 2 and 3 inherits from diagonal, subface side 1 and 4 inherits from triangle sides 1 and 3, valid
-                if diag_dirs[2] > 0.0 && diag_dirs[3] > 0.0
-                    # subface side 1 inherits from triangle side 1
-                    inheritSurfaceProperties!(superVolume, subVolume; from=1, to=1)
-
-                    # subface side 4 inherits from triangle side 3
-                    inheritSurfaceProperties!(superVolume, subVolume; from=3, to=4)
-                end
-
-                # 3) subface sides 3 and 4 inherits from diagonal, subface side 1 and 2 inherits from triangle sides 1 and 2, valid
-                if diag_dirs[3] > 0.0 && diag_dirs[4] > 0.0
-                    # subface side 1 inherits from triangle side 1
-                    inheritSurfaceProperties!(superVolume, subVolume; from=1, to=1)
-
-                    # subface side 2 inherits from triangle side 2
-                    inheritSurfaceProperties!(superVolume, subVolume; from=2, to=2)                    
-                end
-
-                # 4) subface sides 1 and 4 inherits from diagonal, subface side 2 and 3 inherits from triangle sides 1 and 2, valid
-                if diag_dirs[4] > 0.0 && diag_dirs[1] > 0.0
-                    # subface side 2 inherits from triangle side 1
-                    inheritSurfaceProperties!(superVolume, subVolume; from=1, to=2)
-
-                    # subface side 4 inherits from triangle side 3
-                    inheritSurfaceProperties!(superVolume, subVolume; from=2, to=3)
-                end
-
-            end
-
-        elseif (length(superVolume.vertices) == length(subVolume.vertices)) && subVolume.solidWalls[i] == true
-            # if both are quadrilaterals or both are triangles
-            inheritSurfaceProperties!(superVolume, subVolume; from=i, to=i)            
-        else
-            # wall is not solid, no need to inherit
-            continue
+    # walls: a solid subface wall lies on exactly one superface edge; find it
+    # geometrically and inherit from that edge. Works for tri->quad, tri->tri,
+    # quad->quad, any aspect ratio, no diagonal heuristic.
+    charlen = maximum(norm(superVolume.vertices[k] - superVolume.vertices[mod1(k+1, length(superVolume.vertices))])
+                      for k in 1:length(superVolume.vertices))
+    for i in 1:length(subVolume.vertices)
+        subVolume.solidWalls[i] || continue
+        m = (subVolume.vertices[i] + subVolume.vertices[mod1(i + 1, length(subVolume.vertices))]) / 2
+        k, d = containing_edge(superVolume, m)
+        if d < 1e-8 * charlen && superVolume.solidWalls[k]
+            inheritSurfaceProperties!(superVolume, subVolume; from = k, to = i)
+        elseif d >= 1e-8 * charlen
+            @warn "Solid subface wall midpoint not on any superface edge (d=$d); no inheritance" 
         end
     end
 
     # push the subVolume to the list of subVolumes
     push!(superVolume.subVolumes, subVolume)
 
+end
+
+# which superface edge does point p lie on? (edge k spans vertices[k] -> vertices[k+1])
+function containing_edge(superVolume::PolyVolume2D, p)
+    nV = length(superVolume.vertices)
+    best_d, best_k = Inf, 0
+    for k in 1:nV
+        a = superVolume.vertices[k]
+        b = superVolume.vertices[mod1(k + 1, nV)]
+        ab = b - a
+        t  = clamp(dot(p - a, ab) / dot(ab, ab), 0.0, 1.0)
+        d  = norm(p - (a + t * ab))
+        if d < best_d
+            best_d, best_k = d, k
+        end
+    end
+    return best_k, best_d
 end

@@ -11,6 +11,15 @@ println("\n" * "-"^60)
 println("Testing 2D Grey Participating Media")
 println("-"^60)
 
+using RayTraceHeatTransfer
+using Test
+using LinearAlgebra
+using StatsBase
+using StaticArrays
+using GeometryBasics
+using SparseArrays
+using ConvolutionInterpolations
+
 # Analytical reference from Crosbie & Schrenker (1984)
 # Source function along centerline of 1x1 square with one hot wall
 const RELATIVE_TAU_Z = [0.0, 0.00611, 0.02037, 0.04251, 0.07216, 0.10884, 0.15194, 
@@ -22,6 +31,8 @@ const SOURCE_FUNC_CENTER = [0.6293, 0.6198, 0.6017, 0.5767, 0.5460, 0.5108, 0.47
                            0.4323, 0.3919, 0.3525, 0.3153, 0.2810, 0.2500, 0.2224, 
                            0.1981, 0.1768, 0.1584, 0.1424, 0.1287, 0.1171, 0.1073, 
                            0.0992, 0.0930, 0.0885, 0.0863]
+ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
+ANALYTICAL_TOLERANCE = 0.05 # 5% tolerance vs analytical solution (to avoid too much sampling)
 
 #############################################################################
 ### HELPER FUNCTIONS #######################################################

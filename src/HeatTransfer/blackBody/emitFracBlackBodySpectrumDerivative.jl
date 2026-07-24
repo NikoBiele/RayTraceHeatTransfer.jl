@@ -1,10 +1,10 @@
-function emitFracBlackBodySpectrumDerivative(wavelength_bands, temperature, spectral_pos)
+function emitFracBlackBodySpectrumDerivative(wavelength_band_pos, temperature)
     # Skip invalid temperatures
     if !isfinite(temperature) || temperature <= 0.0
         return 0.0
     end
     
-    xi = C2/(wavelength_bands[spectral_pos]*temperature)
+    xi = C2/(wavelength_band_pos*temperature)
     
     # Handle extreme cases
     dF_dT = 0.0
@@ -14,11 +14,11 @@ function emitFracBlackBodySpectrumDerivative(wavelength_bands, temperature, spec
         dF_dT = 0.0
     else        
         # Calculate derivative series
-        for m = 1:10
+        for m = 1:100
             exp_term = exp(-m*xi)
             
             # Early termination if term becomes negligible
-            if exp_term < 1e-15
+            if exp_term < 1e-16
                 break
             end
             

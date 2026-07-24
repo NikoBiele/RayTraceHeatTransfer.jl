@@ -33,10 +33,12 @@ function computeTemperatures!(T::Vector{P}, j::Vector{P}, r::Vector{P},
 end
 
 # Main grey solver for 3D surfaces - ALWAYS solves
-function equilibriumSurfacesGrey3D!(domain::ViewFactorDomain3D, F::Matrix{P}; 
-                                   spectral_bin::Int=1) where {P<:Real}
+function equilibriumSurfacesGrey3D!(domain::ViewFactorDomain3D, F::AbstractMatrix; 
+                                   spectral_bin::Int=1) #where {P<:Real}
     println("=== 3D Surface-Only Grey Solver ===")
     
+    P = Float64
+
     # Count surfaces (no volumes!)
     N_surfs = sum([length(superface.subFaces) for superface in domain.facesMesh])
     n = N_surfs
@@ -50,15 +52,15 @@ function equilibriumSurfacesGrey3D!(domain::ViewFactorDomain3D, F::Matrix{P};
     E_known = ws.work_vec1
     Q_known = ws.work_vec2
     
-    # Step 1: Populate workspace
+    # Populate workspace
     println("Populating workspace...")
     populateWorkspace!(ws, domain, spectral_bin)
     
-    # Step 2: Compute emissive powers
+    # Compute emissive powers
     println("Computing emissive powers...")
     computeEmissivePowers!(E_known, Q_known, ws, N_surfs)
     
-    # Step 3: Compute B matrix (surface reflectivity only!)
+    # Compute B matrix (surface reflectivity only!)
     println("Computing B matrix...")
     B = ws.matrix1
     fill!(B, zero(P))
@@ -75,76 +77,23 @@ function equilibriumSurfacesGrey3D!(domain::ViewFactorDomain3D, F::Matrix{P};
         end
     end
     
-    # Step 4: Compute K matrix
-    println("Computing K matrix...")
-    K = ws.matrix2
-    for i in 1:n
-        for j in 1:n
-            K[i, j] = F[i, j] * B[i, j]
-        end
-    end
-    
-    # Step 5: Solve for S_infty
-    println("Solving for S_infty...")
-    
-    if !has_reflection
-        copyto!(ws.matrix2, F)  # S_infty = F
-    else
-        # (I - K) * S_infty = F
-        for i in 1:n
-            for j in 1:n
-                K[i, j] = (i == j ? 1.0 : 0.0) - K[i, j]
-            end
-        end
-        ws.matrix2 .= K \ F
-    end
-    
-    # matrix2 now contains S_infty
-    
-    # Step 6: Build system matrix M
+    # Build system matrix M
     println("Assembling linear system...")
     M = ws.matrix1  # Reuse matrix1
-    b = ws.work_vec3
+    h = ws.work_vec3
     
     Q_vec_known = ws.bin_Qw_known
     for i in 1:n
-        b[i] = Q_vec_known[i] == 1 ? Q_known[i] : E_known[i]
+        h[i] = Q_vec_known[i] == 1 ? Q_known[i] : E_known[i]
     end
     
-    # Build M using inline helper (clean and efficient!)
-    for i in 1:n
-        for j in 1:n
-            B_ji = getValueB(ws, j)
-            B_ij = getValueB(ws, i)
-            
-            common_term = (1.0 - B_ji) * ws.matrix2[i, j]
-            A_ij = common_term * (1.0 - B_ij)
-            R_ij = common_term * B_ij
-            
-            if Q_vec_known[i] == 1  # Known flux
-                # Need A[j,i] and R[j,i]
-                B_ij_swap = getValueB(ws, j)
-                B_ji_swap = getValueB(ws, i)
-                common_term_swap = (1.0 - B_ji_swap) * ws.matrix2[j, i]
-                A_ji = common_term_swap * (1.0 - B_ij_swap)
-                R_ji = common_term_swap * B_ij_swap
-                
-                M[i, j] = (i == j) ? (1.0 - A_ij - R_ij) : (-A_ji - R_ji)
-            else  # Known temperature
-                # Need R[j,i]
-                B_ij_swap = getValueB(ws, j)
-                B_ji_swap = getValueB(ws, i)
-                common_term_swap = (1.0 - B_ji_swap) * ws.matrix2[j, i]
-                R_ji = common_term_swap * B_ij_swap
-                
-                M[i, j] = (i == j) ? (1.0 - R_ij) : (-R_ji)
-            end
-        end
-    end
+    # Build system matrix M  ==  I − Diagonal(coeff)·Fᵀ
+    coeff = ifelse.(Q_vec_known .== 1, 1.0, 1.0 .- ws.epsw)
+    M .= I - Diagonal(coeff) * permutedims(F)
     
     # Step 7: Solve
     println("Solving linear system...")
-    j = M \ b
+    j = M \ h
     
     # Step 8: Compute absorbed and reflected
     println("Computing absorbed and reflected energies...")
@@ -154,24 +103,13 @@ function equilibriumSurfacesGrey3D!(domain::ViewFactorDomain3D, F::Matrix{P};
     fill!(r, zero(P))
     
     for i in 1:n
-        local_abs = zero(P)
-        local_r = zero(P)
-        
         B_i = getValueB(ws, i)
-        
+        g_i = zero(P)
         for k in 1:n
-            B_k = getValueB(ws, k)
-            
-            common_term = (1.0 - B_i) * ws.matrix2[k, i]
-            A_ki = common_term * (1.0 - B_k)
-            R_ki = common_term * B_k
-            
-            local_abs += A_ki * j[k]
-            local_r += R_ki * j[k]
+            g_i += F[k, i] * j[k]
         end
-        
-        Abs[i] = local_abs
-        r[i] = local_r
+        Abs[i] = (1.0 - B_i) * g_i
+        r[i]   = B_i * g_i
     end
     
     # Step 9: Compute temperatures
