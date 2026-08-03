@@ -10,7 +10,6 @@ using Base.Threads
 using StatsBase
 using SparseArrays
 using Krylov
-using ConvolutionInterpolations
 
 # constants
 const xVecGlobal2D = SVector(1.0, 0.0)
@@ -45,11 +44,12 @@ include(joinpath(@__DIR__, "HeatTransfer","heatTransfer.jl"))
 export PolyVolume2D,
        PolyFace3D, 
        RayTracingDomain2D,
-       RayTracingDomain3D,
        ViewFactorDomain3D,
        viewFactor3D,
        buildSystemMatrix,
        solveEquilibrium!,
        plotMesh,
-       plotField
+       plotField,
+       RayRecorder,
+       collect_rays
 end

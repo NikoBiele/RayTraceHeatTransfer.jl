@@ -172,86 +172,19 @@ mutable struct ViewFactorDomain3D{G,P<:Integer}
     surfaces_only::Bool         # dummy, always true, used for dispatch
 end
 
-#######################
-
-# PolyVolume3D - 3D volumetric element for participating media ray tracing
-# This is the 3D equivalent of PolyVolume2D, representing a hexahedral (box) element
-# Uses nested PolyFace3D structures for faces (consistent with existing architecture)
-
-mutable struct PolyVolume3D{G}
-    
-    # Geometric variables - fixed types, no uncertainty
-    vertices::Union{Nothing, Vector{Point3{G}}}          # 8 vertices for hexahedron (box)
-    faces::Union{Nothing, Vector{PolyFace3D{G}}} # up to 6 faces (each is a PolyFace3D with solidFace field)
-    midPoint::Union{Nothing, Point3{G}}                  # Volume centroid
-    volume::Union{Nothing, G}                            # 3D volume [m^3]
-    subVolumes::Union{Nothing, Vector{Vector{PolyVolume3D{G}}}} # Hierarchical subdivision (one depth vector per 2d volume)
-    
-    # Local gas extinction properties - scalar (grey) or vector (spectral)
-    kappa_g::Union{Nothing, G, Vector{G}}         # absorption coefficient [m^-1]
-    sigma_s_g::Union{Nothing, G, Vector{G}}       # scattering coefficient [m^-1]
-    
-    # State variables (volume) - radiative quantities
-    j_g::Union{Nothing, G, Vector{G}}             # outgoing power [W]
-    g_a_g::Union{Nothing, G, Vector{G}}           # incident absorbed power [W]
-    e_g::Union{Nothing, G, Vector{G}}             # emissive power [W]
-    r_g::Union{Nothing, G, Vector{G}}             # reflected power [W]
-    g_g::Union{Nothing, G, Vector{G}}             # incident power [W]
-    i_g::Union{Nothing, G, Vector{G}}             # total intensity [W*m^(-2)*sr^(-1)]
-    q_in_g::Union{Nothing, G}                     # input source term [W]
-    q_g::Union{Nothing, G}                        # source term [W]
-    T_in_g::Union{Nothing, G}                     # input temperature [K]
-    T_g::Union{Nothing, G}                        # temperature [K]
+# --- for recording rays ---
+struct RayRecorder{P}
+    ids::Vector{P}
+    bin::P
+    origins::Vector{Vector{Point2{Float64}}}
+    endpoints::Vector{Vector{Point2{Float64}}}
 end
 
-# RayTracingDomain3D - Main domain structure for 3D participating media ray tracing
-# This is the 3D equivalent of RayTracingDomain2D
-
-mutable struct RayTracingDomain3D{G}
-    # Mesh hierarchy
-    coarse_mesh::Vector{PolyVolume3D{G}}                   # Vector{PolyVolume3D{G}}
-    # fine_mesh::Vector{Vector{Vector{PolyVolume3D{G}}}}    # Vector{Vector{Vector{PolyVolume3D{G}}}}
-    
-    # Exchange factors
-    F_raw::Union{Matrix{G}, Vector{Matrix{G}}}       # Raw exchange factors
-    F_smooth::Union{Matrix{G}, Vector{Matrix{G}}}    # Smoothed exchange factors
-    
-    # Geometric data
-    surface_areas::Vector{G}           # Areas of all solid faces [m^2]
-    # volumes::Vector{G}                 # Volumes of all cells [m^3]
-    
-    # Index mappings
-    surface_mapping::Dict{Tuple{Int,Int,Int}, Int}  # (coarse, fine, depth, face) -> global surface index
-    # volume_mapping::Dict{Tuple{Int,Int,Int}, Int}   # (coarse, fine) -> global volume index, not necessary
-    
-    # Spectral metadata
-    spectral_mode::Symbol              # :grey, :spectral_uniform, :spectral_variable
-    n_spectral_bins::Int               # Number of spectral bins (1 for grey)
-    wavelength_band_limits::Union{Nothing, Vector{Float64}}  # Wavelength boundaries [μm]
-
-    # use 2d accelerations since it is extruded 2d (search 2d, then 1d)
-
-    # Optimized cache structures (existing)
-    from2d_coarse_face_cache::Union{Nothing, Vector{PolyVolume2D{G}}} # Flattened for direct indexing
-    from2d_fine_face_cache::Union{Nothing, Vector{Vector{PolyVolume2D{G}}}}  # Pre-allocated fine faces
-    
-    # Pre-computed geometric data for faster access
-    from2d_coarse_wall_normals::Union{Nothing, Vector{Vector{Point2}}}  # Outward normals per face
-    from2d_coarse_wall_midpoints::Union{Nothing, Vector{Vector{Point2}}}  # Wall midpoints per face
-    from2d_fine_wall_normals::Union{Nothing, Vector{Vector{Vector{Point2}}}}  # Fine mesh normals
-    from2d_fine_wall_midpoints::Union{Nothing, Vector{Vector{Vector{Point2}}}}  # Fine mesh wall midpoints
-    
-    # Spatial acceleration structures (existing)
-    from2d_coarse_bounding_boxes::Union{Nothing, Vector{Tuple{Point2, Point2}}}  # (min, max) per coarse face
-    from2d_fine_bounding_boxes::Union{Nothing, Vector{Vector{Tuple{Point2, Point2}}}}  # Bounding boxes for fine faces
-    
-    # Optimized spatial acceleration structures
-    from2d_coarse_grid_opt::Union{Nothing, UniformGrid}
-    from2d_coarse_bboxes_opt::Union{Nothing, Vector{BoundingBox2D}}
-    from2d_fine_grids_opt::Union{Nothing, Vector{UniformGrid}}
-    from2d_fine_bboxes_opt::Union{Nothing, Vector{Vector{BoundingBox2D}}}
-    
-    # Energy conservation tracking
-    energy_error::Union{Nothing, G, Vector{G}}
-
+# ---------- macro-surface grouping ----------
+struct MacroSurface
+    normal::Tuple{Float64,Float64}   # unit inward normal (orientation matters)
+    offset::Float64                  # n . x for points on the line
+    weight::Float64                  # summed element areas
+    endpoints::Vector{NTuple{2,Float64}}   # element endpoints (for tests)
+    element_ids::Vector{Int}         # global exchange-matrix indices
 end

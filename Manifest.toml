@@ -2,12 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "b37118f2229a80f3db5057ac3c3c04d574c2c806"
-
-[[deps.AbstractTrees]]
-git-tree-sha1 = "2d9c9a55f9c93e8887ad391fbae72f8ef55e1177"
-uuid = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
-version = "0.4.5"
+project_hash = "baf6bdc2963bf0400a3174e9337031d4f03411dc"
 
 [[deps.AliasTables]]
 deps = ["PtrArrays", "Random"]
@@ -32,12 +27,6 @@ deps = ["Artifacts", "Libdl"]
 uuid = "e66e0078-7015-5450-92f7-15fbd957f2ae"
 version = "1.3.0+1"
 
-[[deps.ConvolutionInterpolations]]
-deps = ["LinearAlgebra", "NearestNeighbors", "Scratch", "Serialization"]
-git-tree-sha1 = "75457c559d63a56fe3d8a8f8d176213577e5b9be"
-uuid = "75b5ba44-29d7-490a-960d-52c835d47405"
-version = "0.18.0"
-
 [[deps.DataAPI]]
 git-tree-sha1 = "abe83f3a2f1b857aac70ef8b269080af17764bbe"
 uuid = "9a962f9c-6df0-11e9-0e5d-c546b8b5ee8a"
@@ -53,20 +42,6 @@ version = "0.19.6"
 deps = ["Printf"]
 uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 version = "1.11.0"
-
-[[deps.Distances]]
-deps = ["LinearAlgebra", "Statistics", "StatsAPI"]
-git-tree-sha1 = "c7e3a542b999843086e2f29dac96a618c105be1d"
-uuid = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
-version = "0.10.12"
-
-    [deps.Distances.extensions]
-    DistancesChainRulesCoreExt = "ChainRulesCore"
-    DistancesSparseArraysExt = "SparseArrays"
-
-    [deps.Distances.weakdeps]
-    ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
-    SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 
 [[deps.Distributed]]
 deps = ["Random", "Serialization", "Sockets"]
@@ -200,12 +175,6 @@ version = "1.2.0"
 uuid = "14a3606d-f60d-562e-9121-12d972cd8159"
 version = "2025.11.4"
 
-[[deps.NearestNeighbors]]
-deps = ["AbstractTrees", "Distances", "StaticArrays"]
-git-tree-sha1 = "ca562494d657e2b69191e440e9c28b9692d67944"
-uuid = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
-version = "0.4.28"
-
 [[deps.NetworkOptions]]
 uuid = "ca575930-c2e3-43a9-ace4-1e988b2c1908"
 version = "1.3.0"
@@ -221,9 +190,9 @@ uuid = "458c3c95-2e84-50aa-8efc-19380b2a3a95"
 version = "3.5.4+0"
 
 [[deps.OrderedCollections]]
-git-tree-sha1 = "05f45c2e0de6259db764adbfd2f1dc6d3f8de13c"
+git-tree-sha1 = "94ba93778373a53bfd5a0caaf7d809c445292ff4"
 uuid = "bac558e1-5e72-5ebc-8fee-abe8a469f55d"
-version = "2.0.1"
+version = "1.8.2"
 
 [[deps.Pkg]]
 deps = ["Artifacts", "Dates", "Downloads", "FileWatching", "LibGit2", "Libdl", "Logging", "Markdown", "Printf", "Random", "SHA", "TOML", "Tar", "UUIDs", "p7zip_jll"]
@@ -270,7 +239,7 @@ uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 version = "1.11.0"
 
 [[deps.RayTraceHeatTransfer]]
-deps = ["ConvolutionInterpolations", "GeometryBasics", "Krylov", "LinearAlgebra", "ProgressMeter", "Random", "SparseArrays", "StaticArrays", "StatsBase"]
+deps = ["GeometryBasics", "Krylov", "LinearAlgebra", "ProgressMeter", "Random", "SparseArrays", "StaticArrays", "StatsBase"]
 path = "."
 uuid = "7cf1493d-886e-405c-b582-53b49fa147b6"
 version = "0.10.0"
@@ -286,12 +255,6 @@ version = "0.10.0"
 [[deps.SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
 version = "0.7.0"
-
-[[deps.Scratch]]
-deps = ["Dates"]
-git-tree-sha1 = "9b81b8393e50b7d4e6d0a9f14e192294d3b7c109"
-uuid = "6c6a2e73-6563-6170-7368-637461726353"
-version = "1.3.0"
 
 [[deps.Serialization]]
 uuid = "9e88b42a-f829-5b0c-bbe9-9e923198166b"

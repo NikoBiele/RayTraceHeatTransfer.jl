@@ -84,14 +84,22 @@ save("fig/mesh_numbering.png", fig, px_per_unit=3)
 
 Volume elements are labelled **g*i*** and wall surfaces **w*i***. The indices shown here are the same indices used in the exchange factor matrix `mesh.F_smooth` and in the system matrices returned by the `buildSystemMatrices!` function (used internally). The system matrices row/column numberings always start with the surfaces, then volumes.
 
-### Step 2: Ray trace and solve
+### Step 2: Ray trace (with optional ray recording)
 
 ```julia
-mesh(10_000_000; method = :exchange);         # Monte Carlo ray tracing
-solveEquilibrium!(mesh, mesh.F_smooth);       # solve GERT system
+record_ids = [10, 20, 30]  # optional ray recording for plotting (element numbers to record emission from)
+rec = RayRecorder(record_ids);  # create the ray recorder (also works in parallel)
+mesh(1_000_000; method = :exchange, rec = rec);  # Monte Carlo ray tracing (optional ray recorder keyword)
+origins, endpoints = collect_rays(rec);  # collect the results, can be used for plotting (one line per ray)
 ```
 
-### Step 3: Validate against Crosbie & Schrenker (1984)
+### Step 3: Solve
+
+```julia
+solveEquilibrium!(mesh, mesh.F_smooth);  # solve GERT system to obtain the steady state
+```
+
+### Step 4: Validate against Crosbie & Schrenker (1984)
 
 The analytical solution for the dimensionless source function S(τ) = (T/T_hot)⁴ along the centerline of this problem is given by Crosbie & Schrenker (1984). Extracting the centerline temperatures from the solved mesh and comparing:
 
@@ -99,7 +107,10 @@ The analytical solution for the dimensionless source function S(τ) = (T/T_hot)�
 using Plots
 
 # --- Left panel: solution temperature field via plotField ---
-p1 = plotField(mesh; field = :T)
+p1 = plotField(mesh; field = :T, transparent_interfaces=true)
+xlabel!(p1, "Position / m")
+ylabel!(p1, "Position / m")
+title!(p1, "Temperature distribution")
 
 # Extract centerline temperatures
 all_temps  = [ff.T_g for ff in mesh.fine_mesh[1]]
@@ -123,10 +134,10 @@ S_ref  = [0.6293, 0.6198, 0.6017, 0.5767, 0.5460, 0.5108, 0.4724,
 
 # --- Bottom panel: centerline validation ---
 p2 = Plots.plot(tau_ref, S_ref,
-    linewidth = 2, color = :black, label = "Analytical (C & S)",
+    linewidth = 2, color = :black, label = "Reference (C & S, 1984)",
     xlabel = "Optical depth τ",
     ylabel = "Dimensionless source function S(τ)",
-    title = "Centerline validation",
+    title = "Centreline validation",
     legend = :topright,
     dpi = 1000,
     guidefontsize = 12,
@@ -309,7 +320,7 @@ end
 
 p = Plots.plot(gas_temps, altitudes ./ 1000,
     linewidth = 2, color = :black, marker = :circle, markersize = 3,
-    ylabel = "Altitude (km)", xlabel = "Temperature (K)",
+    ylabel = "Altitude / km", xlabel = "Temperature / K",
     title = "Atmospheric temperature profile\n(spectral greenhouse effect)",
     legend = false, dpi = 500,
     guidefontsize = 12, tickfontsize = 10,
@@ -417,6 +428,8 @@ This example solves radiative equilibrium in a unit cube with transparent (non-p
 ```julia
 using RayTraceHeatTransfer
 using GLMakie
+GLMakie.activate!()
+Makie.inline!(true)
 
 # Cube vertices
 points = [
@@ -468,14 +481,13 @@ fig
 Calculate analytical view factors directly on the mesh object (requires a convex domain):
 
 ```julia
-domain3D(; parallel=true)
+domain3D(; parallel=true);
 ```
 
 ### Step 5: Solve and visualise
 
 ```julia
-solveEquilibrium!(domain3D, domain3D.F_smooth)
-
+solveEquilibrium!(domain3D, domain3D.F_smooth);
 fig = Figure(size = (800, 700))
 ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
 plotField(ax, domain3D; field = :T)

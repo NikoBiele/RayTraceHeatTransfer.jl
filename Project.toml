@@ -1,10 +1,9 @@
 name = "RayTraceHeatTransfer"
 uuid = "7cf1493d-886e-405c-b582-53b49fa147b6"
-version = "0.10.0"
+version = "0.11.0"
 authors = ["Nikolaj Maack Bielefeld"]
 
 [deps]
-ConvolutionInterpolations = "75b5ba44-29d7-490a-960d-52c835d47405"
 GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
 Krylov = "ba0b0d4f-ebba-5204-a429-3ac8c609bfb7"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -23,7 +22,7 @@ RayTraceHeatTransferMakieExt = "Makie"
 RayTraceHeatTransferPlotsExt = "Plots"
 
 [compat]
-ConvolutionInterpolations = "0.17.1 - 0.18.0"
+ConvolutionInterpolations = "0.17.1 - 0.19.0"
 GeometryBasics = "0.1.0 - 0.5.11"
 Krylov = "0.9.0 - 0.10.8"
 Makie = "0.15.1 - 0.24.13"
@@ -36,7 +35,8 @@ StatsBase = "0.25.1 - 0.34.12"
 julia = "1.10"
 
 [extras]
+ConvolutionInterpolations = "75b5ba44-29d7-490a-960d-52c835d47405"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test"]
+test = ["Test", "ConvolutionInterpolations"]

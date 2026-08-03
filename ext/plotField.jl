@@ -82,14 +82,14 @@ function RayTraceHeatTransfer.plotField(domain::RayTracingDomain2D; field::Symbo
 
     Plots.plot!(p, xlabel="Position (m)", 
                     ylabel="Position (m)",
-                    guidefontsize=20,
-                    tickfontsize=18,
-                    colorbar_titlefontsize=20,
-                    colorbar_tickfontsize=18,
+                    guidefontsize=14,
+                    tickfontsize=14,
+                    colorbar_titlefontsize=14,
+                    colorbar_tickfontsize=14,
                     right_margin=15Plots.mm,
-                    xtickfont=font(18, "Computer Modern"),
-      ytickfont=font(18, "Computer Modern"),
-      colorbar_tickfont=font(18, "Computer Modern"),
+                    xtickfont=font(14, "Computer Modern"),
+      ytickfont=font(14, "Computer Modern"),
+      colorbar_tickfont=font(14, "Computer Modern"),
       colorbar_title_margin=10)
 
     if xlims !== nothing

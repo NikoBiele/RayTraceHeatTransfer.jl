@@ -1,9 +1,10 @@
 function exchangeRayTracing!(rtm::RayTracingDomain2D, rays_tot::P, 
                               nudge::G, max_iters::P,
-                              k_dykstra::Union{Nothing,P}, verbose::Bool) where {G, P<:Integer}
-    
+                              k_dykstra::Union{Nothing,P}, verbose::Bool,
+                              rec::Union{Nothing,RayRecorder}) where {G, P<:Integer}
+
     # Ray trace domain - returns different types based on spectral mode
-    F_raw, rays_per_emitter = parallelRayTracing(rtm, rays_tot, nudge, verbose)
+    F_raw, rays_per_emitter = parallelRayTracing(rtm, rays_tot, nudge, verbose; rec)
 
     if rtm.surfaces_only
         F_raw = F_raw[1:length(rtm.surface_mapping),1:length(rtm.surface_mapping)]
@@ -21,10 +22,11 @@ function exchangeRayTracing!(rtm::RayTracingDomain2D, rays_tot::P,
             verbose && println("Smoothing F matrix for nonuniform spectral bin $bin/$(rtm.n_spectral_bins)")
             F_smooth_bin = smooth_F(
                 F_raw[bin], get_w(rtm; spectral_bin=bin),
+                length(rtm.surface_mapping),
                 max_iters=max_iters,
                 k_dykstra=k_dykstra,
                 verbose=verbose,
-                smooth_surfaces_only=rtm.surfaces_only,
+                smooth_surfaces_only=rtm.surfaces_only
             )
             F_smooth[bin] = F_smooth_bin
         end
@@ -34,10 +36,11 @@ function exchangeRayTracing!(rtm::RayTracingDomain2D, rays_tot::P,
             verbose && println("Smoothing F matrix for uniform spectral bin $representative_bin/$(rtm.n_spectral_bins)")
             F_smooth_bin = smooth_F(
                 F_raw[representative_bin], get_w(rtm; spectral_bin=representative_bin),
+                length(rtm.surface_mapping),
                 max_iters=max_iters,
                 k_dykstra=k_dykstra,
                 verbose=verbose,
-                smooth_surfaces_only=rtm.surfaces_only,
+                smooth_surfaces_only=rtm.surfaces_only
             )
             for j in idx_group
                 F_smooth[j] = F_smooth_bin
@@ -53,7 +56,8 @@ function exchangeRayTracing!(rtm::RayTracingDomain2D, rays_tot::P,
         end
         
         F_smooth = smooth_F(
-            F_raw, get_w(rtm);
+            F_raw, get_w(rtm),
+            length(rtm.surface_mapping),
             max_iters=max_iters,
             k_dykstra=k_dykstra,
             verbose=verbose,

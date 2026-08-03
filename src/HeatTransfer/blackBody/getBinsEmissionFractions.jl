@@ -1,13 +1,3 @@
-# CHANGES vs previous version:
-#  (1) BUG FIX (off-by-one in last bin): previously the last bin's fraction was
-#      computed as 1 - F(limits[K]·T) while bin K-1 ended at limits[K-1], so the
-#      Planck mass of [limits[K-1], limits[K]] was silently dropped and
-#      limits[K+1] was never used. Fractions did not sum to 1 (deficit is
-#      temperature- and binning-dependent). Now bin k spans
-#      [limits[k], limits[k+1]] exactly, with the first bin extended down to 0
-#      and the last bin extended up to ∞ so fractions sum to 1 identically.
-#      (This matches the convention already used by solveTemperatureNewtonRaphson.)
-
 """
     _blackbody_F(λ, T)
 

@@ -88,7 +88,7 @@ function enclosureViewFactors3D(superFaces::Vector{PolyFace3D{G}}, parallel::Boo
     # Apply smoothing
     surface_areas = areas_linear
 
-    F_smooth = smooth_F(F_raw, vcat(surface_areas); max_iters=max_iters, smooth_surfaces_only=true)
+    F_smooth = smooth_F(F_raw, vcat(surface_areas), length(surface_areas); max_iters=max_iters, smooth_surfaces_only=true)
     
     return F_raw, F_smooth
 end

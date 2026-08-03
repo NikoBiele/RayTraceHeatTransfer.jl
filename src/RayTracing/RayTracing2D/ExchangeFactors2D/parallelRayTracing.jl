@@ -1,5 +1,5 @@
 function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P, 
-                                        nudge::G, verbose::Bool) where {P<:Integer, G}
+                                        nudge::G, verbose::Bool; rec=nothing) where {P<:Integer, G}
 
     surface_mapping, volume_mapping, num_surfaces, num_volumes = createIndexMapping(rtm, rays_total)
     num_emitters = num_surfaces + num_volumes
@@ -22,7 +22,7 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
             F_raw_bin = computeExchangeFactorsBin(
                 rtm, rays_per_emitter, nudge, bin,
                 surface_mapping, volume_mapping, num_surfaces,
-                num_volumes, num_emitters, verbose
+                num_volumes, num_emitters, verbose, rec
             )
             F_raw_vector[bin] = F_raw_bin
         end
@@ -34,7 +34,7 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
             F_raw_bin = computeExchangeFactorsBin(
                 rtm, rays_per_emitter, nudge, representative_bin,
                 surface_mapping, volume_mapping, num_surfaces,
-                num_volumes, num_emitters, verbose
+                num_volumes, num_emitters, verbose, rec
             )
             for j in idx_group
                 F_raw_vector[j] = F_raw_bin
@@ -54,7 +54,7 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
         F_raw = computeExchangeFactorsBin(
             rtm, rays_per_emitter, nudge, 1,  # Use bin 1 (doesn't matter for uniform)
             surface_mapping, volume_mapping, num_surfaces,
-            num_volumes, num_emitters, verbose
+            num_volumes, num_emitters, verbose, rec
         )
         
         return F_raw, rays_per_emitter
@@ -64,7 +64,7 @@ end
 function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P,
                                  nudge::G, spectral_bin::P,
                                  surface_mapping, volume_mapping, num_surfaces,
-                                 num_volumes, num_emitters, verbose) where {P<:Integer, G}
+                                 num_volumes, num_emitters, verbose, rec) where {P<:Integer, G}
 
     # Combined, globally-sorted emitter list
     all_emitters = Vector{Tuple{Any, Int}}()
@@ -105,6 +105,7 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P,
 
         for global_emitter_idx in thread_assignments[tid]
             emitter_key, global_idx = all_emitters[global_emitter_idx]
+            recording = rec !== nothing && global_idx in rec.ids && spectral_bin == rec.bin
             empty!(row)
 
             if global_idx <= num_surfaces
@@ -116,6 +117,10 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P,
                     result === nothing && continue
                     a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result...)
                     a == -1 && continue
+                    if recording
+                        push!(rec.origins[tid],   p_emit)
+                        push!(rec.endpoints[tid], result[end])
+                    end
                     row[a] = get(row, a, 0) + 1
                 end
             else
@@ -127,6 +132,10 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P,
                     result === nothing && continue
                     a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result...)
                     a == -1 && continue
+                    if recording
+                        push!(rec.origins[tid],   p_emit)
+                        push!(rec.endpoints[tid], result[end])
+                    end
                     row[a] = get(row, a, 0) + 1
                 end
             end
@@ -180,3 +189,12 @@ function group_uniform_bins(uniform_across_bin::Vector{T}; atol=1e-8, rtol=1e-8)
     end
     return groups, reps, nonuniform
 end
+
+# record ray trajectories
+RayRecorder(ids::Vector{P}; bin::Integer=1, nt::P=Threads.nthreads()) where P =
+    RayRecorder(ids, bin,
+        [Point2{Float64}[] for _ in 1:nt],
+        [Point2{Float64}[] for _ in 1:nt])
+
+collect_rays(r::RayRecorder) =
+    (reduce(vcat, r.origins), reduce(vcat, r.endpoints))
