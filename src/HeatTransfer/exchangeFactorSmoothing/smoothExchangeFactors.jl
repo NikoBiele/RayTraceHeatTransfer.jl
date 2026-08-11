@@ -309,6 +309,7 @@ function DkAP(F_raw::AbstractMatrix, w::AbstractVector,
                 P = G + P - F_smooth
             end
         end
+        delta = delta_perp(F_smooth, w; mode_indicator=:DYK)
         verbose && println("Dykstra projection reached 'k_dykstra' rounds = $k_dykstra. Final perpendicular distance to manifold: δ⟂ = $delta")
         F_smooth = F_smooth ./ sum(F_smooth, dims=2)
         return AP(F_smooth, w, num_surfaces; max_iters=max_iters,

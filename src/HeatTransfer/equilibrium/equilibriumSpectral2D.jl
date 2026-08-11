@@ -490,7 +490,7 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
             emissive, emitFrac, temperatures, sol_j = sweep!(emissive, emitFrac, temperatures, max_iters)
             emissive     = updateSpectralEmission!(rtm, iter, F_matrices, sol_j,
                                                    emitFrac, temperatures, emissive)
-            temperatures = updateTemperaturesSpectral!(rtm, emissive, emitFrac)
+            temperatures = updateTemperaturesSpectral!(rtm, emissive, getBinsEmissionFractions(rtm, temperatures))
             println("Converged after $iter iterations, Final errors: convergence error = $convergence_error")
             break
         end
@@ -501,7 +501,7 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
             emissive, emitFrac, temperatures, sol_j = sweep!(emissive, emitFrac, temperatures, max_iters)
             emissive     = updateSpectralEmission!(rtm, iter, F_matrices, sol_j,
                                                    emitFrac, temperatures, emissive)
-            temperatures = updateTemperaturesSpectral!(rtm, emissive, emitFrac)
+            temperatures = updateTemperaturesSpectral!(rtm, emissive, getBinsEmissionFractions(rtm, temperatures))
         end
     end
 
@@ -626,7 +626,7 @@ function predict_spectral_convergence_rate(rtm::RayTracingDomain2D,
         u_list   = [zeros(G, N) for _ in 1:K]
         for k in 1:K
             ek_v       = (emitFrac[:, k] .+ emissive .* Phi[:, k] .* J_T_diag) .* v
-            rhs_k      = (I - F_matrices[k]*Diagonal(b[:,k])) * ek_v
+            rhs_k      = (I - Diagonal(b[:,k])*F_matrices[k]') * ek_v
             u_list[k] .= DtD_factors[k] \ rhs_k
             Mu_total .+= M_matrices[k] * u_list[k]
         end

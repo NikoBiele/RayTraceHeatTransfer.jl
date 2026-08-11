@@ -49,6 +49,10 @@ using Test
     @testset "3D mixed epsilon grey vs spectral" begin
         include("test_3d_mixed_eps_grey_vs_spectral.jl")
     end
+
+    @testset "Spectral isothermal cavity" begin
+        include("test_spectral_isothermal.jl")
+    end
     
     println("\n" * "="^80)
     println("TEST SUITE COMPLETE")

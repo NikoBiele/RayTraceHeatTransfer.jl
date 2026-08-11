@@ -6,7 +6,6 @@ function buildSystemMatrixVolume(mesh, F::AbstractMatrix;
                    for fine_face in mesh.fine_mesh[i]])
     N_vols = mesh.surfaces_only ? 0 : length([fine_face for i in 1:length(mesh.coarse_mesh) 
                      for fine_face in mesh.fine_mesh[i]])
-    n = N_surfs + N_vols
     
     # Allocate workspace
     ws = OneMatrixWorkspace{Float64}(N_surfs, N_vols)
@@ -22,34 +21,16 @@ function buildSystemMatrixVolume(mesh, F::AbstractMatrix;
     computeEmissivePowersVariable!(mesh, ws, E_known, Q_known)
     
     # Step 3: Compute B matrix (reflectivity/scattering albedo)
-    b = ws.work_vec3
-    fill!(b, zero(Float64))
-    
-    # Check if we need scattering/reflection calculations
-    has_scattering = any(ws.omega_g .> 1e-6)
-    has_reflection = sum(ws.epsw) < n
-    
-    if has_scattering || has_reflection
-        # Surface reflectivity terms
-        for j in 1:N_surfs
-            b[j] = 1.0 - ws.epsw[j]
-        end
-        
-        # Volume scattering terms - use precomputed omega
-        for vol_count in 1:N_vols
-            vol_idx = N_surfs + vol_count
-            b[vol_idx] = ws.omega_g[vol_count]
-        end
-    end
-    
+    b = get_b(mesh)
+
     # Build M matrix (system matrix for solving)
     M = ws.matrix1
     fill!(M, zero(Float64))
     Q_vec_known = vcat(ws.bin_Qw_known, ws.bin_Qg_known)
     
     # Build system matrix M  ==  I − Diagonal(coeff)·Fᵀ
-    coeff = ifelse.(Q_vec_known .== 1, 1.0, b)
-    M = I - Diagonal(coeff) * permutedims(F)
+    coeff = ifelse.(Q_vec_known .== 1, 1.0, b[:,spectral_bin])
+    M = I - Diagonal(coeff) * F'
     
     return M
 end
@@ -80,29 +61,16 @@ function buildSystemMatrixSurface(domain, F::AbstractMatrix;
     computeEmissivePowers!(E_known, Q_known, ws, N_surfs)
     
     # Step 3: Compute B matrix (surface reflectivity only!)
-    B = ws.matrix1
-    fill!(B, zero(Float64))
-    
-    # Check if we need reflection calculations
-    has_reflection = sum(ws.epsw) < N_surfs
-    
-    if has_reflection
-        # Surface reflectivity: B[i,j] = (1 - epsilon_j)
-        for i in 1:n
-            for j in 1:n
-                B[i, j] = 1.0 - ws.epsw[j]
-            end
-        end
-    end
+    b = get_b(domain)
     
     # Build M matrix (system matrix for solving)
     Q_vec_known = ws.bin_Qw_known
     
     # Build system matrix M  ==  I − Diagonal(coeff)·Fᵀ
-    coeff = ifelse.(Q_vec_known .== 1, 1.0, 1.0 .- ws.epsw)
-    M = I - Diagonal(coeff) * permutedims(F)
+    coeff = ifelse.(Q_vec_known .== 1, 1.0, b[1:n,spectral_bin])
+    M = I - Diagonal(coeff) * F'
     
-    return M # D, 
+    return M
 end
 
 function buildSystemMatrix(domain, F::AbstractMatrix;
