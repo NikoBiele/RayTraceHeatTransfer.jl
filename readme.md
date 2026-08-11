@@ -293,9 +293,9 @@ mesh.wavelength_band_limits = λ_edges; # spectral limits
 ### Step 5: Ray trace and solve
 
 ```julia
-mesh(2_000_000; method = :exchange);
+mesh(2_000_000; method = :exchange, k_dykstra=1000); # opt-in to pure Dykstra smoothing
 solveEquilibrium!(mesh, mesh.F_smooth;
-    max_iters = 10_000, convergence_tol = 1e-15);
+    max_iters = 10_000, convergence_tol = 1e-14);
 ```
 
 Ray tracing is performed independently for each spectral bin, computing separate exchange factor matrices that represent the wavelength-dependent extinction. The spectral equilibrium solver then iterates to find the temperature distribution that simultaneously satisfies energy conservation across all bins.
