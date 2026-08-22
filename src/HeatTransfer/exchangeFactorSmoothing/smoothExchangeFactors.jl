@@ -1,17 +1,17 @@
+# ---------------- dual system: built once per mesh ----------------
 struct DualSolver{T}
-    M::Matrix{T}        # reduced-mass weights (OP needs these anyway)
-    rowsum::Vector{T}   # M*1  ⇒  R = M + Diagonal(rowsum)
-    dinv::Vector{T}     # 1 ./ diag(R), Jacobi preconditioner
+    Y::Matrix{T}        # reduced-mass weights (shared with OP)
+    rowsum::Vector{T}   # Y*1  ⇒  R = Y + Diagonal(rowsum)
+    dinv::Vector{T}     # Jacobi preconditioner 1 ./ diag(R)
 end
 
 function DualSolver(w::AbstractVector)
-    w2 = w .^ 2
-    M = (w2 * w2') ./ (w2 .+ w2')
-    rowsum = vec(sum(M, dims = 2))
-    return DualSolver(M, rowsum, 1 ./ (diag(M) .+ rowsum))
+    Y = Y_mat(w)                                # threaded for N > 1000
+    rowsum = vec(sum(Y, dims = 2))
+    return DualSolver(Y, rowsum, 1 ./ (diag(Y) .+ rowsum))
 end
 
-Rmul!(y, S::DualSolver, v) = (mul!(y, S.M, v); @. y += S.rowsum * v; y)
+Rmul!(y, S::DualSolver, v) = (mul!(y, Symmetric(S.Y, :U), v); @. y += S.rowsum * v; y)
 
 function solve_R(S::DualSolver, b; rtol = 1e-14, maxiter = 200)
     x = zeros(eltype(b), length(b))
@@ -28,20 +28,21 @@ function solve_R(S::DualSolver, b; rtol = 1e-14, maxiter = 200)
         @. p = z + beta * p
         rz = rz_new
     end
+    @warn "solve_R: PCG reached maxiter = $maxiter, relative residual $(norm(r)/bn)"
     return x, maxiter
 end
 
 # convergence check
-function delta_R(F_local::AbstractMatrix, w::Vector{T}) where T
-    n = size(F_local, 1)
+function delta_R(F::AbstractMatrix, w::Vector{T}) where T
+    n = size(F, 1)
     d_squared = zero(T)
     @inbounds for i in 1:n
         w_i = w[i]
         for j in (i+1):n
-            if F_local[i,j] > 1e-12 || F_local[j,i] > 1e-12
+            if F[i,j] > 1e-12 || F[j,i] > 1e-12
                 w_j = w[j]
-                x_ij = w_i * F_local[i,j]
-                x_ji = F_local[j,i] * w_j
+                x_ij = w_i * F[i,j]
+                x_ji = F[j,i] * w_j
                 diff = x_ij - x_ji
                 d_squared += diff * diff / (w_i^2 + w_j^2)
             end
@@ -51,17 +52,17 @@ function delta_R(F_local::AbstractMatrix, w::Vector{T}) where T
 end
 
 # parallel convergence check
-function delta_R_parallel(F_local::AbstractMatrix, w::Vector{T}) where T
-    n = size(F_local, 1)
+function delta_R_parallel(F::AbstractMatrix, w::Vector{T}) where T
+    n = size(F, 1)
     d_squared = Threads.Atomic{T}(zero(T))
     Threads.@threads :dynamic for i in 1:n
         w_i = w[i]
         local_d_sum = zero(T)
         @inbounds for j in (i+1):n
-            if F_local[i,j] > 1e-12 || F_local[j,i] > 1e-12
+            if F[i,j] > 1e-12 || F[j,i] > 1e-12
                 w_j = w[j]
-                x_ij = w_i * F_local[i,j]
-                x_ji = F_local[j,i] * w_j
+                x_ij = w_i * F[i,j]
+                x_ji = F[j,i] * w_j
                 diff = x_ij - x_ji
                 local_d_sum += diff * diff / (w_i^2 + w_j^2)
             end
@@ -71,9 +72,9 @@ function delta_R_parallel(F_local::AbstractMatrix, w::Vector{T}) where T
     return sqrt(d_squared[])
 end
 
-function delta_R_M_sparse(M::SparseMatrixCSC, w::AbstractVector, u::Vector{Float64})
-    N = size(M, 1)
-    rows = rowvals(M); vals = nonzeros(M)
+function delta_R_X_sparse(X::SparseMatrixCSC, w::AbstractVector, u::Vector{Float64})
+    N = size(X, 1)
+    rows = rowvals(X); vals = nonzeros(X)
     nc = min(Threads.nthreads(), N)
     bounds = round.(Int, range(0, N, length = nc + 1))
     part = zeros(nc)
@@ -81,7 +82,7 @@ function delta_R_M_sparse(M::SparseMatrixCSC, w::AbstractVector, u::Vector{Float
         s = 0.0
         @inbounds for j in (bounds[c] + 1):bounds[c + 1]
             uj = u[j]; wj2 = w[j]^2
-            @simd for k in nzrange(M, j)
+            @simd for k in nzrange(X, j)
                 i = rows[k]
                 if i < j
                     d = vals[k] * (u[i] - uj)
@@ -94,8 +95,8 @@ function delta_R_M_sparse(M::SparseMatrixCSC, w::AbstractVector, u::Vector{Float
     return sqrt(sum(part))
 end
 
-function delta_R_M_dense(M::Matrix{Float64}, w::AbstractVector, u::Vector{Float64})
-    N = size(M, 1)
+function delta_R_X_dense(X::Matrix{Float64}, w::AbstractVector, u::Vector{Float64})
+    N = size(X, 1)
     nc = min(4 * nthreads(), N)
     bounds = round.(Int, range(0, N, length = nc + 1))
     part = zeros(nc)
@@ -104,7 +105,7 @@ function delta_R_M_dense(M::Matrix{Float64}, w::AbstractVector, u::Vector{Float6
         @inbounds for j in (bounds[c] + 1):bounds[c + 1]
             uj = u[j]; wj2 = w[j]^2
             @simd for i in 1:(j - 1)
-                d = M[i, j] * (u[i] - uj)
+                d = X[i, j] * (u[i] - uj)
                 s += d * d / (w[i]^2 + wj2)
             end
         end
@@ -113,33 +114,37 @@ function delta_R_M_dense(M::Matrix{Float64}, w::AbstractVector, u::Vector{Float6
     return sqrt(sum(part))
 end
 
-function delta_perp(F_local::AbstractMatrix, w::AbstractVector;
-                    mode_indicator::Union{Symbol,Nothing}=nothing,
-                    tperm::Union{Nothing,Vector{Int}}=nothing)
-    N = length(w)
-    if mode_indicator == :DYK
-        # Dykstra rounds (reciprocity violation = 0)
-        b = Diagonal(w)*(F_local*ones(N)-ones(N))
-        # lambda = R_chol \ b
-        dual = DualSolver(w)
-        lambda, iters = solve_R(dual, b)
-        return sqrt(b' * lambda)
-    else
-        if N > 1000
-            delta_R_val = delta_R_parallel(F_local, w)
-        else
-            delta_R_val = delta_R(F_local, w)
-        end
-        if mode_indicator == :AP
-            return delta_R_val # estimate (lower bound)
-        else # mode_indicator == exact, if called in itself
-            # full distance
-            dual = DualSolver(w)
-            _ , b = Xbar_b(F_local, w, dual.M)
-            lambda, iters = solve_R(dual, b)
-            return sqrt(delta_R_val^2 + b' * lambda)
-        end
+# ---------------- raw reciprocity floor of the input (Lemma G.2 quantity) ----------------
+function delta_R_raw(F::SparseMatrixCSC, w::AbstractVector)
+    X = Diagonal(w) * F
+    A = X - X'                                  # antisymmetric part, O(nnz)
+    rows = rowvals(A); vals = nonzeros(A)
+    s = 0.0
+    @inbounds for j in 1:size(A, 2), k in nzrange(A, j)
+        i = rows[k]
+        i < j && (s += vals[k]^2 / (w[i]^2 + w[j]^2))
     end
+    return sqrt(s)
+end
+delta_R_raw(F::AbstractMatrix, w::AbstractVector) =
+    length(w) > 1000 ? delta_R_parallel(F, w) : delta_R(F, w)
+
+function delta_perp(F::AbstractMatrix, w::AbstractVector;
+                    mode_indicator::Union{Symbol,Nothing}=nothing,
+                    dual::Union{Nothing,DualSolver}=nothing)
+    N = length(w)
+    if mode_indicator == :DYK                          # reciprocal iterate: δ_R = 0
+        dual === nothing && (dual = DualSolver(w))
+        b = w .* (vec(sum(F, dims = 2)) .- 1)
+        lambda, _ = solve_R(dual, b)
+        return sqrt(dot(b, lambda))
+    end
+    dR = delta_R_raw(F, w)
+    mode_indicator == :AP && return dR                 # lower bound
+    dual === nothing && (dual = DualSolver(w))
+    _, b = Xbar_b(F, w, dual.Y)
+    lambda, _ = solve_R(dual, b)
+    return sqrt(dR^2 + dot(b, lambda))
 end
 
 function ap_distance_certificate(w::AbstractVector{<:Real};
@@ -204,14 +209,14 @@ function _log_bin(w, t)
     return exp.(la[keep]), n[keep], maximum(d), sum(d)
 end
 
-function cross_coupling_chi(F_local::SparseMatrixCSC, n_surf::Integer; 
+function cross_coupling_chi(F::SparseMatrixCSC, n_surf::Integer; 
                             surfaces_first::Bool=true)
-    N = size(F_local, 1)
+    N = size(F, 1)
     0 ≤ n_surf ≤ N  || throw(ArgumentError("n_surf = $n_surf out of range [0, $N]"))
 
-    rows = rowvals(F_local)
-    vals = nonzeros(F_local)
-    acc  = zero(float(eltype(F_local)))
+    rows = rowvals(F)
+    vals = nonzeros(F)
+    acc  = zero(float(eltype(F)))
 
     # surface predicate for either ordering, lifted out of the hot path
     lo, hi = surfaces_first ? (1, n_surf) : (N - n_surf + 1, N)
@@ -219,106 +224,97 @@ function cross_coupling_chi(F_local::SparseMatrixCSC, n_surf::Integer;
 
     @inbounds for j in 1:N
         col_surf = is_surf(j)
-        for k in nzrange(F_local, j)
+        for k in nzrange(F, j)
             i = rows[k]
             # keep the entry iff exactly one index is a surface ⇒ it lies in F_sg or F_gs
             (is_surf(i) ⊻ col_surf) && (acc += vals[k])
         end
     end
     chi = acc / N
-    nz     = nnz(F_local)
-    Ntot   = size(F_local, 1)
+    nz     = nnz(F)
+    Ntot   = size(F, 1)
     perrow = nz / Ntot
     dens   = nz / Ntot^2
-    mem_GB = Base.summarysize(F_local) / 2^30
+    mem_GB = Base.summarysize(F) / 2^30
 
     return chi, nz, perrow, dens, mem_GB
 end
 
-function M_mat(w::AbstractVector)
+function cross_coupling_chi(F::AbstractMatrix, n_surf::Integer; surfaces_first::Bool=true)
+    N = size(F, 1)
+    0 ≤ n_surf ≤ N || throw(ArgumentError("n_surf = $n_surf out of range [0, $N]"))
+    s = surfaces_first ? (1:n_surf) : ((N - n_surf + 1):N)
+    g = surfaces_first ? ((n_surf + 1):N) : (1:(N - n_surf))
+    acc = sum(@view F[s, g]) + sum(@view F[g, s])
+    nz = count(!iszero, F)
+    return acc / N, nz, nz / N, nz / N^2, Base.summarysize(F) / 2^30
+end
+
+function Y_mat(w::AbstractVector)
     N = length(w)
     if N > 1000
-        M_matrix = zeros(N,N)
+        Y_matrix = zeros(N,N)
         Threads.@threads for i in 1:N
             w2_i = w[i] * w[i]
             for j in 1:N
                 w2_j = w[j] * w[j]
-                M_matrix[i,j] = (w2_i*w2_j)/(w2_i+w2_j)   # reduced-mass weights
+                Y_matrix[i,j] = (w2_i*w2_j)/(w2_i+w2_j)   # reduced-mass weights
             end
         end
-        return M_matrix
+        return Y_matrix
     else
         w2 = w .^ 2
-        M_matrix  = (w2 * w2') ./ (w2 .+ w2')                        # reduced-mass weights
-        return M_matrix
+        Y_matrix  = (w2 * w2') ./ (w2 .+ w2')                        # reduced-mass weights
+        return Y_matrix
     end
 end
 
-function Xbar_b(F_local::AbstractMatrix, w::AbstractVector, M_local::AbstractMatrix)
+function Xbar_b(F::AbstractMatrix, w::AbstractVector, Y::AbstractMatrix)
     N = length(w)
     if N > 1000
-        Xbar = zeros(N,N)
-        b = zeros(N)
+        Xbar = zeros(N, N); b = zeros(N); inv_w = 1 ./ w
         Threads.@threads for i in 1:N
-            inv_wi = 1 / w[i]
-            for j in 1:N
-                Xbar[i,j] = M_local[i,j] * (inv_wi * F_local[i,j] + F_local[j,i] * (1 ./ w[j]))  # weighted symmetrisation
-                b[i] += Xbar[i,j]
+            inv_wi = inv_w[i]; bi = 0.0
+            @inbounds for j in 1:N
+                v = Y[i, j] * (inv_wi * F[i, j] + F[j, i] * inv_w[j])
+                Xbar[i, j] = v; bi += v
             end
-            b[i] -= w[i] # conservation defect
+            b[i] = bi - w[i]
         end
         return Xbar, b
     else
-        Z  = Diagonal(1 ./ w) * F_local     # W⁻² X0
-        Xbar  = M_local .* (Z + Z')         # weighted symmetrisation
-        b  = Xbar * ones(N) - w             # conservation defect
-        return Xbar, b
+        Z = Diagonal(1 ./ w) * F
+        Xbar = Y .* (Z + Z')
+        return Xbar, Xbar * ones(N) - w
     end
 end
 
-function OP(F_OP::AbstractMatrix, w::AbstractVector, M_local::AbstractMatrix) # where P
-    N = length(w)
-    Xbar, b = Xbar_b(F_OP, w, M_local)
-    dual = DualSolver(w)
+function OP(F_OP::AbstractMatrix, w::AbstractVector, dual::DualSolver)
+    Xbar, b = Xbar_b(F_OP, w, dual.Y)
     lambda, iters = solve_R(dual, b)
-    Xstar = Xbar - M_local .* (lambda * ones(N)' + ones(N) * lambda')            # rank-2 correction
+    Xstar = Xbar - dual.Y .* (lambda .+ lambda')      # rank-2 correction, one temporary
     return Diagonal(1 ./ w) * Xstar, iters
 end
 
-function DkAP(F_raw::AbstractMatrix, w::AbstractVector,
-              num_surfaces::Int;
-              k_dykstra::Union{Nothing,Int}=nothing, 
-              max_iters::Int=1000, verbose::Bool=true,
-              nz_over_N::AbstractFloat=1.0)
+function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
+              k_dykstra::Int=0, max_iters::Int=1000, verbose::Bool=true,
+              nz_over_N::Real=length(w))
+    k_dykstra > 0 || return AP(F_raw, w, num_surfaces; max_iters, verbose, nz_over_N)
 
-    if k_dykstra > 0
-        F_smooth = copy(F_raw); P = zeros(size(F_raw))
-        M_matrix = M_mat(w); delta = 100.0
-        for k in 1:k_dykstra
-            G, iters = OP(F_smooth, w, M_matrix)
-            F_smooth = max.(G + P, 0.0)
-            if k % 5 == 0
-                delta = delta_perp(F_smooth, w; mode_indicator=:DYK)
-                verbose && println("Dykstra projection round $k: perpendicular distance to target manifold: δ⟂ = $delta")
-            end
-            if delta < 8*eps(Float64)
-                verbose && println("Dykstra converged in $k rounds ($iters iterations in final inner solve), skipping alternating-projection.")
-                return F_smooth
-            end
-            if k < k_dykstra
-                P = G + P - F_smooth
-            end
+    dual = DualSolver(w)                               # Y, R-diagonal, preconditioner: once
+    F_smooth = copy(F_raw); P = zeros(size(F_raw)); delta = Inf; iters = 0
+    for k in 1:k_dykstra
+        G, iters = OP(F_smooth, w, dual)
+        F_smooth = max.(G + P, 0.0)
+        if k % 5 == 0 || k == k_dykstra
+            delta = delta_perp(F_smooth, w; mode_indicator=:DYK, dual)
+            verbose && println("Dykstra round $k ($iters PCG iterations): δ⟂ = $delta")
         end
-        delta = delta_perp(F_smooth, w; mode_indicator=:DYK)
-        verbose && println("Dykstra projection reached 'k_dykstra' rounds = $k_dykstra. Final perpendicular distance to manifold: δ⟂ = $delta")
-        F_smooth = F_smooth ./ sum(F_smooth, dims=2)
-        return AP(F_smooth, w, num_surfaces; max_iters=max_iters,
-                    nz_over_N=nz_over_N,
-                    verbose=verbose)
-    else
-        return AP(F_raw, w, num_surfaces; max_iters=max_iters, verbose=verbose,
-                    nz_over_N=nz_over_N)
+        delta < 8 * eps(Float64) && break
+        P = G + P - F_smooth
     end
+    F_smooth ./= sum(F_smooth, dims = 2)               # always renormalise, always finalise
+    return AP(F_smooth, w, num_surfaces; max_iters, verbose, nz_over_N)
 end
 
 function get_w(rtm::RayTracingDomain2D; spectral_bin::Int=1)
@@ -475,199 +471,142 @@ function AP_convergence_check(w::AbstractVector, num_surfaces::Int)
     end
 end
 
-function AP(F_AP::AbstractMatrix, w::AbstractVector,
-            num_surfaces::Int;
-            max_iters::Int=1_000,
-            verbose::Bool=true,
-            nz_over_N::AbstractFloat=1.0)
-    
-    # check if convergence is possible
-    AP_convergence_check(w, num_surfaces)
-
-    # get distance certificate
-    mult = ap_distance_certificate(w)
-
-    # Choose solver strategy
-    if F_AP isa SparseMatrixCSC
-        use_sparse = true
-    else
-        use_sparse = false
-        F_AP = Matrix(F_AP)
-    end
-
-    verbose && println("Alternating projection (AP) strategy: Parallel, $(use_sparse ? "sparse" : "dense")")
-
-    # --- stopping machinery -------------------------------------------------
-    N = length(w)
-    target = 8 * eps(Float64)                          # best-case terminal condition
-    guard  = sqrt(N / nz_over_N) * target              # floor-aware acceptance level
-    switch = 4 * guard                                 # below this: check every iteration
-    max_stride = 52                                    # cap on scheduled check stride: abs(log2(eps(Float64)))
-
-    delta_prev = 100.0
-    k_prev = 0
-    k = 0
-    k_next = 0
-    c = 0
-    flat = 0
-    rho_est = 0.5
-    converged = false
-    floor_accepted = false
-
-    M_iter = build_M(F_AP, w)
-    r = zeros(N)
-    mul!(r, Symmetric(M_iter, :U), ones(N))
-    u = w ./ r
-    delta_init = if use_sparse
-        delta_R_M_sparse(M_iter, w, u)
-    else
-        delta_R_M_dense(M_iter, w, u)
-    end
-    
-    delta_best = delta_init
-    verbose && println("Alternating projection (AP), initial perpendicular distance to target manifold: $delta_init ≤ δ⟂ ≤ $(mult*delta_init)")
-    delta = delta_init
-
-    while k < max_iters && delta > target
-        if use_sparse
-            M_iter = all_steps_sparse!(M_iter, w, r, u)
-        else
-            M_iter = all_steps_parallel!(M_iter, w, r, u)
-        end
-        k += 1
-        if k >= k_next
-            delta = if use_sparse
-                delta_R_M_sparse(M_iter, w, u)
-            else
-                delta_R_M_dense(M_iter, w, u)
-            end
-            c += 1
-
-            # contraction-rate estimate over the elapsed stride
-            if c >= 3
-                rho_est = min(max((delta/delta_prev)^(1/max(k - k_prev, 1)), 0.5), 0.9999)
-            end
-
-            # flatness counter: three consecutive checks with <0.1% relative improvement
-            if (c >= 3 && (delta_prev - delta) / max(delta_prev, eps(Float64)) < 1e-3) || (c >= 3 && delta >= delta_best * (1 - 1e-3))
-                flat += 1
-            else
-                flat = 0
-            end
-            delta_best = min(delta_best, delta)
-
-            # acceptance: tight stall-accept OR flatness (floor reached)
-            if (rho_est > 0.99 && delta < guard) || (flat >= 3 && delta < guard)
-                floor_accepted = true
-                verbose && println("Alternating projection (AP) contraction exhausted at iteration $k (floor δ_R ≈ $delta)")
-                break
-            end
-
-            k_prev, delta_prev = k, delta
-
-            # scheduling: rate-based stride above `switch`, per-iteration below;
-            # stride capped so a clamped rho_est can never schedule past reach
-            if delta > switch
-                stride = max(1, ceil(Int, log(delta/target) / log(1/rho_est)))
-                k_next = k + min(stride, max_stride)
-            else
-                k_next = k + 1
-            end
-            verbose && println("Alternating projection (AP) iteration $k: perpendicular distance to target manifold: $delta ≤ δ⟂ ≤ $(mult*delta)")
-        end
-    end
-    converged = delta <= target || floor_accepted
-    # ------------------------------------------------------------------------
-
-    if converged
-        verbose && println("Converged after $k iterations. Final perpendicular distance to manifold: $delta ≤ δ⟂ ≤ $(mult*delta)")
-    else
-        @warn "Alternating projection (AP) reached max_iters = $max_iters. Final perpendicular distance to manifold: $delta ≤ δ⟂ ≤ $(mult*delta)"
-    end
-
-    if delta > delta_init && delta > sqrt(nz_over_N)
-        @warn "Smoothing increased the perpendicular distance to the target manifold."
-        @warn "Use unsmoothed mesh.F_raw instead of mesh.F_smooth."
-    end
-
-    return recover_F(M_iter, r)
-end
-
-function build_M(F::SparseMatrixCSC, w::AbstractVector)
+function build_X(F::SparseMatrixCSC, w::AbstractVector)
     X = Diagonal(w) * F                  # sparse, scales rows
     return 0.5*(X + X')  # sparse + sparse, O(nnz)
 end
 
-function build_M(F::Matrix{Float64}, w::Vector{Float64})
+function build_X(F::Matrix{Float64}, w::Vector{Float64})
     N = size(F, 1)
-    M = similar(F)
+    X = similar(F)
     @threads for j in 1:N
         wj = w[j]
         @inbounds @simd for i in 1:N
-            M[i, j] = 0.5 * (w[i] * F[i, j] + wj * F[j, i])
+            X[i, j] = 0.5 * (w[i] * F[i, j] + wj * F[j, i])
         end
     end
-    return M
+    return X
 end
 
-function recover_F(M_local::SparseMatrixCSC, r::Vector{Float64})
-    N = size(M_local, 1)
-    rows = rowvals(M_local); vals = nonzeros(M_local)
-    @threads for j in 1:N                      # col sums = row sums (M symmetric)
-        s = 0.0
-        @inbounds @simd for k in nzrange(M_local, j)
-            s += vals[k]
-        end
-        r[j] = s
-    end
-    fv = nonzeros(M_local)
-    @threads for j in 1:N
-        @inbounds @simd for k in nzrange(M_local, j)
-            fv[k] = vals[k] / r[rows[k]]
-        end
-    end
-    return M_local # really F
-end
-
-function recover_F(M_local::Matrix{Float64}, r::Vector{Float64})
-    mul!(r, Symmetric(M_local, :U), ones(length(r)))
-    return M_local ./ r
-end
-
-function all_steps_parallel!(M_local::Matrix{Float64}, w::Vector{Float64},
-                             r::Vector{Float64}, u::Vector{Float64})
-    N = size(M_local, 1)
-    mul!(r, Symmetric(M_local, :U), ones(N))
+# row sums and hunger vector of the current iterate
+function hunger!(r::Vector{Float64}, u::Vector{Float64}, X::Matrix{Float64},
+                 w::AbstractVector, e::Vector{Float64})
+    mul!(r, Symmetric(X, :U), e)
     u .= w ./ r
-
-    @threads for j in 1:N
-        uj = u[j]
-        @inbounds @simd for i in 1:N
-            M_local[i, j] *= 0.5 * (u[i] + uj)
-        end
-    end
-    return M_local
 end
 
-function all_steps_sparse!(M_local::SparseMatrixCSC, w::AbstractVector,
-                           r::Vector{Float64}, u::Vector{Float64})
-    N = size(M_local, 1)
-    rows = rowvals(M_local); vals = nonzeros(M_local)
-
-    @threads for j in 1:N
+function hunger!(r::Vector{Float64}, u::Vector{Float64}, X::SparseMatrixCSC,
+                 w::AbstractVector, ::Vector{Float64})
+    vals = nonzeros(X)
+    @threads for j in 1:size(X, 1)                     # column sums = row sums
         s = 0.0
-        @inbounds @simd for k in nzrange(M_local, j)
+        @inbounds @simd for k in nzrange(X, j)
             s += vals[k]
         end
-        r[j] = s
-        u[j] = w[j] / s
+        r[j] = s; u[j] = w[j] / s
     end
+    return u
+end
 
-    @threads for j in 1:N
+# Hadamard scaling X_k -> X_{k+1}
+function scale!(X::Matrix{Float64}, u::Vector{Float64})
+    @threads for j in 1:size(X, 1)
         uj = u[j]
-        @inbounds @simd for k in nzrange(M_local, j)
+        @inbounds @simd for i in 1:size(X, 1)
+            X[i, j] *= 0.5 * (u[i] + uj)
+        end
+    end
+    return X
+end
+
+function scale!(X::SparseMatrixCSC, u::Vector{Float64})
+    rows = rowvals(X); vals = nonzeros(X)
+    @threads for j in 1:size(X, 1)
+        uj = u[j]
+        @inbounds @simd for k in nzrange(X, j)
             vals[k] *= 0.5 * (u[rows[k]] + uj)
         end
     end
-    return M_local
+    return X
+end
+
+delta_R_X(X::SparseMatrixCSC, w, u) = delta_R_X_sparse(X, w, u)
+delta_R_X(X::Matrix{Float64}, w, u) = delta_R_X_dense(X, w, u)
+
+# r is the current row-sum vector of X (from the last hunger! call); no recomputation
+function recover_F(X::SparseMatrixCSC, r::Vector{Float64})
+    rows = rowvals(X); vals = nonzeros(X)
+    @threads for j in 1:size(X, 1)
+        @inbounds @simd for k in nzrange(X, j)
+            vals[k] /= r[rows[k]]
+        end
+    end
+    return X
+end
+recover_F(X::Matrix{Float64}, r::Vector{Float64}) = X ./ r
+
+function AP(F_AP::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
+            max_iters::Int=1_000, verbose::Bool=true,
+            nz_over_N::Real=length(w))
+
+    AP_convergence_check(w, num_surfaces)
+    mult = ap_distance_certificate(w)
+    use_sparse = F_AP isa SparseMatrixCSC
+    use_sparse || (F_AP = Matrix(F_AP))
+    verbose && println("Alternating projection (AP): parallel, $(use_sparse ? "sparse" : "dense")")
+
+    N = length(w)
+    target = 8 * eps(Float64)
+    guard  = sqrt(N / nz_over_N) * target              # floor-aware acceptance: 8·N/√nnz·ε, = 8ε when dense
+    switch = 4 * guard
+    max_stride = 52
+
+    delta_raw = delta_R_raw(F_AP, w)                   # defect of the input (MC-bounded)
+    X_iter = build_X(F_AP, w)
+    r = zeros(N); u = zeros(N); e = ones(N)
+    hunger!(r, u, X_iter, w, e)                        # (X_0, u_0)
+    delta = delta_R_X(X_iter, w, u)                    # defect of the iterate recovered from X_0
+    delta_init = delta; delta_best = delta
+    verbose && println("  raw input: δ_R = $delta_raw;  after first reciprocity projection: $delta ≤ δ⟂ ≤ $(mult*delta)")
+
+    k = 0; k_next = 0; c = 0; flat = 0
+    k_prev = 0; delta_prev = delta; rho_est = 0.5; floor_accepted = false
+
+    while k < max_iters && delta > target
+        scale!(X_iter, u)                              # X_k -> X_{k+1}
+        k += 1
+        hunger!(r, u, X_iter, w, e)                    # (X_k, u_k), needed for the next step anyway
+        if k >= k_next
+            delta = delta_R_X(X_iter, w, u)            # δ_R of the current iterate, no lag
+            c += 1
+            if c >= 3
+                rho_est = min(max((delta / delta_prev)^(1 / max(k - k_prev, 1)), 0.5), 0.9999)
+                flat = delta >= delta_best * (1 - 1e-3) ? flat + 1 : 0
+            end
+            delta_best = min(delta_best, delta)
+            if delta < guard && (rho_est > 0.99 || flat >= 3)
+                floor_accepted = true
+                verbose && println("  contraction exhausted at iteration $k (floor δ_R ≈ $delta)")
+                break
+            end
+            k_prev, delta_prev = k, delta
+            if delta > switch
+                stride = max(1, ceil(Int, log(delta / target) / log(1 / rho_est)))
+                k_next = k + min(stride, max_stride)
+            else
+                k_next = k + 1
+            end
+            verbose && println("  iteration $k: $delta ≤ δ⟂ ≤ $(mult*delta)")
+        end
+    end
+    converged = delta <= target || floor_accepted
+    if converged
+        verbose && println("Converged after $k iterations. Final: $delta ≤ δ⟂ ≤ $(mult*delta)")
+    else
+        @warn "AP reached max_iters = $max_iters. Final: $delta ≤ δ⟂ ≤ $(mult*delta)"
+    end
+    if delta > max(delta_init, guard)
+        @warn "Smoothing increased the distance to the target manifold; use F_raw instead of F_smooth."
+    end
+    return recover_F(X_iter, r)
 end
