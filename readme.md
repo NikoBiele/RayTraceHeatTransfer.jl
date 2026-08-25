@@ -771,9 +771,14 @@ end
 δ_R is the reciprocity defect of the raw view factor matrix — the same initial quantity
 `smooth!` reports in its log:
 
-$$
-\delta_{R}(F) = \sqrt{ \sum_{i<j} \frac{\left(w_{i} F_{ij} - w_{j} F_{ji}\right)^2}{w_{i}^2 + w_{j}^2} }
-$$
+```math
+\delta_{R}(F) =
+\sqrt{
+  \sum_{i<j}
+  \frac{\left(w_i F_{ij} - w_j F_{ji}\right)^2}
+       {w_i^2 + w_j^2}
+}
+```
 
 where $w_i$ is the element weight (surface area in 3D). It is a sum over pairs,
 not a percentage, so it grows with element count too.
