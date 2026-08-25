@@ -38,6 +38,7 @@ plotField(args...; kwargs...) = _notenabled(:plotField)
 include(joinpath(@__DIR__, "Domains", "domains.jl"))
 include(joinpath(@__DIR__, "Meshing", "meshing.jl"))
 include(joinpath(@__DIR__, "RayTracing", "rayTracing.jl"))
+include(joinpath(@__DIR__, "Smoothing", "smooth.jl"))
 include(joinpath(@__DIR__, "HeatTransfer","heatTransfer.jl"))
 
 # export
@@ -51,5 +52,6 @@ export PolyVolume2D,
        plotMesh,
        plotField,
        RayRecorder,
-       collect_rays
+       collect_rays,
+       smooth!
 end

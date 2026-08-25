@@ -57,6 +57,7 @@ ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     domain3D()
+    smooth!(domain3D)
     solveEquilibrium!(domain3D, domain3D.F_smooth)
     
     # Extract temperatures from all subfaces
@@ -107,6 +108,7 @@ end
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     domain3D()
+    smooth!(domain3D)
     solveEquilibrium!(domain3D, domain3D.F_smooth)
     
     # Check that specified temperatures are maintained
@@ -162,6 +164,7 @@ end
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     domain3D()
+    smooth!(domain3D)
     solveEquilibrium!(domain3D, domain3D.F_smooth)
     
     # Calculate total energy balance
@@ -241,6 +244,7 @@ end
     
     domain_base = ViewFactorDomain3D(points_base, faces, Ndim, q_in_w, T_in_w, epsilon)
     domain_base()
+    smooth!(domain_base)
     solveEquilibrium!(domain_base, domain_base.F_smooth)
     
     # Get temperature statistics from base case
@@ -261,6 +265,7 @@ end
             
             domain_rot = ViewFactorDomain3D(points_rot, faces, Ndim, q_in_w, T_in_w, epsilon)
             domain_rot()
+            smooth!(domain_rot)
             solveEquilibrium!(domain_rot, domain_rot.F_smooth)
             
             # Temperature statistics should be invariant
@@ -313,6 +318,7 @@ end
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     domain3D()
+    smooth!(domain3D)
     solveEquilibrium!(domain3D, domain3D.F_smooth)
     
     # Solution should still exist and be physically reasonable

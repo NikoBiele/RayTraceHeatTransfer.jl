@@ -38,6 +38,7 @@ rim(j) = Point2(R * cos(2π * (j - 1) / N_seg), R * sin(2π * (j - 1) / N_seg));
     end;
     mesh = RayTracingDomain2D(faces, divisions);
     mesh(10_000_000; method = :exchange);
+    smooth!(mesh)
     solveEquilibrium!(mesh, mesh.F_smooth);
     T_g = [ff.T_g for fine in mesh.fine_mesh for ff in fine];
     # test for isothermal
@@ -61,6 +62,7 @@ end
     end;
     mesh2 = RayTracingDomain2D(faces2, divisions2);
     mesh2(10_000_000; method = :exchange);
+    smooth!(mesh2)
     solveEquilibrium!(mesh2, mesh2.F_smooth);
 
     T_limit = ((T_hot^4 + 0.0^4) / 2)^(1/4);      # ≈ 840.896 K

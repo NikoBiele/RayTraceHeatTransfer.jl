@@ -5,10 +5,10 @@ A Julia package for radiative heat transfer using Monte Carlo ray tracing and th
 ## Features
 
 - **2D participating media** — absorbing, emitting, and scattering gases with enclosing surfaces
-- **3D surface enclosures** — transparent media with analytical view factors (Narayanaswamy 2015)
+- **3D surface enclosures** — transparent media with semi-analytical view factors (Narayanaswamy 2015)
 - **Grey and spectral** — wavelength-independent or band-resolved radiation with automatic solver selection
-- **Exchange factor smoothing** — iterative reciprocity enforcement for machine-precision reciprocity and energy conservation
-- **Callable domains** — `mesh(N_rays; method=:exchange)` runs ray tracing directly on the domain object
+- **Exchange factor smoothing** — reciprocity and energy conservation enforcement to machine-precision
+- **Four-step workflow** — mesh → ray trace / view factors → smooth → solve
 - **Plotting extensions** — GLMakie and Plots backends for mesh and field visualisation
 
 ## Installation
@@ -24,6 +24,33 @@ For plotting, also install a Makie backend and/or Plots:
 Pkg.add("GLMakie")   # for plotMesh (2D and 3D) and plotField (3D)
 Pkg.add("Plots")     # for plotField (2D)
 ```
+
+## Workflow
+
+Every example below follows the same four steps:
+
+1. **Mesh** — build the geometry and set boundary conditions.
+2. **Exchange factors** — Monte Carlo ray tracing (2D participating media) or
+   analytical view factors (3D surface enclosures), producing exchange
+   factor matrix `F_raw`.
+3. **Smooth** — `smooth!(domain)` projects the exchange factor matrix `F_raw`
+   onto the nearest matrix satisfying reciprocity and energy conservation,
+   producing `F_smooth`.
+4. **Solve** — `solveEquilibrium!(domain, domain.F_smooth)` yields the
+   steady state.
+
+Step 3 is separate because it is a distinct computation with its own cost and
+diagnostics, and because how much work it does varies enormously between
+problems. `F_raw` arrives violating reciprocity: in 2D from Monte Carlo noise,
+in 3D because the view factor formula is ill-conditioned for polygons that
+share an edge and must be evaluated on a slightly perturbed geometry. On a
+triangulated sphere, where every pair of adjacent faces has a nonzero view
+factor, the raw reciprocity defect reaches 90%; smoothing brings it to 10⁻¹⁵
+(see Example 5). Both matrices remain available on the domain, so `F_raw` can
+be inspected or exported, but `F_smooth` is what should be passed to the solver.
+
+Smoothing is cheap relative to the tracing step, so `F_raw` can be traced once
+and smoothed repeatedly with different settings.
 
 ---
 
@@ -45,7 +72,7 @@ vertices = SVector(
 )
 solidWalls = SVector(true, true, true, true) # all walls impenetrable by radiation
 
-face = PolyVolume2D{Float64}(vertices, solidWalls, 1, 1.0, 0.0);  # κ=1, σₛ=0, for the gas volume
+face = PolyVolume2D{Float64}(vertices, solidWalls, 1, 1.0, 0.0)  # κ=1, σₛ=0, for the gas volume
 
 face.T_in_w  = [1000.0, 0.0, 0.0, 0.0]   # bottom hot, rest cold
 face.epsilon = [1.0, 1.0, 1.0, 1.0]       # black walls
@@ -53,7 +80,7 @@ face.T_in_g  = -1.0                         # unknown (solve for this)
 face.q_in_g  = 0.0                          # radiative equilibrium
 
 Ndim = 11  # 11 × 11 elements
-mesh = RayTracingDomain2D([face], [(Ndim, Ndim)]); # mesh the domain
+mesh = RayTracingDomain2D([face], [(Ndim, Ndim)]) # mesh the domain
 ```
 
 ### Understanding the mesh numbering
@@ -88,18 +115,24 @@ Volume elements are labelled **g*i*** and wall surfaces **w*i***. The indices sh
 
 ```julia
 record_ids = [10, 20, 30]  # optional ray recording for plotting (element numbers to record emission from)
-rec = RayRecorder(record_ids);  # create the ray recorder (also works in parallel)
-mesh(1_000_000; method = :exchange, rec = rec);  # Monte Carlo ray tracing (optional ray recorder keyword)
-origins, endpoints = collect_rays(rec);  # collect the results, can be used for plotting (one line per ray)
+rec = RayRecorder(record_ids)  # create the ray recorder (also works in parallel)
+mesh(1_000_000; method = :exchange, rec = rec)  # Monte Carlo ray tracing (optional ray recorder keyword)
+origins, endpoints = collect_rays(rec)  # collect the results, can be used for plotting (one line per ray)
 ```
 
-### Step 3: Solve
+### Step 3: Smooth
 
 ```julia
-solveEquilibrium!(mesh, mesh.F_smooth);  # solve GERT system to obtain the steady state
+smooth!(mesh)  # enforce reciprocity and energy conservation on F_raw
 ```
 
-### Step 4: Validate against Crosbie & Schrenker (1984)
+### Step 4: Solve
+
+```julia
+solveEquilibrium!(mesh, mesh.F_smooth)  # solve GERT system to obtain the steady state
+```
+
+### Step 5: Validate against Crosbie & Schrenker (1984)
 
 The analytical solution for the dimensionless source function S(τ) = (T/T_hot)⁴ along the centerline of this problem is given by Crosbie & Schrenker (1984). Extracting the centerline temperatures from the solved mesh and comparing:
 
@@ -283,19 +316,22 @@ face_sun.q_in_g    = 0.0 # uses temperature
 face_sun.T_in_w    = [0.0, 0.0, 0.0, 0.0] # cold space behind the sun (fully absorbing)
 face_sun.q_in_w    = [0.0, 0.0, 0.0, 0.0] # uses temperature
 
-push!(faces, face_sun);
-push!(divisions, (1, 2)); # each layer must be divided for the ray tracer to work
+push!(faces, face_sun)
+push!(divisions, (1, 2)) # each layer must be divided for the ray tracer to work
 
-mesh = RayTracingDomain2D(faces, divisions); # mesh the domain
-mesh.wavelength_band_limits = λ_edges; # spectral limits
+mesh = RayTracingDomain2D(faces, divisions) # mesh the domain
+mesh.wavelength_band_limits = λ_edges # spectral limits
 ```
 
-### Step 5: Ray trace and solve
+### Step 5: Ray trace, smooth and solve
 
 ```julia
-mesh(2_000_000; method = :exchange, k_dykstra=1000); # opt-in to pure Dykstra smoothing
+mesh(2_000_000; method = :exchange)
+# smooth the ray tracing result to enforce energy conservation and reciprocity
+# opt-in to pure Dykstra smoothing
+smooth!(mesh, k_dykstra=1000)
 solveEquilibrium!(mesh, mesh.F_smooth;
-    max_iters = 10_000, convergence_tol = 1e-14);
+    max_iters = 10_000, convergence_tol = 1e-14)
 ```
 
 Ray tracing is performed independently for each spectral bin, computing separate exchange factor matrices that represent the wavelength-dependent extinction. The spectral equilibrium solver then iterates to find the temperature distribution that simultaneously satisfies energy conservation across all bins.
@@ -353,16 +389,16 @@ At the center of the circle, symmetry provides an analytical limit to validate a
 using RayTraceHeatTransfer
 using GeometryBasics, StaticArrays
 
-N_seg = 16;       # number of wedges
-R     = 1.0;      # circle radius (m)
-T_hot = 1000.0;   # hot half-rim temperature (K)
-kappa = 1.0;      # absorption coefficient (m⁻¹)
+N_seg = 16       # number of wedges
+R     = 1.0      # circle radius (m)
+T_hot = 1000.0   # hot half-rim temperature (K)
+kappa = 1.0      # absorption coefficient (m⁻¹)
 
 # j runs one past N_seg at the last wedge; cos/sin wrap, closing the circle.
-rim(j) = Point2(R * cos(2π * (j - 1) / N_seg), R * sin(2π * (j - 1) / N_seg));
+rim(j) = Point2(R * cos(2π * (j - 1) / N_seg), R * sin(2π * (j - 1) / N_seg))
 
-faces     = PolyVolume2D{Float64}[];
-divisions = Tuple{Int,Int}[];
+faces     = PolyVolume2D{Float64}[]
+divisions = Tuple{Int,Int}[]
 for j in 1:N_seg
     verts = SVector(Point2(0.0, 0.0), rim(j), rim(j + 1))
     # Wall order follows vertex order: (spoke, rim, spoke).
@@ -376,18 +412,19 @@ for j in 1:N_seg
     face.q_in_g  = 0.0     # radiative equilibrium
     push!(faces, face)
     push!(divisions, (11, 11))
-end;
+end
 
-mesh = RayTracingDomain2D(faces, divisions);
+mesh = RayTracingDomain2D(faces, divisions)
 ```
 
 Each wedge is subdivided 11 × 11, exactly as the square in Example 1 — the fine mesh machinery is element-shape agnostic.
 
-### Step 2: Ray trace and solve
+### Step 2: Ray trace, smooth and solve
 
 ```julia
-mesh(10_000_000; method = :exchange);      # Monte Carlo ray tracing
-solveEquilibrium!(mesh, mesh.F_smooth);    # solve GERT system
+mesh(10_000_000; method = :exchange)      # Monte Carlo ray tracing
+smooth!(mesh) # smooth the ray tracing result to enforce energy conservation and reciprocity
+solveEquilibrium!(mesh, mesh.F_smooth)    # solve GERT system
 ```
 
 ### Step 3: Visualise and validate against the center limit
@@ -421,7 +458,7 @@ The package test suite additionally verifies the isothermal limit on this geomet
 
 ## Example 4 — 3D Surface Enclosure
 
-This example solves radiative equilibrium in a unit cube with transparent (non-participating) media. Two opposing faces have prescribed temperatures (1000 K and 0 K); the four side walls are in radiative equilibrium (unknown temperature, zero net heat flux). All surfaces are black (ε = 1). View factors are computed analytically using the method of Narayanaswamy (2015), which means no ray tracing is needed.
+This example solves radiative equilibrium in a unit cube with transparent (non-participating) media. Two opposing faces have prescribed temperatures (1000 K and 0 K); the four side walls are in radiative equilibrium (unknown temperature, zero net heat flux). All surfaces are black (ε = 1). View factors are computed semi-analytically using the formulation of Narayanaswamy (2015), which means no ray tracing is needed.
 
 ### Step 1: Define the cube geometry
 
@@ -463,7 +500,7 @@ epsilon = ones(size(faces, 1))                     # black surfaces
 q_in_w  = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]           # zero net heat flux on sides
 T_in_w  = [1000.0, 0.0, -1.0, -1.0, -1.0, -1.0]    # hot, cold, four unknown
 
-domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon); # mesh domain
+domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon) # mesh domain
 ```
 Faces 1 and 2 are the hot and cold walls at opposing ends of the cube. The four side faces have `T_in_w = -1.0` (unknown) and `q_in_w = 0.0` (radiative equilibrium), so their temperature distributions emerge from the solution.
 
@@ -476,18 +513,35 @@ plotMesh(ax, domain3D)
 fig
 ```
 
-### Step 4: Calculate view factors
+### Step 4: Compute view factors
 
-Calculate analytical view factors directly on the mesh object (requires a convex domain):
+View factors are computed directly on the mesh object (requires a convex
+domain). Rows are normalised on assembly, so `F_raw` conserves energy exactly:
 
 ```julia
-domain3D(; parallel=true);
+domain3D(; parallel=true)
 ```
 
-### Step 5: Solve and visualise
+### Step 5: Smooth
 
 ```julia
-solveEquilibrium!(domain3D, domain3D.F_smooth);
+smooth!(domain3D)  # enforce reciprocity and energy conservation
+```
+
+Energy conservation is exact by construction, so what smoothing recovers here
+is reciprocity. How much work that is depends on the geometry. The contour
+integral is ill-conditioned for polygons sharing an edge, and the
+implementation evaluates such pairs on a slightly perturbed geometry. On the
+cube most adjacent pairs are the coplanar ones within a single face, whose true
+view factor is zero and which the perturbation therefore cannot corrupt; only
+the subcells meeting along the twelve cube edges are affected. The raw
+reciprocity defect is correspondingly small, around 10⁻¹³. Example 5 shows the
+opposite case.
+
+### Step 6: Solve and visualise
+
+```julia
+solveEquilibrium!(domain3D, domain3D.F_smooth)
 fig = Figure(size = (800, 700))
 ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
 plotField(ax, domain3D; field = :T)
@@ -509,7 +563,7 @@ The temperature field shows a smooth gradient from the hot face (1000 K) to the 
 
 This example extends Example 4 from axis-aligned quads to an arbitrary convex triangulated geometry: a unit sphere approximated by recursively subdividing a regular icosahedron. A small hot cap of triangles is placed at the north pole and a matching cold cap at the south pole; all remaining triangles are in radiative equilibrium.
 
-This example demonstrates two features of the package: arbitrary triangulated geometry (view factors are still computed analytically via Narayanaswamy (2015), for any closed convex polyhedron built from planar triangles), and the separate mesh / view factor / solve steps that let the user inspect the mesh before committing to the expensive view factor computation.
+This example demonstrates three features of the package: arbitrary triangulated geometry (view factors are computed via Narayanaswamy (2015) for any closed convex polyhedron built from planar triangles), the separate mesh / view factor / smooth / solve steps that let the user inspect the mesh before committing to the expensive view factor computation, and — as the subdivision level rises — the clearest demonstration of what the smoothing step is for.
 
 ### Step 1: Build and inspect the mesh
 
@@ -606,7 +660,7 @@ T_in_w[hot_ids]  .= 1000.0
 T_in_w[cold_ids] .=    0.0
 
 Ndim = 1
-domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon);
+domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
 
 fig = Figure(size = (800, 700))
 ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
@@ -623,15 +677,25 @@ Inspecting the mesh before committing to the view factor computation is especial
 
 ### Step 2: Compute view factors
 
-Once the mesh looks right, view factors are computed by calling the domain as a functor:
+Once the mesh looks right, view factors are computed by calling the domain as a
+functor:
 
 ```julia
 domain3D(; parallel=true)
 ```
 
-This step performs analytical view factor computation for every pair of subcells, followed by iterative reciprocity smoothing to machine precision. It is typically the most expensive step in the workflow.
+This computes a view factor for every pair of subcells and is typically the
+most expensive step in the workflow. Rows are normalised on assembly, so
+`F_raw` conserves energy exactly; its reciprocity, as shown below, is another
+matter.
 
-### Step 3: Solve and visualise
+### Step 3: Smooth
+
+```julia
+smooth!(domain3D)
+```
+
+### Step 4: Solve and visualise
 
 ```julia
 solveEquilibrium!(domain3D, domain3D.F_smooth)
@@ -682,30 +746,120 @@ for level in levels
     T_in_w[cold_ids] .= T_cold
 
     domain = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-    domain()
-    solveEquilibrium!(domain, domain.F_smooth)
+    domain(; parallel=true, verbose=false)
+    δ_raw = RayTraceHeatTransfer.delta_R(domain.F_raw,
+                                         RayTraceHeatTransfer.get_w(domain))
+    smooth!(domain, verbose=false)
+    solveEquilibrium!(domain, domain.F_smooth; verbose=false)
 
     equilibrium_ids = setdiff(1:n_tri, hot_ids, cold_ids)
     equator_id = equilibrium_ids[argmin(abs.(z_centroids[equilibrium_ids]))]
     T_eq = domain.facesMesh[equator_id].subFaces[1].T_w
     error = abs(T_limit - T_eq)
 
-    println("Level $level: $n_tri triangles → error = $(round(error, digits = 15)) K")
+    println("Level $level: $n_tri triangles → δ_R(F_raw) = $(round(δ_raw, sigdigits=3)), error = $(round(error, digits = 15)) K")
 end
 ```
 
-| Level | Triangles | \|T_equator − T_limit\| (K) |
-|:-----:|:---------:|:----------------------------:|
-|   0   |     20    | 6.8e-2                       |
-|   1   |     80    | 1.1e-13                      |
-|   2   |    320    | 2.0e-11                      |
-|   3   |   1280    | 6.2e-11                      |
+| Level | Triangles | δ_R (F_raw) | \|T_equator − T_limit\| (K) |
+|:-----:|:---------:|:-----------:|:---------------------------:|
+|   0   |     20    |   1.7e-15   | 6.8e-2                      |
+|   1   |     80    |   3.9e-14   | 1.1e-13                     |
+|   2   |    320    |   3.7e-01   | 1.6e-11                     |
+|   3   |   1280    |   1.6e+00   | 4.3e-11                     |
 
-At level 0 the 6+6 cap triangles occupy over half of the sphere's 20-triangle surface, so the equal-proportion-of-caps symmetry that pins every equilibrium triangle to `T_limit` does not hold cleanly: only 8 triangles remain in equilibrium, and the computed equator temperature differs from the limit by about 0.07 K. From level 1 onward the symmetry is well-resolved, and the computed equator temperature matches the analytical limit to machine precision. The residual error grows very slowly with mesh size (from 10⁻¹³ K to 10⁻¹¹ K across a 16× refinement), reflecting accumulated floating-point roundoff in progressively larger linear systems rather than discretisation error. With analytical view factors smoothed to machine precision and machine-precision linear solves, the method carries no meaningful discretisation error beyond floating-point roundoff.
+δ_R is the reciprocity defect of the raw view factor matrix — the same initial quantity
+`smooth!` reports in its log:
+
+$$
+\delta_R(F) = \sqrt{\;\sum_{i<j} \frac{\left(w_i F_{ij} - w_j F_{ji}\right)^2}{w_i^2 + w_j^2}\;}
+$$
+
+where $w_i$ is the element weight (surface area in 3D). It is a sum over pairs,
+not a percentage, so it grows with element count too.
+
+At level 0 the 6+6 caps cover over half the sphere, leaving only 8 equilibrium
+triangles, so the symmetry argument doesn't hold cleanly. From level 1 onward
+the equator temperature matches the analytical limit to within 10⁻¹¹ K.
+
+The δ_R column is why smoothing exists. The view factor integral is
+ill-conditioned for polygons sharing an edge, and is evaluated on a slightly
+perturbed geometry. On the cube this barely matters — most adjacent pairs are
+coplanar with a true view factor of zero. On a sphere every face sees every
+other, so all three neighbours of every triangle carry a perturbed, nonzero
+view factor. Rows are normalised on assembly, so energy conservation holds
+regardless; reciprocity is what breaks. Smoothing drives δ_R to machine
+precision at every level.
 
 ### Reference
 
 Narayanaswamy, A. (2015). "An analytic expression for radiation view factor between two arbitrarily oriented planar polygons." *International Journal of Heat and Mass Transfer*, 91, 841–847.
+
+---
+
+## Example 6 — Mixed Triangular and Quadrilateral Faces
+
+Examples 4 and 5 are single-topology: the cube is all quadrilaterals, the
+icosphere all triangles. A 3D domain can mix the two.
+
+Since `faces` is a matrix, every row has the same width — a triangle is written
+as a four-vertex row with one vertex repeated. The repeated pair is detected at
+mesh time and the face is routed to the triangular mesher.
+
+The geometry here is a shed: a rectangular floor, two quadrilateral roof slopes,
+and two triangular gables.
+
+```julia
+using RayTraceHeatTransfer
+using GLMakie
+GLMakie.activate!()
+Makie.inline!(true)
+
+points = [
+    0.0  0.0  0.0;   # 1
+    2.0  0.0  0.0;   # 2
+    2.0  1.5  0.0;   # 3
+    0.0  1.5  0.0;   # 4
+    0.6  0.0  1.0;   # 5  ridge at y = 0
+    0.6  1.5  1.0    # 6  ridge at y = 1.5
+]
+
+faces = [
+    1 4 3 2;   # floor          (quad)
+    1 5 6 4;   # steep roof     (quad)
+    5 2 3 6;   # shallow roof   (quad)
+    1 2 5 5;   # gable y = 0    (triangle — apex vertex 5 repeated)
+    3 4 6 6    # gable y = 1.5  (triangle — apex vertex 6 repeated)
+]
+
+Ndim    = 7
+epsilon = ones(size(faces, 1))
+q_in_w  = zeros(size(faces, 1))
+T_in_w  = [1000.0, 300.0, -1.0, -1.0, -1.0]
+
+domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon);
+
+fig = Figure(size = (800, 700))
+ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
+plotMesh(ax, domain3D)
+fig
+save("fig/shed_mesh.png", fig, px_per_unit = 3)
+```
+
+![Mixed-topology shed mesh](fig/shed_mesh.png)
+
+Vertex order follows the right-hand rule for outward normals, as in Example 4,
+and the repeated vertex may sit at any position in the row.
+
+The two topologies give different subcell counts at the same `Ndim`: a
+quadrilateral is divided into `Ndim²` cells, a triangle into `Ndim(Ndim+1)/2`.
+
+```julia
+[length(f.subFaces) for f in domain3D.facesMesh]   # [49, 49, 49, 28, 28]
+```
+
+From here the domain proceeds exactly as in Examples 4 and 5 — view factors,
+smoothing, then solve.
 
 ---
 

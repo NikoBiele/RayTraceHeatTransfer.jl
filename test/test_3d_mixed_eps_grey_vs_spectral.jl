@@ -71,6 +71,7 @@ GREY3D_J_RTOL   = 1e-8
     domain_grey = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w,
                                      copy(eps_faces))
     domain_grey()
+    smooth!(domain_grey)
     solveEquilibrium!(domain_grey, domain_grey.F_smooth)
 
     # ---- spectral twin: same epsilon replicated over bins --------------------
@@ -78,6 +79,7 @@ GREY3D_J_RTOL   = 1e-8
     domain_spec = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w,
                                      eps_spectral)
     domain_spec()
+    smooth!(domain_spec)
     domain_spec.wavelength_band_limits = [1.0e-6, 3.0e-6, 8.0e-6, 1.0e-3]
     solveEquilibrium!(domain_spec, domain_spec.F_smooth)
 

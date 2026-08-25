@@ -60,6 +60,7 @@ end
     @testset "$label grey" begin
         mesh = build_diffusion_grey(N_side)
         mesh(N_rays; method = :exchange)
+        smooth!(mesh)
 
         @test (mesh.F_smooth isa SparseMatrixCSC) == expect_sparse
         @test count(<(0.0), mesh.F_smooth) == 0

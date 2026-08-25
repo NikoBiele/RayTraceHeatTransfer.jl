@@ -114,26 +114,24 @@ function RayTraceHeatTransfer.plotField(ax1, domain::ViewFactorDomain3D; field=:
     # Function to get the field value
     value_field = Symbol(string(field) * "_w")
     
-    value_range = extrema([getfield(subface, value_field) for i in 1:length(domain.facesMesh) for subface in domain.facesMesh[i].subFaces])
+    value_range = extrema([getfield(subface, value_field) for superface in domain.facesMesh for subface in superface.subFaces])
     crange = value_range
 
-    num_faces = length(domain.facesMesh)
-    num_subfaces = length(domain.facesMesh[1].subFaces)
-    for i in 1:num_faces # face
-        for p in 1:num_subfaces
-            tri1_x = [domain.facesMesh[i].subFaces[p].vertices[1][1], domain.facesMesh[i].subFaces[p].vertices[2][1], domain.facesMesh[i].subFaces[p].vertices[3][1]]
-            tri1_y = [domain.facesMesh[i].subFaces[p].vertices[1][2], domain.facesMesh[i].subFaces[p].vertices[2][2], domain.facesMesh[i].subFaces[p].vertices[3][2]]
-            tri1_z = [domain.facesMesh[i].subFaces[p].vertices[1][3], domain.facesMesh[i].subFaces[p].vertices[2][3], domain.facesMesh[i].subFaces[p].vertices[3][3]]
+    for superface in domain.facesMesh # face
+        for subface in superface.subFaces
+            tri1_x = [subface.vertices[1][1], subface.vertices[2][1], subface.vertices[3][1]]
+            tri1_y = [subface.vertices[1][2], subface.vertices[2][2], subface.vertices[3][2]]
+            tri1_z = [subface.vertices[1][3], subface.vertices[2][3], subface.vertices[3][3]]
             plot = Makie.mesh!(ax1, tri1_x, tri1_y, tri1_z, 
-                                color = getfield(domain.facesMesh[i].subFaces[p], value_field),
+                                color = getfield(subface, value_field),
                                 colormap = cmap, 
                                 colorrange = crange)
-            if length(domain.facesMesh[i].subFaces[p].vertices) == 4
-                tri2_x = [domain.facesMesh[i].subFaces[p].vertices[1][1], domain.facesMesh[i].subFaces[p].vertices[3][1], domain.facesMesh[i].subFaces[p].vertices[4][1]]
-                tri2_y = [domain.facesMesh[i].subFaces[p].vertices[1][2], domain.facesMesh[i].subFaces[p].vertices[3][2], domain.facesMesh[i].subFaces[p].vertices[4][2]]
-                tri2_z = [domain.facesMesh[i].subFaces[p].vertices[1][3], domain.facesMesh[i].subFaces[p].vertices[3][3], domain.facesMesh[i].subFaces[p].vertices[4][3]]
+            if length(subface.vertices) == 4
+                tri2_x = [subface.vertices[1][1], subface.vertices[3][1], subface.vertices[4][1]]
+                tri2_y = [subface.vertices[1][2], subface.vertices[3][2], subface.vertices[4][2]]
+                tri2_z = [subface.vertices[1][3], subface.vertices[3][3], subface.vertices[4][3]]
                 plot = Makie.mesh!(ax1, tri2_x, tri2_y, tri2_z, 
-                            color = getfield(domain.facesMesh[i].subFaces[p], value_field),
+                            color = getfield(subface, value_field),
                             colormap = cmap, 
                             colorrange = crange)
             end

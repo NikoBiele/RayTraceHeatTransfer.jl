@@ -317,27 +317,39 @@ function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
     return AP(F_smooth, w, num_surfaces; max_iters, verbose, nz_over_N)
 end
 
-function get_w(rtm::RayTracingDomain2D; spectral_bin::Int=1)
-    # Extract surface areas, volumes, and local extinction for specific spectral bin
-    w = zeros(length(rtm.surface_mapping)+length(rtm.volume_mapping))
+function get_w(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D}; spectral_bin::Int=1)
     
-    for ((coarse_idx, fine_idx, wall_idx), surface_idx) in rtm.surface_mapping
-        face = rtm.fine_mesh[coarse_idx][fine_idx]
-        w[surface_idx] = face.area[wall_idx]
-    end
-    for ((coarse_idx, fine_idx), volume_idx) in rtm.volume_mapping
-        face = rtm.fine_mesh[coarse_idx][fine_idx]
-        element_idx = length(rtm.surface_mapping) + volume_idx
-        # Extract local extinction for specific spectral bin
-        if isa(face.kappa_g, Vector)
-            local_beta = face.kappa_g[spectral_bin] + face.sigma_s_g[spectral_bin]
-        else
-            local_beta = face.kappa_g + face.sigma_s_g
+    if typeof(rtm) <: RayTracingDomain2D
+        # Extract surface areas, volumes, and local extinction for specific spectral bin
+        w = zeros(length(rtm.surface_mapping)+length(rtm.volume_mapping))
+        
+        for ((coarse_idx, fine_idx, wall_idx), surface_idx) in rtm.surface_mapping
+            face = rtm.fine_mesh[coarse_idx][fine_idx]
+            w[surface_idx] = face.area[wall_idx]
         end
-        w[element_idx] = max(1e-6, 4*local_beta*face.volume)
+        for ((coarse_idx, fine_idx), volume_idx) in rtm.volume_mapping
+            face = rtm.fine_mesh[coarse_idx][fine_idx]
+            element_idx = length(rtm.surface_mapping) + volume_idx
+            # Extract local extinction for specific spectral bin
+            if isa(face.kappa_g, Vector)
+                local_beta = face.kappa_g[spectral_bin] + face.sigma_s_g[spectral_bin]
+            else
+                local_beta = face.kappa_g + face.sigma_s_g
+            end
+            w[element_idx] = max(1e-6, 4*local_beta*face.volume)
+        end
+        return w
+    elseif typeof(rtm) <: ViewFactorDomain3D
+        w = Float64[]
+        for emitter_face in rtm.facesMesh
+            for emitter_sub in emitter_face.subFaces
+                push!(w, emitter_sub.area)
+            end
+        end
+        return w
+    else
+        error("Unknown domain type $rtm.")
     end
-    
-    return w
 end
 
 function get_b(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D})
@@ -409,18 +421,25 @@ function get_T_current(rtm::RayTracingDomain2D)
 end
 
 # Updated smoothing algorithm
-function smooth_F(F_raw::AbstractMatrix, w::AbstractVector,
-                                 num_surfaces::Int;
+function smooth_F(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D}, F_raw::AbstractMatrix;
                                  max_iters::Int=1_000,
                                  smooth_surfaces_only::Bool=false,
                                  k_dykstra::Union{Nothing,Int}=nothing,
                                  verbose::Bool=true,
-                                 renorm::Bool=true)
+                                 renorm::Bool=true,
+                                 spectral_bin::Int=1)
+
+    w = get_w(rtm; spectral_bin)
+    num_surfaces = if typeof(rtm) <: RayTracingDomain2D
+        length(rtm.surface_mapping)
+    else
+        size(F_raw,1)
+    end
 
     verbose && println("Matrix size: $(length(w))×$(length(w))")
 
     # use for deciding between sparse/dense path and AP/OP
-    if smooth_surfaces_only
+    if rtm.surfaces_only
         off_diag_chi = 0.0 # convex enclosure (deterministic exchange factor, only need polishing, i.e. AP)
         nz_over_N = Float64(length(w))
     else

@@ -60,6 +60,7 @@ CONSISTENCY_TOLERANCE = 0.05  # 5% tolerance for consistency checks (ray tracing
     epsilon_grey = ones(6)
     domain_grey = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon_grey)
     domain_grey()
+    smooth!(domain_grey)
     solveEquilibrium!(domain_grey, domain_grey.F_smooth)
     
     grey_T = Float64[]
@@ -78,6 +79,7 @@ CONSISTENCY_TOLERANCE = 0.05  # 5% tolerance for consistency checks (ray tracing
     domain_spectral = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, 
                                      epsilon_spectral)
     domain_spectral()
+    smooth!(domain_spectral)
     domain_spectral.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     solveEquilibrium!(domain_spectral, domain_spectral.F_smooth)
     
@@ -167,6 +169,7 @@ end
     # Solve spectral problem
     N_rays = 1_000_000
     mesh(N_rays; method=:exchange)
+    smooth!(mesh)
     solveEquilibrium!(mesh, mesh.F_smooth)
     
     # Check that spectral results integrate properly
@@ -244,6 +247,7 @@ end
     domain_black = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, 
                                   epsilon_all_black)
     domain_black()
+    smooth!(domain_black)
     domain_black.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     solveEquilibrium!(domain_black, domain_black.F_smooth)
     
@@ -256,6 +260,7 @@ end
     domain_selective = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w,
                                       epsilon_all_selective)
     domain_selective()
+    smooth!(domain_selective)
     domain_selective.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     solveEquilibrium!(domain_selective, domain_selective.F_smooth)
     
@@ -302,6 +307,7 @@ end
     epsilon_grey = ones(6)
     domain_grey = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon_grey)
     domain_grey()
+    smooth!(domain_grey)
     
     @test domain_grey.spectral_mode == :grey
     @test domain_grey.n_spectral_bins == 1
@@ -314,6 +320,7 @@ end
     domain_spectral = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, 
                                      epsilon_spectral)
     domain_spectral()
+    smooth!(domain_spectral)
     domain_spectral.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     
     @test domain_spectral.spectral_mode == :spectral_uniform || 
@@ -357,6 +364,7 @@ end
     
     domain = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     domain()
+    smooth!(domain)
     domain.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
     solveEquilibrium!(domain, domain.F_smooth)
     

@@ -202,6 +202,7 @@ end
             
             # Run ray tracing with exchange factor method
             mesh(N_rays_total; method=:exchange)
+            smooth!(mesh)
             
             # Solve steady state
             solveEquilibrium!(mesh, mesh.F_smooth)
@@ -253,7 +254,8 @@ end
             
             # Run ray tracing
             mesh(N_rays_total; method=:exchange)
-            
+            smooth!(mesh)
+
             # Solve steady state
             solveEquilibrium!(mesh, mesh.F_smooth)
             
@@ -306,6 +308,7 @@ end
                                           epsilon=epsilon, Ndim=Ndim)
             
             mesh(N_rays_total; method=:exchange)
+            smooth!(mesh)
             solveEquilibrium!(mesh, mesh.F_smooth)
             
             temps = [fine_face.T_g for fine_face in mesh.fine_mesh[1]]
@@ -341,6 +344,7 @@ end
                                   epsilon=epsilon, Ndim=Ndim)
     
     mesh(N_rays_total; method=:exchange)
+    smooth!(mesh)
     solveEquilibrium!(mesh, mesh.F_smooth)
     
     # Check energy error if available

@@ -15,8 +15,6 @@ include(joinpath(@__DIR__, "equilibrium", "setupBoundaryConditions.jl"))
 include(joinpath(@__DIR__, "equilibrium", "solveEquilibrium.jl"))
 include(joinpath(@__DIR__, "equilibrium", "updateSpectralEmission.jl"))
 include(joinpath(@__DIR__, "equilibrium", "updateTemperaturesSpectral.jl"))
-# exchange factor smoothing
-include(joinpath(@__DIR__, "exchangeFactorSmoothing", "smoothExchangeFactors.jl"))
 # heat transfer 2D
 include(joinpath(@__DIR__, "writeResults", "writeResultsToDomain3D.jl"))
 include(joinpath(@__DIR__, "writeResults", "writeTemperaturesHeatSources.jl"))

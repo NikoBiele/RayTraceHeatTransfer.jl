@@ -1,101 +1,55 @@
-function enclosureViewFactors3D(superFaces::Vector{PolyFace3D{G}}, parallel::Bool, max_iters::Int=1000) where G
-    # Calculate dimensions
-    num_faces = length(superFaces)
-    num_subFaces = length(superFaces[1].subFaces)
-    elements = num_faces * num_subFaces
-    
-    # Pre-allocate results
-    F_raw = zeros(elements, elements)
-    areas_linear = Vector{G}(undef, elements)
-    
-    if parallel # use all available threads
-        # Parallelize over emitters (outer loop)
-        @threads for emitter_linear in 1:elements
-            emitter_face, emitter_sub = fromLinear(emitter_linear, num_subFaces)
-            
-            # Set up emitting face geometry
-            vertices1 = superFaces[emitter_face].subFaces[emitter_sub].vertices
-            face1 = Matrix{G}(undef, length(vertices1), 3)
-            for i in 1:length(vertices1)
-                face1[i, :] = vertices1[i]
-            end
-            
-            # Loop over all absorbers for this emitter
-            for absorber_linear in 1:elements
-                if emitter_linear == absorber_linear
-                    F_raw[emitter_linear, absorber_linear] = 0.0
-                    continue
-                end
-                
-                absorber_face, absorber_sub = fromLinear(absorber_linear, num_subFaces)
-                
-                # Set up absorbing face geometry
-                vertices2 = superFaces[absorber_face].subFaces[absorber_sub].vertices
-                face2 = Matrix{G}(undef, length(vertices2), 3)
-                for i in 1:length(vertices2)
-                    face2[i, :] = vertices2[i]
-                end
-                
-                # Calculate view factor
-                result = viewFactor3D(face1, face2)
-                F_raw[emitter_linear, absorber_linear] = occursin("NaN", string(result[1])) ? 0.0 : result[1]
-            end
-            
-            # Store area (only needs to be done once per emitter)
-            result = viewFactor3D(face1, face1)  # Get area from self-calculation
-            areas_linear[emitter_linear] = result[3]
-            superFaces[emitter_face].subFaces[emitter_sub].area = result[3]
+function enclosureViewFactors3D(vfd::ViewFactorDomain3D, parallel::Bool)
+    elements = 0
+    for superface in vfd.facesMesh
+        for subface in superface.subFaces
+            elements += 1
         end
-    else
-        for emitter_linear in 1:elements
-            emitter_face, emitter_sub = fromLinear(emitter_linear, num_subFaces)
+    end
             
-            # Set up emitting face geometry
-            vertices1 = superFaces[emitter_face].subFaces[emitter_sub].vertices
-            face1 = Matrix{G}(undef, length(vertices1), 3)
-            for i in 1:length(vertices1)
-                face1[i, :] = vertices1[i]
+    F_raw        = zeros(elements, elements)
+    faces        = Vector{Matrix{Float64}}(undef, elements)
+
+    # ---- Pass 1: faces vertices --------------------------------
+    k = 0
+    for superface in vfd.facesMesh
+        for subface in superface.subFaces
+            k += 1
+            verts  = subface.vertices
+            face   = Matrix{Float64}(undef, length(verts), 3)
+            for v in eachindex(verts)
+                face[v, :] = verts[v]
             end
-            
-            # Loop over all absorbers for this emitter
-            for absorber_linear in 1:elements
-                if emitter_linear == absorber_linear
-                    F_raw[emitter_linear, absorber_linear] = 0.0
-                    continue
-                end
-                
-                absorber_face, absorber_sub = fromLinear(absorber_linear, num_subFaces)
-                
-                # Set up absorbing face geometry
-                vertices2 = superFaces[absorber_face].subFaces[absorber_sub].vertices
-                face2 = Matrix{G}(undef, length(vertices2), 3)
-                for i in 1:length(vertices2)
-                    face2[i, :] = vertices2[i]
-                end
-                
-                # Calculate view factor
-                result = viewFactor3D(face1, face2)
-                F_raw[emitter_linear, absorber_linear] = occursin("NaN", string(result[1])) ? 0.0 : result[1]
-            end
-            
-            # Store area (only needs to be done once per emitter)
-            result = viewFactor3D(face1, face1)  # Get area from self-calculation
-            areas_linear[emitter_linear] = result[3]
-            superFaces[emitter_face].subFaces[emitter_sub].area = result[3]
+            faces[k] = face
         end
     end
 
-    # Apply smoothing
-    surface_areas = areas_linear
+    # ---- Pass 2: upper triangle -------------------------------
+    fillRow! = function (i)
+        face1 = faces[i]
+        for j in (i + 1):elements
+            v1, v2, A1, A2 = viewFactor3D(face1, faces[j])
+            v1 = (isnan(v1) || v1 < 0.0) ? 0.0 : v1
+            v2 = (isnan(v2) || v2 < 0.0) ? 0.0 : v2
+            F_raw[i, j] = v1
+            F_raw[j, i] = v2
+        end
+    end
 
-    F_smooth = smooth_F(F_raw, vcat(surface_areas), length(surface_areas); max_iters=max_iters, smooth_surfaces_only=true)
-    
-    return F_raw, F_smooth
-end
+    if parallel
+        # Row i costs (elements - i), so a plain @threads split is badly
+        # unbalanced. Pairing i with (elements + 1 - i) makes the work per
+        # task roughly constant.
+        npair = cld(elements, 2)
+        @threads for p in 1:npair
+            fillRow!(p)
+            q = elements + 1 - p
+            q > p && fillRow!(q)
+        end
+    else
+        for i in 1:elements
+            fillRow!(i)
+        end
+    end
 
-# Convert linear index back to 2D indices  
-@inline function fromLinear(linear_idx, num_subFaces)
-    face_idx = div(linear_idx - 1, num_subFaces) + 1
-    subface_idx = mod(linear_idx - 1, num_subFaces) + 1
-    return face_idx, subface_idx
+    return F_raw ./ sum(F_raw, dims=2)
 end

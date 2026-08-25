@@ -63,6 +63,7 @@ const SIGMA = 5.670374419e-8  # Stefan-Boltzmann constant, W/(m^2 K^4)
 
     mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
     mesh(N_rays_total; method = :exchange)
+    smooth!(mesh)
     solveEquilibrium!(mesh, mesh.F_smooth)
 
     @test abs(mesh.energy_error) < ENERGY_TOLERANCE
@@ -109,7 +110,8 @@ end
     face.q_in_g  = 0.0
 
     mesh = RayTracingDomain2D([face], [(Nx, Ny)])
-    mesh(N_rays_total; method = :exchange, k_dykstra=500)
+    mesh(N_rays_total; method = :exchange)
+    smooth!(mesh, k_dykstra=500)
     solveEquilibrium!(mesh, mesh.F_smooth)
 
     @test abs(mesh.energy_error) < ENERGY_TOLERANCE

@@ -1,5 +1,5 @@
 function equilibriumSurfacesSpectral3D!(domain::ViewFactorDomain3D{G,P}, F::Matrix{G}; 
-                               max_iters::Int=1000, convergence_tol::G=1e-12) where {G,P<:Integer}
+                               max_iters::Int=1000, convergence_tol::G=1e-12, verbose::Bool=true) where {G,P<:Integer}
     """
     Solve 3D spectral surface radiation using the optimal solver.
     
@@ -23,18 +23,18 @@ function equilibriumSurfacesSpectral3D!(domain::ViewFactorDomain3D{G,P}, F::Matr
             solver - avoid setting it manually.
             """)
         end
-        println("=== Using DIRECT solver ===")
-        return equilibriumSurfacesSpectral3D_direct!(domain, F)
+        verbose && println("=== Using DIRECT solver ===")
+        return equilibriumSurfacesSpectral3D_direct!(domain, F; verbose=verbose)
     else
-        println("=== Using FULL solver ===")
+        verbose && println("=== Using FULL solver ===")
         return equilibriumSurfacesSpectral3D_full!(domain, F; max_iters=max_iters,
-                                                convergence_tol=convergence_tol)
+                                                convergence_tol=convergence_tol, verbose=verbose)
     end
 end
 
 function equilibriumSurfacesSpectral3D_full!(domain::ViewFactorDomain3D{G,P}, F::AbstractMatrix; 
                                max_iters::Int=1000,
-                               convergence_tol::G=1e-12) where {G,P<:Integer}
+                               convergence_tol::G=1e-12, verbose::Bool=true) where {G,P<:Integer}
     
     # Validate spectral setup at entry
     if isnothing(domain.wavelength_band_limits)
@@ -61,27 +61,27 @@ function equilibriumSurfacesSpectral3D_full!(domain::ViewFactorDomain3D{G,P}, F:
         error("wavelength_band_limits must be strictly increasing (no duplicates)")
     end
 
-    println("=== 3D Spectral Surface Radiation Solver ===")
-    println("Spectral mode: $(domain.spectral_mode)")
-    println("Number of spectral bins: $(domain.n_spectral_bins)")
+    verbose && println("=== 3D Spectral Surface Radiation Solver ===")
+    verbose && println("Spectral mode: $(domain.spectral_mode)")
+    verbose && println("Number of spectral bins: $(domain.n_spectral_bins)")
     
     # Get system size
     N_surfs = sum([length(superface.subFaces) for superface in domain.facesMesh])
     
-    println("\nComputing GERT matrices for each spectral band...")
-    println("(Using same view factor matrix F for all bands)")
+    verbose && println("\nComputing GERT matrices for each spectral band...")
+    verbose && println("(Using same view factor matrix F for all bands)")
     
     # Build system matrices for each spectral band
     # Each band has different epsilon, so different M
     M_matrices = Vector{AbstractMatrix}()
     
     for bin in 1:domain.n_spectral_bins
-        println("  Building matrices for spectral bin $bin...")
+        verbose && println("  Building matrices for spectral bin $bin...")
         M = buildSystemMatrix(domain, F; spectral_bin=bin)
         push!(M_matrices, M)
     end
     
-    println("\nAssembling block matrix structure...")
+    verbose && println("\nAssembling block matrix structure...")
     # Build block matrix (same structure as 2D)
     if F isa SparseMatrixCSC
         block_matrix = spzeros((domain.n_spectral_bins + 1) * N_surfs, 
@@ -110,7 +110,7 @@ function equilibriumSurfacesSpectral3D_full!(domain::ViewFactorDomain3D{G,P}, F:
     Factorization = qr(block_matrix)
     
     # Setup boundary conditions
-    println("Setting up boundary conditions...")
+    verbose && println("Setting up boundary conditions...")
     boundary, temperatures, emissive = setupBoundaryConditions(domain)
     
     # convergence tolerance
@@ -121,7 +121,7 @@ function equilibriumSurfacesSpectral3D_full!(domain::ViewFactorDomain3D{G,P}, F:
     previous_sol_j = zeros(G, domain.n_spectral_bins * N_surfs)
     emitFrac = getBinsEmissionFractions(domain, temperatures)
         
-    println("\nStarting spectral iteration...")
+    verbose && println("\nStarting spectral iteration...")
     for iter = 1:max_iters
         
         # Update emissive powers and temperatures
@@ -140,28 +140,28 @@ function equilibriumSurfacesSpectral3D_full!(domain::ViewFactorDomain3D{G,P}, F:
         convergence_error = norm(sol_j - previous_sol_j) / norm(sol_j)
         previous_sol_j .= sol_j
         if iter % 20 == 0
-            println("Iteration $iter: convergence error = $convergence_error")
+            verbose && println("Iteration $iter: convergence error = $convergence_error")
         end
         
-        println("Iteration $iter: convergence error = $convergence_error")
+        verbose && println("Iteration $iter: convergence error = $convergence_error")
         
         if iter > 1 && convergence_error < convergence_tol
-            println("Converged after $iter iterations")
+            verbose && println("Converged after $iter iterations")
             
             # Compute energy conservation error for each band
             domain.energy_error = G.([sum((I - F') * sol_j[(i - 1) * N_surfs + 1:i * N_surfs]) 
                                for i in 1:domain.n_spectral_bins]) # C_matrices[i]
-            println("Energy conservation errors by band: $(domain.energy_error)")
+            verbose && println("Energy conservation errors by band: $(domain.energy_error)")
             
             break
         end
         
         if iter == max_iters
-            println("Warning: Maximum iterations reached. Final error = $convergence_error")
+            @warn "Warning: Maximum iterations reached. Final error = $convergence_error"
         end
     end
     
-    println("\nWriting spectral results to mesh...")
+    verbose && println("\nWriting spectral results to mesh...")
     for bin in 1:domain.n_spectral_bins
         # Extract solution for this band
         bin_start = (bin - 1) * N_surfs + 1
@@ -194,10 +194,11 @@ function equilibriumSurfacesSpectral3D_full!(domain::ViewFactorDomain3D{G,P}, F:
     # Write temperatures and heat sources
     writeTemperaturesHeatSources!(domain, temperatures)
     
-    println("=== 3D Spectral Solution Complete ===")
+    verbose && println("=== 3D Spectral Solution Complete ===")
 end
 
-function equilibriumSurfacesSpectral3D_direct!(domain::ViewFactorDomain3D{G,P}, F::AbstractMatrix) where {G,P<:Integer}
+function equilibriumSurfacesSpectral3D_direct!(domain::ViewFactorDomain3D{G,P}, F::AbstractMatrix;
+                                                verbose::Bool=true) where {G,P<:Integer}
     """
     OPTIMIZED direct emission solver for 3D non-scattering, non-reflecting problems.
     
@@ -232,25 +233,25 @@ function equilibriumSurfacesSpectral3D_direct!(domain::ViewFactorDomain3D{G,P}, 
         error("wavelength_band_limits must be strictly increasing (no duplicates)")
     end
 
-    println("=== 3D Spectral Surface Radiation Solver (DIRECT) ===")
-    println("Spectral mode: $(domain.spectral_mode)")
-    println("Number of spectral bins: $(domain.n_spectral_bins)")
-    println("Using optimized direct emission solver")
+    verbose && println("=== 3D Spectral Surface Radiation Solver (DIRECT) ===")
+    verbose && println("Spectral mode: $(domain.spectral_mode)")
+    verbose && println("Number of spectral bins: $(domain.n_spectral_bins)")
+    verbose && println("Using optimized direct emission solver")
     
     # Get system size
     N_surfs = sum([length(superface.subFaces) for superface in domain.facesMesh])
     
-    println("\nComputing GERT matrices for each spectral band...")
-    println("(Using same view factor matrix F for all bands)")
+    verbose && println("\nComputing GERT matrices for each spectral band...")
+    verbose && println("(Using same view factor matrix F for all bands)")
     
     M = buildSystemMatrix(domain, F[1:N_surfs,1:N_surfs]; spectral_bin=1) # C, D
     
     # Setup boundary conditions
-    println("Setting up boundary conditions...")
+    verbose && println("Setting up boundary conditions...")
     boundary, temperatures, emissive = setupBoundaryConditions(domain)
     
     # Iteration loop
-    println("\nStarting spectral direct solve...")
+    verbose && println("\nStarting spectral direct solve...")
     # Build reduced system: A_reduced = sum_bin M_bin * Diagonal(emitFrac[:, bin])
     # This is the key optimization! N×N system instead of (n_bins*N)×(n_bins*N)        
     # DIRECT solve
@@ -286,7 +287,7 @@ function equilibriumSurfacesSpectral3D_direct!(domain::ViewFactorDomain3D{G,P}, 
     # Compute energy conservation error for each band
     domain.energy_error = G.([sum((I - F[1:N_surfs,1:N_surfs]') * sol_j[(i - 1) * N_surfs + 1:i * N_surfs]) 
                         for i in 1:domain.n_spectral_bins]) # C
-    println("Energy conservation errors by band: $(domain.energy_error)")
+    verbose && println("Energy conservation errors by band: $(domain.energy_error)")
 
     for bin in 1:domain.n_spectral_bins
         # Extract solution for this band
@@ -320,5 +321,5 @@ function equilibriumSurfacesSpectral3D_direct!(domain::ViewFactorDomain3D{G,P}, 
     # Write temperatures and heat sources
     writeTemperaturesHeatSources!(domain, temperatures)
     
-    println("=== 3D Spectral Solution Complete (DIRECT) ===")
+    verbose && println("=== 3D Spectral Solution Complete (DIRECT) ===")
 end

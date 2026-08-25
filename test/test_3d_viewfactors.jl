@@ -130,6 +130,7 @@ end
     # Create domain and compute view factors
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     domain3D()
+    smooth!(domain3D)
     
     # Test against EES reference
     @test maximum(abs.(domain3D.F_smooth - F_EES)) < VF_TOLERANCE
@@ -230,6 +231,7 @@ end
             # Create domain with rotated geometry
             domain3D = ViewFactorDomain3D(points_rotated, faces, Ndim, q_in_w, T_in_w, epsilon)
             domain3D()
+            smooth!(domain3D)
             
             # Extract unique view factor values (excluding self-view)
             F_unique = Float64[]

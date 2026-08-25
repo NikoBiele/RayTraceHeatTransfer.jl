@@ -1,5 +1,5 @@
 function equilibriumSpectral2D!(rtm::RayTracingDomain2D, F_matrices::Union{AbstractMatrix, Vector{AbstractMatrix}}; 
-                              max_iters::P=1000, convergence_tol=1e-12) where {P<:Integer}
+                              max_iters::P=1000, convergence_tol=1e-12, verbose::Bool=true) where {P<:Integer}
     """
     Solve spectral radiative equilibrium using the optimal solver.
     
@@ -29,19 +29,19 @@ function equilibriumSpectral2D!(rtm::RayTracingDomain2D, F_matrices::Union{Abstr
             Remove the manual assignment, or set :spectral_variable.
             """)
         end
-        println("=== Using DIRECT spectral solver ===")
-        return equilibriumSpectral2D_direct!(rtm, F_matrices)
+        verbose && println("=== Using DIRECT spectral solver ===")
+        return equilibriumSpectral2D_direct!(rtm, F_matrices, verbose)
     elseif rtm.spectral_mode == :spectral_variable
-        println("=== Using FULL spectral solver ===")
+        verbose && println("=== Using FULL spectral solver ===")
         return equilibriumSpectral2D_woodbury!(rtm, F_matrices;
                                           max_iters=max_iters,
-                                          convergence_tol=convergence_tol)
+                                          convergence_tol=convergence_tol, verbose)
     else
         error("spectral_mode must be :spectral_uniform or :spectral_variable but is $(rtm.spectral_mode)")
     end
 end
 
-function equilibriumSpectral2D_direct!(rtm::RayTracingDomain2D, F_matrices::AbstractMatrix) # single F
+function equilibriumSpectral2D_direct!(rtm::RayTracingDomain2D, F_matrices::AbstractMatrix, verbose::Bool=true) # single F
     """
     OPTIMIZED direct emission solver for non-scattering, non-reflecting problems.
     
@@ -93,7 +93,7 @@ function equilibriumSpectral2D_direct!(rtm::RayTracingDomain2D, F_matrices::Abst
     b = get_b(rtm) # reflection-scattering
 
     # Iteration loop
-    println("Starting spectral steady-state direct solve...")
+    verbose && println("Starting spectral steady-state direct solve...")
     
     # the system simplifies
     j_tot = M \ boundary
@@ -124,7 +124,7 @@ function equilibriumSpectral2D_direct!(rtm::RayTracingDomain2D, F_matrices::Abst
     end
     
     # Write spectral results for each bin to mesh
-    println("Writing spectral results to mesh...")
+    verbose && println("Writing spectral results to mesh...")
     for bin in 1:rtm.n_spectral_bins
         # Extract solution for this bin
         bin_start = (bin - 1) * elements_tot + 1
@@ -217,7 +217,7 @@ Results agree between paths to the precision of the linear solves.
 function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
                                           F_matrices::Union{AbstractMatrix, Vector{<:AbstractMatrix}};
                                           max_iters::P=500,
-                                          convergence_tol=0.001) where {P<:Integer}
+                                          convergence_tol=0.001, verbose::Bool=true) where {P<:Integer}
 
     G = Float64
 
@@ -267,8 +267,8 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
     end
 
     # ---- Woodbury precomputation ---------------------------------------------
-    println("==== Building and Factorizing Woodbury blocks ====")
-    println("    Storage: $(use_sparse ? "sparse (LU per band + matrix-free CG inner)" :
+    verbose && println("==== Building and Factorizing Woodbury blocks ====")
+    verbose && println("    Storage: $(use_sparse ? "sparse (LU per band + matrix-free CG inner)" :
                                           "dense (Cholesky per band + dense inner)")")
 
     local solve_inner            # Mu::Vector -> w::Vector
@@ -361,7 +361,7 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
     f_prev    = zeros(G, K * N)
     j_in_prev = zeros(G, K * N)
     have_prev = false
-    println("Starting spectral steady-state iteration (Woodbury)...")
+    verbose && println("Starting spectral steady-state iteration (Woodbury)...")
     # One full sweep: given (emissive, emitFrac, temperatures) as INPUTS,
     # runs the Woodbury solve into sol_j, then updates emission state.
     # Returns (emissive_new, emitFrac_new, temperatures_new).
@@ -460,12 +460,12 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
                 emissive, emitFrac, temperatures, j_b = s_best
                 sol_j .= j_b
                 if λ_best > 0
-                    println("  Newton: accepted λ = $λ_best, ",
+                    verbose && println("  Newton: accepted λ = $λ_best, ",
                             "residual $(round(ϕ_best/ϕ0, sigdigits=3))× plain step")
                     # after an acceptance: 
                     consec_rejects = 0
                 else
-                    println("  Newton: direction rejected (plain step kept)")
+                    verbose && println("  Newton: direction rejected (plain step kept)")
                     # after a rejection:  
                     consec_rejects += 1
                     if consec_rejects >= 3 # && n_reassemble < 3
@@ -483,7 +483,7 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
         previous_sol_j .= sol_j
 
         if iter % 20 == 0
-            println("Iteration $iter: convergence error = $convergence_error")
+            verbose && println("Iteration $iter: convergence error = $convergence_error")
         end
 
         if iter > 1 && convergence_error < convergence_tol
@@ -491,13 +491,12 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
             emissive     = updateSpectralEmission!(rtm, iter, F_matrices, sol_j,
                                                    emitFrac, temperatures, emissive)
             temperatures = updateTemperaturesSpectral!(rtm, emissive, getBinsEmissionFractions(rtm, temperatures))
-            println("Converged after $iter iterations, Final errors: convergence error = $convergence_error")
+            verbose && println("Converged after $iter iterations, Final errors: convergence error = $convergence_error")
             break
         end
 
         if iter == max_iters
-            println("Warning: Maximum iterations reached:")
-            println("Final errors: convergence error = $convergence_error")
+            @warn "Warning: Maximum iterations reached, final errors: convergence error = $convergence_error"
             emissive, emitFrac, temperatures, sol_j = sweep!(emissive, emitFrac, temperatures, max_iters)
             emissive     = updateSpectralEmission!(rtm, iter, F_matrices, sol_j,
                                                    emitFrac, temperatures, emissive)
@@ -507,7 +506,7 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
 
     # ---- Write spectral results back to the domain ---------------------------
     # (adjoint spmv throughout: sparse-safe unchanged)
-    println("Writing spectral results to mesh...")
+    verbose && println("Writing spectral results to mesh...")
     for bin in 1:K
         bin_start = (bin - 1) * N + 1
         bin_end   = bin * N

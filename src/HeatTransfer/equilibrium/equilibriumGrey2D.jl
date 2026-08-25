@@ -77,8 +77,8 @@ function computeTemperaturesVariable!(mesh::RayTracingDomain2D, ws::OneMatrixWor
 end
 
 # Main solver - UNCHANGED except using getValueB
-function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::AbstractMatrix; spectral_bin::N=1) where {N<:Integer} # P<:Real, 
-    println("=== Variable Extinction Memory-Optimized Steady State Solver ===")
+function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::AbstractMatrix; spectral_bin::N=1, verbose::Bool=true) where {N<:Integer} # P<:Real, 
+    verbose && println("=== Variable Extinction Memory-Optimized Steady State Solver ===")
     
     # Count surfaces and volumes
     N_surfs = length(mesh.surface_mapping)
@@ -86,7 +86,7 @@ function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::AbstractMatrix; spectra
     n = N_surfs + N_vols
         
     # Allocate workspace
-    println("Allocating workspace...")
+    verbose && println("Allocating workspace...")
     ws = OneMatrixWorkspace{Float64}(N_surfs, N_vols)
     
     # Use work vectors for main arrays
@@ -94,15 +94,15 @@ function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::AbstractMatrix; spectra
     Q_known = ws.work_vec2
     
     # Step 1: Populate workspace from mesh
-    println("Populating workspace from mesh...")
+    verbose && println("Populating workspace from mesh...")
     populateWorkspace!(ws, mesh, spectral_bin)
     
     # Step 2: Compute emissive powers with variable extinction
-    println("Computing emissive powers with variable extinction...")
+    verbose && println("Computing emissive powers with variable extinction...")
     computeEmissivePowersVariable!(mesh, ws, E_known, Q_known)
     
     # Step 3: Compute B matrix with variable extinction
-    println("Computing B matrix with variable extinction...")
+    verbose && println("Computing B matrix with variable extinction...")
     b = zeros(n)
     
     # Check if we need scattering calculations
@@ -125,7 +125,7 @@ function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::AbstractMatrix; spectra
     end
     
     # Step 4: Build system matrix M directly in matrix1 (overwrite B)
-    println("Assembling linear system...")
+    verbose && println("Assembling linear system...")
     M = ws.matrix1
     fill!(M, zero(Float64))
     h = zeros(n)
@@ -149,7 +149,7 @@ function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::AbstractMatrix; spectra
     M = I - Diagonal(coeff) * permutedims(F)
     
     # Step 5: Solve linear system
-    println("Solving linear system...")
+    verbose && println("Solving linear system...")
     if F isa SparseMatrixCSC
         wkr = GmresWorkspace(M, h; memory = 50)   # GMRES(50): hard cap on the Krylov subspace
         gmres!(wkr, M, h; restart = true, rtol = 1e-12)
@@ -159,7 +159,7 @@ function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::AbstractMatrix; spectra
     end
         
     # Step 6: Compute Abs = A' * j and r = R' * j
-    println("Computing absorbed and reflected energies...")
+    verbose && println("Computing absorbed and reflected energies...")
     Abs = ws.work_vec4
     r = ws.work_vec5
     fill!(Abs, zero(Float64))
@@ -194,19 +194,19 @@ function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::AbstractMatrix; spectra
     end
 
     # Step 9: Compute temperatures with variable extinction
-    println("Computing temperatures with variable extinction...")
+    verbose && println("Computing temperatures with variable extinction...")
     T = ws.work_vec1  # Reuse work_vec1
     computeTemperaturesVariable!(mesh, ws, T, j, r)
     
     # Step 10: Write results to mesh
-    println("Writing results to mesh...")
+    verbose && println("Writing results to mesh...")
     writeResultsToDomain!(mesh, j, Abs, r; T=T, spectral_bin=spectral_bin)
 
     # Step 11: Compute energy conservation error
-    println("Computing energy conservation error...")
+    verbose && println("Computing energy conservation error...")
     mesh.energy_error = sum(j - r - Abs)
     
-    println("=== Variable Extinction Steady State Solution Complete ===")
+    verbose && println("=== Variable Extinction Steady State Solution Complete ===")
     
     return nothing
 end

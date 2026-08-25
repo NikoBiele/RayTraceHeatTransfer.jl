@@ -103,7 +103,7 @@ function meshTriangle(face::PolyVolume2D{G}, Ndim::P) where {G, P<:Integer}
 end
 
 # updated 3d version of meshQuad with spectral support
-function meshTriangle(face::Vector{Vector{G}}, Nx::P, Ny::P) where {G,P<:Integer}
+function meshTriangle(face::Vector{Vector{G}}, Ndim::P) where {G,P<:Integer}
     # save triangle midpoint
     triangle_midPoint = sum(face)/3
     
@@ -166,7 +166,7 @@ function meshTriangle(face::Vector{Vector{G}}, Nx::P, Ny::P) where {G,P<:Integer
     face2 = PolyVolume2D{G}(new_points, new_solid, 1, 1.0, 1.0)
 
     # mesh as if it was a quadrilateral
-    face2 = meshQuad(face2, Nx, Ny)
+    face2 = meshQuad(face2, Ndim, Ndim)
 
     # calculate the projected midpoint on the diagonal
     point_vector = triangle_midPoint[1:2] - startpoint # Vector from the start of the line to the point

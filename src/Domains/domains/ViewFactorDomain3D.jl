@@ -26,10 +26,12 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
     # Create super faces
     superFaces = PolyFace3D[]
     for (i, face_rows) in enumerate(eachrow(faces))
-        if length(face_rows) == 4
+        if length(unique(face_rows)) == 3 || length(face_rows) == 3
+            points3d = [Point3{G}(points[fr,:]) for fr in unique(face_rows)]
+        elseif length(face_rows) == 4
             points3d = [Point3{G}(points[face_rows[j],:]) for j in 1:4]
         else
-            points3d = [Point3{G}(points[face_rows[j],:]) for j in 1:3]
+            error("Superfaces in 3D must consist of 3 or 4 points")
         end
         
         push!(superFaces, PolyFace3D(points3d, true, domain_midpoint, epsilon[i], q_in_w[i], T_in_w[i]))
@@ -38,7 +40,6 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
     # Mesh the faces
     mesh3D = meshFaces(points, faces, Ndims)
     num_faces = length(mesh3D)
-    num_points = length(mesh3D[1][1])
     
     first_epsilon = nothing
     uniform_epsilon = true
@@ -46,7 +47,7 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
         superFaces[i].subFaces = PolyFace3D[]
         
         # First pass: create all subfaces with q=0
-        for j in 1:num_points
+        for j in 1:length(mesh3D[i][1])
             p1 = Point3{G}(mesh3D[i][1][j]...)
             p2 = Point3{G}(mesh3D[i][2][j]...)
             p3 = Point3{G}(mesh3D[i][3][j]...)
@@ -89,14 +90,14 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
                                 spectral_mode, n_bins, nothing, nothing, uniform_epsilon, true)
 end
     
-function (vfd::ViewFactorDomain3D)(; parallel::Bool=true, max_iters::Int=1000)
+function (vfd::ViewFactorDomain3D)(; parallel::Bool=true, verbose::Bool=true)
 
     # Calculate view factors (wavelength-independent!)
-    println("Computing view factors (geometry only, wavelength-independent)...")
-    F_raw, F_smooth = enclosureViewFactors3D(vfd.facesMesh, parallel, max_iters)
+    verbose && println("Computing view factors (geometry only, wavelength-independent)...")
+    F_raw = enclosureViewFactors3D(vfd, parallel)
     
     vfd.F_raw = F_raw
-    vfd.F_smooth = F_smooth
+    vfd.F_smooth = Matrix{Float64}(undef, 2, 2)
 
     return nothing
 end

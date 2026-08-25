@@ -75,7 +75,6 @@ function writeResultsToDomainGrey3D!(domain::ViewFactorDomain3D, T::Vector{P}, j
         end
     end
     
-    println("Grey results written: $surf_count surfaces")
 end
 
 # Spectral mode - write results for a specific spectral bin
@@ -105,7 +104,6 @@ function writeResultsToDomainSpectralBin3D!(domain::ViewFactorDomain3D, j::Vecto
         end
     end
     
-    println("Spectral bin $spectral_bin results written: $surf_count surfaces")
 end
 
 # Grey mode - write scalar results (your existing function with minor fixes)

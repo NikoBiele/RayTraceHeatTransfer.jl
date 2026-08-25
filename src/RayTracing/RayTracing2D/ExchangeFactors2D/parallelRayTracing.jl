@@ -41,7 +41,7 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
             end
         end
 
-        return F_raw_vector, rays_per_emitter
+        return F_raw_vector
         
     else
         # Grey or uniform spectral - single F matrix works for all bins
@@ -57,7 +57,7 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
             num_volumes, num_emitters, verbose, rec
         )
         
-        return F_raw, rays_per_emitter
+        return F_raw
     end
 end
 

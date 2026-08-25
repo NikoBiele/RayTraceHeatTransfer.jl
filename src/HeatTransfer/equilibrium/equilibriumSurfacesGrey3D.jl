@@ -34,8 +34,8 @@ end
 
 # Main grey solver for 3D surfaces - ALWAYS solves
 function equilibriumSurfacesGrey3D!(domain::ViewFactorDomain3D, F::AbstractMatrix; 
-                                   spectral_bin::Int=1) #where {P<:Real}
-    println("=== 3D Surface-Only Grey Solver ===")
+                                   spectral_bin::Int=1, verbose::Bool=true) #where {P<:Real}
+    verbose && println("=== 3D Surface-Only Grey Solver ===")
     
     P = Float64
 
@@ -43,7 +43,7 @@ function equilibriumSurfacesGrey3D!(domain::ViewFactorDomain3D, F::AbstractMatri
     N_surfs = sum([length(superface.subFaces) for superface in domain.facesMesh])
     n = N_surfs
     
-    println("Found $N_surfs surfaces")
+    verbose && println("Found $N_surfs surfaces")
     
     # Allocate workspace
     ws = SurfaceOnlyWorkspace{P}(N_surfs)
@@ -53,15 +53,15 @@ function equilibriumSurfacesGrey3D!(domain::ViewFactorDomain3D, F::AbstractMatri
     Q_known = ws.work_vec2
     
     # Populate workspace
-    println("Populating workspace...")
+    verbose && println("Populating workspace...")
     populateWorkspace!(ws, domain, spectral_bin)
     
     # Compute emissive powers
-    println("Computing emissive powers...")
+    verbose && println("Computing emissive powers...")
     computeEmissivePowers!(E_known, Q_known, ws, N_surfs)
     
     # Compute B matrix (surface reflectivity only!)
-    println("Computing B matrix...")
+    verbose && println("Computing B matrix...")
     B = ws.matrix1
     fill!(B, zero(P))
     
@@ -78,7 +78,7 @@ function equilibriumSurfacesGrey3D!(domain::ViewFactorDomain3D, F::AbstractMatri
     end
     
     # Build system matrix M
-    println("Assembling linear system...")
+    verbose && println("Assembling linear system...")
     M = ws.matrix1  # Reuse matrix1
     h = ws.work_vec3
     
@@ -92,11 +92,11 @@ function equilibriumSurfacesGrey3D!(domain::ViewFactorDomain3D, F::AbstractMatri
     M .= I - Diagonal(coeff) * permutedims(F)
     
     # Step 7: Solve
-    println("Solving linear system...")
+    verbose && println("Solving linear system...")
     j = M \ h
     
     # Step 8: Compute absorbed and reflected
-    println("Computing absorbed and reflected energies...")
+    verbose && println("Computing absorbed and reflected energies...")
     Abs = ws.work_vec4
     r = ws.work_vec5
     fill!(Abs, zero(P))
@@ -113,19 +113,19 @@ function equilibriumSurfacesGrey3D!(domain::ViewFactorDomain3D, F::AbstractMatri
     end
     
     # Step 9: Compute temperatures
-    println("Computing temperatures...")
+    verbose && println("Computing temperatures...")
     T = ws.work_vec1
     computeTemperatures!(T, j, r, ws, N_surfs)
     
     # Step 10: Write results to domain
-    println("Writing results to domain...")
+    verbose && println("Writing results to domain...")
     writeResultsToDomain!(domain, j, Abs, r; T=T, spectral_bin=spectral_bin)
 
     # Step 11: Compute energy conservation error
-    println("Computing energy conservation error...")
+    verbose && println("Computing energy conservation error...")
     domain.energy_error = sum(j - r - Abs)
     
-    println("=== 3D Grey Solution Complete ===")
+    verbose && println("=== 3D Grey Solution Complete ===")
     
     return nothing
 end

@@ -80,6 +80,7 @@ DECOUPLE_J_RTOL = 1e-4    # deterministic shared-F comparison; observed ~1e-10
 
     # ---- trace ONCE ----------------------------------------------------------
     mesh_spec(N_rays; method=:exchange)
+    smooth!(mesh_spec)
     F_shared = mesh_spec.F_smooth
 
     solveEquilibrium!(mesh_spec, F_shared)

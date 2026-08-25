@@ -45,8 +45,9 @@ function _isothermal_spectral_error(κ_bins::Vector{Float64},
         10 .^ range(log10(λ_min), log10(λ_max), length = n_bins + 1)
 
     mesh(N_rays; method = :exchange)
+    smooth!(mesh)
     solveEquilibrium!(mesh, mesh.F_smooth;
-                      max_iters = 10_000, convergence_tol = 1e-15)
+                      max_iters = 10_000, convergence_tol = 1e-14)
 
     return maximum(abs(ff.T_g - T_wall) for ff in mesh.fine_mesh[1])
 end

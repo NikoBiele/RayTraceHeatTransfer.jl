@@ -73,6 +73,7 @@ SHARED_F_J_RTOL   = 1e-4   #     (observed ~1e-12)
 
     # ---- trace ONCE; both solvers consume the identical F --------------------
     mesh_spec(N_rays; method=:exchange)
+    smooth!(mesh_spec)
     F_shared = mesh_spec.F_smooth
 
     solveEquilibrium!(mesh_grey, F_shared[1])

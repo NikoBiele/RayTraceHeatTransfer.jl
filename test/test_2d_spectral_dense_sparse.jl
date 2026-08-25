@@ -65,6 +65,7 @@ end
     @testset "Sparse/dense spectral C&S" begin
         mesh = build_cs_spectral(N_side, n_bins)
         mesh(N_rays; method = :exchange)
+        smooth!(mesh)
 
         @test mesh.spectral_mode == :spectral_variable        # Woodbury dispatch
         @test all(count(<(0.0), F) == 0 for F in mesh.F_smooth)
