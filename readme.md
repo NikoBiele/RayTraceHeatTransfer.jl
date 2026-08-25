@@ -772,7 +772,7 @@ end
 `smooth!` reports in its log:
 
 $$
-\delta_R(F)^2 = \sum_{i<j} \frac{(w_i F_{ij} - w_j F_{ji})^2}{w_i^2 + w_j^2}
+\delta_R(F)=\sqrt{\sum_{i<j}\frac{(w_iF_{ij}-w_jF_{ji})^2}{w_i^2+w_j^2}}
 $$
 
 where $w_i$ is the element weight (surface area in 3D). It is a sum over pairs,
