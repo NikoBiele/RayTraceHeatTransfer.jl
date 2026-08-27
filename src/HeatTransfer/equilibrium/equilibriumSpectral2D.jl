@@ -315,11 +315,10 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
         # ---- existing dense precomputation, unchanged ----
         DtD_factors = Vector{Cholesky{G, Matrix{G}}}(undef, K)
         DtDinv_Mt   = Vector{AbstractMatrix}(undef, K)
-        ridge       = sqrt(eps(real(G))) * one(real(G))
         inner = Matrix{G}(I, N, N)
         for k in 1:K
             Dk   = D_matrices[k]
-            DtDk = Symmetric(Dk' * Dk + ridge * I)
+            DtDk = Symmetric(Dk' * Dk)
             chol = cholesky(DtDk)
             DtD_factors[k] = chol
             DtDinv_Mt[k]   = chol \ Matrix(M_matrices[k]')
