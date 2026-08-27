@@ -5,7 +5,7 @@ using Test
     println("\n" * "="^80)
     println("STARTING TEST SUITE")
     println("="^80)
-    
+
     # Test 3D transparent surfaces (view factors and heat transfer)
     @testset "3D Surfaces (Transparent)" begin
         include("test_3d_viewfactors.jl")
@@ -52,6 +52,10 @@ using Test
 
     @testset "Spectral isothermal cavity" begin
         include("test_spectral_isothermal.jl")
+    end
+
+    @testset "Spectral bin refinement" begin
+        include("test_spectral_bin_refinement.jl")
     end
     
     println("\n" * "="^80)

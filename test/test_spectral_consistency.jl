@@ -20,7 +20,7 @@ using SparseArrays
 using ConvolutionInterpolations
 
 TEMP_TOLERANCE = 5.0  # K, Tolerance for absolute temperature
-ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
+ENERGY_TOLERANCE = 1e-8 # W, Absolute tolerance for energy balance
 CONSISTENCY_TOLERANCE = 0.05  # 5% tolerance for consistency checks (ray tracing vs. exchange factors)
 
 #############################################################################

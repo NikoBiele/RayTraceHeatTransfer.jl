@@ -39,7 +39,7 @@ using GeometryBasics
 using SparseArrays
 using ConvolutionInterpolations
 
-DECOUPLE_J_RTOL = 1e-4    # deterministic shared-F comparison; observed ~1e-10
+DECOUPLE_J_RTOL = 1e-8    # deterministic shared-F comparison; observed ~1e-10
 
 @testset "Selective epsilon: per-bin vs independent grey solves" begin
     # ---- configuration -------------------------------------------------------
@@ -133,7 +133,7 @@ DECOUPLE_J_RTOL = 1e-4    # deterministic shared-F comparison; observed ~1e-10
 
         @testset "bin $bin (eps = $(eps_bins[bin]))" begin
             @test all(isapprox.(j_spec_bins[:, bin], j_grey;
-                                rtol=DECOUPLE_J_RTOL, atol=1e-4))
+                                rtol=DECOUPLE_J_RTOL, atol=1e-8))
         end
     end
 end

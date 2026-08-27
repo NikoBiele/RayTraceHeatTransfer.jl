@@ -33,7 +33,7 @@ using SparseArrays
 using ConvolutionInterpolations
 
 GREY3D_TEMP_TOL = 1e-6   # K; deterministic F, solver-precision comparison
-GREY3D_J_RTOL   = 1e-8
+GREY3D_J_RTOL   = 1e-9
 
 @testset "3D Shared Grey vs Spectral (mixed epsilon)" begin
     # ---- unit cube, standard connectivity from the existing 3D tests ---------
@@ -134,7 +134,7 @@ GREY3D_J_RTOL   = 1e-8
         end
     end
     mask = e_grey .> 1e-8
-    @test all(isapprox.(e_spec[mask], e_grey[mask]; rtol=1e-6))
+    @test all(isapprox.(e_spec[mask], e_grey[mask]; rtol=1e-9))
 end
 
 println("✓ 3D Grey vs Spectral consistency tests complete")

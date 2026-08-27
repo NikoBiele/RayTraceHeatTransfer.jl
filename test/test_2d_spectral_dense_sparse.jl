@@ -83,6 +83,6 @@ end
         @test err_smooth < err_raw
         @test err_smooth < 0.05
         # per-bin energy conservation from the Woodbury solve
-        @test maximum(abs.(mesh.energy_error)) < 1e-6
+        @test maximum(abs.(mesh.energy_error)) < 1e-8
     end
 end

@@ -31,8 +31,8 @@ using SparseArrays
 using ConvolutionInterpolations
 
 # Deterministic solver-level comparison => tight tolerances.
-SHARED_F_TEMP_TOL = 1e-4   # K   (observed agreement ~1e-10; margin for platform variation)
-SHARED_F_J_RTOL   = 1e-4   #     (observed ~1e-12)
+SHARED_F_TEMP_TOL = 1e-7   # K   (observed agreement ~1e-10; margin for platform variation)
+SHARED_F_J_RTOL   = 1e-9   #     (observed ~1e-12)
 
 @testset "Shared-F Grey vs Spectral (nonuniform b)" begin
     T_hot, T_cold  = 1000.0, 0.0
@@ -119,7 +119,7 @@ SHARED_F_J_RTOL   = 1e-4   #     (observed ~1e-12)
         Tg = mesh_grey.fine_mesh[ci][fi].T_g
         Ts = mesh_spec.fine_mesh[ci][fi].T_g
         if Tg > 1.0
-            @test isapprox((Ts / Tg)^4, 1.0; atol=1e-4)
+            @test isapprox((Ts / Tg)^4, 1.0; atol=1e-8)
         end
     end
 end

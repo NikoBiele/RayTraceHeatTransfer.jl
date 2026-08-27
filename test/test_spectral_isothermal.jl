@@ -53,7 +53,7 @@ function _isothermal_spectral_error(κ_bins::Vector{Float64},
 end
 
 @testset "Isothermal enclosure — spectral solver paths" begin
-    tol = 1e-3   # kelvin
+    tol = 1e-9   # kelvin
     n_bins = 5
 
     @testset "uniform kappa and epsilon (shared-F direct path)" begin

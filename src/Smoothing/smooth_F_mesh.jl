@@ -5,7 +5,7 @@ function smooth!(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D};
                                  renorm::Bool=true)
 
     # Smooth exchange factors based on spectral mode
-    if rtm.spectral_mode == :spectral_variable
+    if rtm.spectral_mode == :spectral_variable && typeof(rtm) <: RayTracingDomain2D
         # Variable spectral - smooth each F matrix separately
         F_smooth = Vector{AbstractMatrix}(undef, rtm.n_spectral_bins)
         
