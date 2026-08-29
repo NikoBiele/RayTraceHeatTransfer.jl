@@ -299,22 +299,36 @@ end
 function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
               k_dykstra::Int=0, max_iters::Int=1000, verbose::Bool=true,
               nz_over_N::Real=length(w))
-    k_dykstra > 0 || return AP(F_raw, w, num_surfaces; max_iters, verbose, nz_over_N)
+
+    delta_raw = delta_R(F_raw, w)
+              
+    if k_dykstra <= 0
+        F_smooth, k_ap, converged, delta_max = AP(F_raw, w, num_surfaces; max_iters, verbose, nz_over_N)
+        k_dykstra = 0; k_pcg_tot = 0; k_pcg_max = 0
+        return F_smooth, converged, delta_raw, delta_max, k_dykstra, k_ap, k_pcg_tot, k_pcg_max
+    end
 
     dual = DualSolver(w)                               # Y, R-diagonal, preconditioner: once
     F_smooth = copy(F_raw); P = zeros(size(F_raw)); delta = Inf; iters = 0
+    k_pcg_tot = 0; k_pcg_max = 0; k_dyk_conv = k_dykstra
     for k in 1:k_dykstra
         G, iters = OP(F_smooth, w, dual)
+        k_pcg_tot += iters
+        k_pcg_max = max(iters, k_pcg_max)
         F_smooth = max.(G + P, 0.0)
         if k % 5 == 0 || k == k_dykstra
             delta = delta_perp(F_smooth, w; mode_indicator=:DYK, dual)
             verbose && println("Dykstra round $k ($iters PCG iterations): δ⟂ = $delta")
         end
-        delta < 8 * eps(Float64) && break
+        if delta < 8 * eps(Float64)
+            k_dyk_conv = k
+            break
+        end
         P = G + P - F_smooth
     end
     F_smooth ./= sum(F_smooth, dims = 2)               # always renormalise, always finalise
-    return AP(F_smooth, w, num_surfaces; max_iters, verbose, nz_over_N)
+    F_smooth, k_ap, converged, delta_max = AP(F_smooth, w, num_surfaces; max_iters, verbose, nz_over_N)
+    return F_smooth, converged, delta_raw, delta_max, k_dyk_conv, k_ap, k_pcg_tot, k_pcg_max
 end
 
 function get_w(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D}; spectral_bin::Int=1)
@@ -585,6 +599,7 @@ function AP(F_AP::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
     r = zeros(N); u = zeros(N); e = ones(N)
     hunger!(r, u, X_iter, w, e)                        # (X_0, u_0)
     delta = delta_R_X(X_iter, w, u)                    # defect of the iterate recovered from X_0
+    delta < target && (max_iters = 0)                    # already converged, exit
     delta_init = delta; delta_best = delta
     verbose && println("  raw input: δ_R = $delta_raw;  after first reciprocity projection: $delta ≤ δ⟂ ≤ $(mult*delta)")
 
@@ -627,5 +642,5 @@ function AP(F_AP::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
     if delta > max(delta_init, guard)
         @warn "Smoothing increased the distance to the target manifold; use F_raw instead of F_smooth."
     end
-    return recover_F(X_iter, r)
+    return recover_F(X_iter, r), k, converged, (mult*delta)
 end

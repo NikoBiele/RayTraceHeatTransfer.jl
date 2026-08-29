@@ -35,7 +35,7 @@ Every example below follows the same four steps:
    factor matrix `F_raw`.
 3. **Smooth** — `smooth!(domain)` projects the exchange factor matrix `F_raw`
    onto the nearest matrix satisfying reciprocity and energy conservation,
-   producing `F_smooth`.
+   producing `F_smooth` and returning convergence diagnostics.
 4. **Solve** — `solveEquilibrium!(domain, domain.F_smooth)` yields the
    steady state.
 
@@ -45,7 +45,7 @@ problems. `F_raw` arrives violating reciprocity: in 2D from Monte Carlo noise,
 in 3D because the view factor formula is ill-conditioned for polygons that
 share an edge and must be evaluated on a slightly perturbed geometry. On a
 triangulated sphere, where every pair of adjacent faces has a nonzero view
-factor, the raw reciprocity defect reaches 90%; smoothing brings it to 10⁻¹⁵
+factor, the raw reciprocity defect becomes significant; smoothing brings it to 10⁻¹⁵
 (see Example 5). Both matrices remain available on the domain, so `F_raw` can
 be inspected or exported, but `F_smooth` is what should be passed to the solver.
 
@@ -123,8 +123,19 @@ origins, endpoints = collect_rays(rec)  # collect the results, can be used for p
 ### Step 3: Smooth
 
 ```julia
-smooth!(mesh)  # enforce reciprocity and energy conservation on F_raw
+stats = smooth!(mesh)  # enforce reciprocity and energy conservation on F_raw
 ```
+
+`smooth!` produces `mesh.F_smooth` and returns convergence diagnostics, one entry
+per spectral bin, so a run can be checked without reading the log:
+
+```julia
+all(stats.converged)      # did the smoothing projection converge?
+maximum(stats.delta_smooth)  # certified upper bound on the remaining reciprocity defect
+```
+
+The named tuple also carries iteration counts (`k_dykstra`, `k_ap`, `k_pcg_tot`,
+`k_pcg_max`). See the `smooth!` docstring for the full description.
 
 ### Step 4: Solve
 
@@ -747,9 +758,9 @@ for level in levels
 
     domain = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     domain(; parallel=true, verbose=false)
-    δ_raw = RayTraceHeatTransfer.delta_R(domain.F_raw,
-                                         RayTraceHeatTransfer.get_w(domain))
-    smooth!(domain, verbose=false)
+    stats = smooth!(domain, verbose=false)
+    δ_raw = stats.delta_raw[1]
+    δ_smooth = stats.delta_smooth[1]
     solveEquilibrium!(domain, domain.F_smooth; verbose=false)
 
     equilibrium_ids = setdiff(1:n_tri, hot_ids, cold_ids)
@@ -757,18 +768,19 @@ for level in levels
     T_eq = domain.facesMesh[equator_id].subFaces[1].T_w
     error = abs(T_limit - T_eq)
 
-    println("Level $level: $n_tri triangles → δ_R(F_raw) = $(round(δ_raw, sigdigits=3)), error = $(round(error, digits = 15)) K")
+    println("Level $level: $n_tri triangles → δ_R(F_raw) = $(round(δ_raw, sigdigits=3)), "*
+            "δ_R(F_smooth) = $(round(δ_smooth, sigdigits=3)), error = $(round(error, sigdigits = 3)) K")
 end
 ```
 
-| Level | Triangles | δ_R (F_raw) | \|T_equator − T_limit\| (K) |
-|:-----:|:---------:|:-----------:|:---------------------------:|
-|   0   |     20    |   1.7e-15   | 6.8e-2                      |
-|   1   |     80    |   3.9e-14   | 1.1e-13                     |
-|   2   |    320    |   3.7e-01   | 1.6e-11                     |
-|   3   |   1280    |   1.6e+00   | 4.3e-11                     |
+| Level | Triangles | δ_R (F_raw) | δ_R (F_smooth) | \|T_equator − T_limit\| (K) |
+|:-----:|:---------:|:-----------:|:--------------:|:---------------------------:|
+|   0   |     20    |   1.7e-15   |    1.3e-15     |         6.8e-2              |
+|   1   |     80    |   3.9e-14   |    2.0e-15     |         1.1e-13             |
+|   2   |    320    |   3.7e-01   |    8.0e-16     |         1.7e-11             |
+|   3   |   1280    |   1.6e+00   |    2.7e-15     |         4.3e-11             |
 
-δ_R is the reciprocity defect of the raw view factor matrix — the same initial quantity
+δ_R is the reciprocity defect of the view factor matrix — the same initial quantity
 `smooth!` reports in its log:
 
 $$

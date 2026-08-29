@@ -9,7 +9,7 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
     n_bins = rtm.n_spectral_bins
     is_spectral = rtm.spectral_mode != :grey
     
-    if rtm.spectral_mode == :spectral_variable
+    if rtm.spectral_mode == :spectral_variable && !rtm.surfaces_only
         # Variable spectral - need separate F matrix for each bin
         verbose && println("Computing $n_bins separate F matrices for variable spectral extinction")
         F_raw_vector = Vector{AbstractMatrix}(undef, n_bins)
@@ -44,7 +44,7 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
         return F_raw_vector
         
     else
-        # Grey or uniform spectral - single F matrix works for all bins
+        # Grey or uniform spectral or surfaces only - single F matrix works for all bins
         if is_spectral
             verbose && println("Computing single F matrix for uniform spectral extinction ($n_bins bins)")
         else
@@ -57,7 +57,11 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
             num_volumes, num_emitters, verbose, rec
         )
         
-        return F_raw
+        if rtm.surfaces_only
+            return F_raw[1:length(rtm.surface_mapping),1:length(rtm.surface_mapping)]
+        else
+            return F_raw
+        end
     end
 end
 

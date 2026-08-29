@@ -92,8 +92,10 @@ mutable struct RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}
     fine_mesh::VVPF
     coarse_grid::GRID
     fine_grids::Vector{GRID}
-    F_raw::Union{AbstractMatrix, Vector{AbstractMatrix}, Vector{AbstractMatrix{Float64}}, Vector{Matrix{Float64}}}              # UPDATED: Union for spectral support
-    F_smooth::Union{AbstractMatrix,  Vector{AbstractMatrix}, Vector{AbstractMatrix{Float64}}, Vector{Matrix{Float64}}}           # UPDATED: Union for spectral support
+    F_raw::Union{AbstractMatrix, SparseMatrixCSC{Float64, Int64}, Vector{SparseMatrixCSC{Float64, Int64}},
+            Vector{AbstractMatrix}, Vector{AbstractMatrix{Float64}}, Vector{Matrix{Float64}}}              # UPDATED: Union for spectral support
+    F_smooth::Union{AbstractMatrix, SparseMatrixCSC{Float64, Int64}, Vector{SparseMatrixCSC{Float64, Int64}},
+            Vector{AbstractMatrix}, Vector{AbstractMatrix{Float64}}, Vector{Matrix{Float64}}}           # UPDATED: Union for spectral support
     surface_areas::VT
     volumes::VT
     surface_mapping::DIII
