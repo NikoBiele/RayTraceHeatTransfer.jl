@@ -212,7 +212,11 @@ function Base.show(io::IO, ::MIME"text/plain", d::D) where {D<:SurfaceDomain3D}
     println(io, "  spectral   ", _spectral_line(d))
 
     if stage === :meshed
-        println(io, "  exchange   not computed — call domain(; parallel = true)")
+        if D <: ViewFactorDomain3D
+            println(io, "  exchange   not computed — call domain(; parallel = true)")
+        else
+            println(io, "  exchange   not computed — call domain(N_rays)")
+        end
     else
         println(io, "  exchange   F_raw     ", _mdesc(d.F_raw))
         if stage === :traced

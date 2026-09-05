@@ -492,26 +492,33 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
     verbose && println("Matrix size: $(length(w))×$(length(w))")
 
     # use for deciding between sparse/dense path and AP/OP
+    nz = length(w)^2 # initialize dense (for view factors)
     if rtm.surfaces_only
-        off_diag_chi = 0.0 # convex enclosure (deterministic exchange factor, only need polishing, i.e. AP)
-        nz_over_N = Float64(length(w))
+        if F_raw isa SparseMatrixCSC
+            nz = nnz(F_raw)
+        end
+        off_diag_chi = 0.0
     else
         off_diag_chi, nz, perrow, dens, mem_GB = cross_coupling_chi(F_raw, num_surfaces)
         verbose && println("Raw ray traced sparse matrix statistics:")
         verbose && println("    nonzeros: ", nz, ", per-row density: ", round(perrow; sigdigits=6),
                             ", density: ", round(dens;sigdigits=6), ", memory footprint (GB): ", mem_GB)
-        nz_over_N = Float64(nz / length(w))
-        if nz / length(w)^2 > 0.25
-            F_raw = Matrix(F_raw)
-        end
+    end
+    nz_over_N = Float64(nz / length(w))
+    if nz / length(w)^2 > 0.25
+        F_raw = Matrix(F_raw)
     end
 
     verbose && println("Off-diagonal cross-coupling of F_raw is χ = $off_diag_chi")
     if k_dykstra === nothing
-        if off_diag_chi < 0.4 || F_raw isa SparseMatrixCSC
+        if typeof(rtm) <: ViewFactorDomain3D ||
+            (typeof(rtm) <: RayTracingDomain2D && off_diag_chi < 0.4) ||
+            F_raw isa SparseMatrixCSC
+            
             verbose && println("    Using AP only (0 Dykstra rounds)")
             k_dykstra = 0
-        else
+        else # chi > 0.4 || typeof(rtm) <: RayTracingDomain3D_surfaces || typeof(F_raw) <: Matrix
+
             verbose && println("    Using OP+AP (1 Dykstra round)")
             k_dykstra = 1
         end

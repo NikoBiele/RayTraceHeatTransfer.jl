@@ -1,4 +1,4 @@
-function updateSpectralEmission!(domain::ViewFactorDomain3D{G,P}, iter::Int, 
+function updateSpectralEmission!(domain::SurfaceDomain3D{G,P}, iter::Int, 
                                    F_matrices::Union{AbstractMatrix, Vector{AbstractMatrix}}, sol_j::Vector{G}, 
                                    emitFrac::AbstractMatrix, temperatures::Vector{G}, 
                                    emissive::Vector{G}) where {G,P}
