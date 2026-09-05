@@ -1,5 +1,6 @@
 function traceRay(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit::Point2{G}, 
-                   nudge::G, current_coarse_index::P, spectral_bin::P=1) where {G, P<:Integer}
+                   nudge::G, current_coarse_index::P, spectral_bin::P,
+                   local_rng::AbstractRNG) where {G, P<:Integer}
     
     if hmesh.uniform_across_bin[spectral_bin] > -0.1
         # Use fast uniform ray tracing - extinction is same for all bins
@@ -9,20 +10,21 @@ function traceRay(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit::Point2
         else
             uniform_beta = first_face.kappa_g + first_face.sigma_s_g
         end
-        return traceRayUniform(hmesh, p_emit, dir_emit, uniform_beta, nudge, current_coarse_index)
+        return traceRayUniform(hmesh, p_emit, dir_emit, uniform_beta, nudge, current_coarse_index, local_rng)
     else
         # Use variable extinction ray tracing
-        return traceRayVariable(hmesh, p_emit, dir_emit, nudge, current_coarse_index, spectral_bin)
+        return traceRayVariable(hmesh, p_emit, dir_emit, nudge, current_coarse_index, spectral_bin, local_rng)
     end
 end
 
 # Uniform ray tracing (unchanged - extinction is uniform across all bins)
 function traceRayUniform(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit::Point2{G}, 
-                           beta::T, nudge, current_coarse_index::P) where {G, T, P<:Integer}
+                           beta::T, nudge, current_coarse_index::P,
+                           local_rng::AbstractRNG) where {G, T, P<:Integer}
     point = p_emit
     direction = dir_emit
 
-    S = beta > 0 ? G(-log(rand()) / beta) : G(Inf)
+    S = beta > 0 ? -log(rand(local_rng, G)) / beta : G(Inf)
 
     @inbounds for _ in 1:10_000
         coarse_face = hmesh.coarse_face_cache[current_coarse_index]
@@ -71,12 +73,13 @@ end
 
 # Updated variable ray tracing with spectral bin support
 function traceRayVariable(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit::Point2{G}, 
-                           nudge, current_coarse_index::P, spectral_bin::Int=1) where {G, P<:Integer}
+                           nudge, current_coarse_index::P, spectral_bin::Int,
+                           local_rng::AbstractRNG) where {G, P<:Integer}
     point = p_emit
     direction = dir_emit
 
     # Sample target optical depth for interaction
-    target_tau = -log(rand())
+    target_tau = -log(rand(local_rng, G))
     accumulated_tau = 0.0
 
     @inbounds for _ in 1:10_000

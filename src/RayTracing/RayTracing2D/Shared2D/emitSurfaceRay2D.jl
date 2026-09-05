@@ -1,8 +1,9 @@
-function emitSurfaceRay2D(face::PolyVolume2D{G}, wall_index::P, nudge::G) where {G, P<:Integer}
+function emitSurfaceRay2D(face::PolyVolume2D{G}, wall_index::P, nudge::G,
+                        rng::AbstractRNG) where {G, P<:Integer}
     # println("Emitting surface ray, type of G is $(typeof(G))")
 
     p1, p2 = face.vertices[wall_index], face.vertices[mod1(wall_index+1, length(face.vertices))]
-    R = G(rand()) # Convert random number to the appropriate type G
+    R = rand(rng, G) # Convert random number to the appropriate type G
 
     # sample position to find emission point
     p = p1 + (p2 - p1) * R
@@ -11,7 +12,7 @@ function emitSurfaceRay2D(face::PolyVolume2D{G}, wall_index::P, nudge::G) where 
     p = Point2{G}(p[1], p[2])
 
     # sample direction of ray (local coordinate system)
-    i1_loc = lambertSample2D() # Convert the result to type G if needed
+    i1_loc = lambertSample2D(rng, G) # Convert the result to type G if needed
     
     # unit vectors in local coordinate system
     xVecLocal = normalize(p2-p1)

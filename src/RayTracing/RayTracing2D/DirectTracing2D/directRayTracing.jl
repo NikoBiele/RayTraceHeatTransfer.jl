@@ -1,23 +1,26 @@
-function directRayTracing!(rtm::RayTracingDomain2D, rays_tot::P, nudge::G, verbose::Bool) where {G, P<:Integer}
+function directRayTracing!(rtm::RayTracingDomain2D, rays_tot::P, nudge::G, verbose::Bool,
+                            seeds::Union{UnitRange{S},Vector{S}}, rngs::Vector{<:AbstractRNG}, nthreads::K) where {G,S<:Integer,P<:Integer,K<:Integer}
     
     if rtm.spectral_mode != :grey
         verbose && println("Running direct ray tracing for $(rtm.n_spectral_bins) spectral bins")
         # Run direct ray tracing for each spectral bin
         for bin in 1:rtm.n_spectral_bins
             verbose && println("Processing spectral bin $bin/$(rtm.n_spectral_bins)")
-            directRayTracingSingleBin!(rtm, rays_tot, nudge, bin)
+            directRayTracingSingleBin!(rtm, rays_tot, nudge, bin, seeds, rngs, nthreads)
         end
     else
         verbose && println("Running direct ray tracing for grey extinction")
-        directRayTracingSingleBin!(rtm, rays_tot, nudge, 1)  # bin=1 for grey
+        directRayTracingSingleBin!(rtm, rays_tot, nudge, 1, seeds, rngs, nthreads)  # bin=1 for grey
     end
 
     writeTemperaturesHeatSourcesDirect!(rtm)
 
 end
 
-function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::P, nudge::G,
-                                        spectral_bin::P) where {G, P<:Integer}
+function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::S, nudge::G,
+                                        spectral_bin::P,
+                                        seeds::Union{UnitRange{K},Vector{K}}, rngs::Vector{<:AbstractRNG},
+                                        nthreads::P) where {G,S<:Integer,P<:Integer,K<:Integer}
 
     # Prepare emitters
     emitters, total_energy = prepareEmitters(rtm, nudge, spectral_bin) # pass nudge to get the type G
@@ -33,8 +36,6 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::P, nudge:
     wall_emitted_count = [[zeros(Int, length(face.solidWalls)) for face in coarse_face.subVolumes] for coarse_face in rtm.coarse_mesh]
     reflected_count = [[zeros(Int, length(face.solidWalls)) for face in coarse_face.subVolumes] for coarse_face in rtm.coarse_mesh]
     wall_absorbed_count = [[zeros(Int, length(face.solidWalls)) for face in coarse_face.subVolumes] for coarse_face in rtm.coarse_mesh]
-
-    nthreads = Threads.nthreads()
     
     # Divide rays among threads
     rays_per_thread = div(rays_tot, nthreads)
@@ -58,7 +59,8 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::P, nudge:
     
     @threads for tid in 1:nthreads
         ray_range = thread_assignments[tid]
-        local_rng = MersenneTwister(tid)  # Use thread ID as seed
+        local_rng = rngs[tid] # Use thread ID as seed
+        Random.seed!(rngs[tid], seeds[tid])
         
         # Local counters for this thread
         local_absorbed_count = [zeros(Int, length(coarse_face.subVolumes)) for coarse_face in rtm.coarse_mesh]
@@ -73,7 +75,7 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::P, nudge:
             
             if emitter.type == :surface
                 fine_face = rtm.coarse_mesh[emitter.coarse_index].subVolumes[emitter.fine_index]
-                origin, direction = emitSurfaceRay2D(fine_face, emitter.wall_index, nudge)
+                origin, direction = emitSurfaceRay2D(fine_face, emitter.wall_index, nudge, local_rng)
                 # Check prescribed temperature for this spectral bin
                 temp_value = fine_face.T_in_w[emitter.wall_index]
                 if temp_value >= 0.0
@@ -81,7 +83,7 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::P, nudge:
                 end
             else
                 fine_face = rtm.coarse_mesh[emitter.coarse_index].subVolumes[emitter.fine_index]
-                origin, direction = emitVolumeRay2D(fine_face, nudge)
+                origin, direction = emitVolumeRay2D(fine_face, nudge, local_rng)
                 # Check prescribed temperature for this spectral bin
                 temp_value = fine_face.T_in_g
                 if temp_value >= 0.0
@@ -90,7 +92,7 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::P, nudge:
             end
             
             # Use spectral ray tracing interface
-            result = traceSingleRay(rtm, origin, direction, nudge, emitter.coarse_index, spectral_bin, 100000)
+            result = traceSingleRay(rtm, origin, direction, nudge, emitter.coarse_index, spectral_bin, 100_000, local_rng)
             
             if result !== nothing
                 absorption_type, abs_coarse_index, abs_fine_index, abs_wall_index, path = result

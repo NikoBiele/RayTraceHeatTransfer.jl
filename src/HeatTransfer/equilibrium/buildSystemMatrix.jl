@@ -40,7 +40,7 @@ function buildSystemMatrixSurface(domain, F::AbstractMatrix;
     P = Float64
 
     # Count surfaces (no volumes in 3D!)
-    if typeof(domain) <: ViewFactorDomain3D
+    if typeof(domain) <: SurfaceDomain3D
         N_surfs = sum([length(superface.subFaces) for superface in domain.facesMesh])
     else
         N_surfs = length(domain.surface_mapping)

@@ -1,6 +1,7 @@
 function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
                         direction::Point2{G}, nudge::G,
-                        current_coarse_index::P, spectral_bin::P=1, max_iters::P=10_000) where {G, P<:Integer}
+                        current_coarse_index::P, spectral_bin::P, max_iters::P,
+                        rng::AbstractRNG) where {G, P<:Integer}
     path = []
     iteration_count = 0
     
@@ -8,12 +9,12 @@ function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
         iteration_count += 1
         
         # Russian Roulette termination for long rays
-        if iteration_count > 1000 && rand() > 0.8
+        if iteration_count > 1000 && rand(rng, G) > 0.8
             return nothing
         end
         
         # Pass spectral bin to trace_ray
-        ray_result = traceRay(hmesh, origin, direction, nudge, current_coarse_index, spectral_bin)
+        ray_result = traceRay(hmesh, origin, direction, nudge, current_coarse_index, spectral_bin, rng)
 
         if ray_result === nothing
             return nothing
@@ -30,7 +31,7 @@ function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
                 wall_temp = fine_face.T_in_w[next_wall_index]
                 if wall_temp < 0.0
                     # Reemission
-                    p_omit, direction = emitSurfaceRay2D(fine_face, next_wall_index, nudge)
+                    p_omit, direction = emitSurfaceRay2D(fine_face, next_wall_index, nudge, rng)
                     # nudge the point a tiny bit towards the midpoint, to ensure we are inside cell
                     origin = end_point + (fine_face.midPoint - end_point) * nudge
                     push!(path, (next_coarse_index, next_fine_index, next_wall_index, :reemission))
@@ -41,7 +42,7 @@ function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
             else
                 # Reflection
                 normal = fine_face.inwardNormals[next_wall_index]
-                direction = sampleReflectionDirection2D(normal)
+                direction = sampleReflectionDirection2D(normal, rng)
                 origin = end_point
                 push!(path, (next_coarse_index, next_fine_index, next_wall_index, :reflection))
             end
@@ -58,9 +59,9 @@ function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
                 local_kappa = fine_face.kappa_g
             end
 
-            if rand() < local_sigma_s / (local_kappa + local_sigma_s)
+            if rand(rng, G) < local_sigma_s / (local_kappa + local_sigma_s)
                 # Scattering
-                direction = isotropicScatter2D(nudge) # pass nudge to pass type G
+                direction = isotropicScatter2D(nudge, rng) # pass nudge to pass type G
                 origin = end_point
                 push!(path, (next_coarse_index, next_fine_index, -1, :scattering))
             else
@@ -68,7 +69,7 @@ function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
                 gas_temp = fine_face.T_in_g
                 if gas_temp < 0.0
                     # Reemission
-                    direction = isotropicScatter2D(nudge) # pass nudge to pass type G
+                    direction = isotropicScatter2D(nudge, rng) # pass nudge to pass type G
                     origin = end_point
                     push!(path, (next_coarse_index, next_fine_index, 0, :reemission))
                 else

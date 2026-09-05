@@ -5,7 +5,7 @@ A Julia package for radiative heat transfer using Monte Carlo ray tracing and th
 ## Features
 
 - **2D participating media** — absorbing, emitting, and scattering gases with enclosing surfaces
-- **3D surface enclosures** — transparent media with semi-analytical view factors (Narayanaswamy 2015)
+- **3D surface enclosures** — transparent media with semi-analytical view factors or ray tracing
 - **Grey and spectral** — wavelength-independent or band-resolved radiation with automatic solver selection
 - **Exchange factor smoothing** — reciprocity and energy conservation enforcement to machine-precision
 - **Four-step workflow** — mesh → ray trace / view factors → smooth → solve
@@ -30,9 +30,9 @@ Pkg.add("Plots")     # for plotField (2D)
 Every example below follows the same four steps:
 
 1. **Mesh** — build the geometry and set boundary conditions.
-2. **Exchange factors** — Monte Carlo ray tracing (2D participating media) or
-   analytical view factors (3D surface enclosures), producing exchange
-   factor matrix `F_raw`.
+2. **Exchange factors** — Monte Carlo ray tracing (2D participating media,
+   3D surface enclosures) or analytical view factors (3D convex surface
+   enclosures), producing exchange factor matrix `F_raw`.
 3. **Smooth** — `smooth!(domain)` projects the exchange factor matrix `F_raw`
    onto the nearest matrix satisfying reciprocity and energy conservation,
    producing `F_smooth` and returning convergence diagnostics.
@@ -104,7 +104,6 @@ plotMesh(ax, mesh; volumeNumbers = centerline_vols)
 plotMesh(ax, mesh; wallNumbers = bottom_wall_indices)
 
 fig
-save("fig/mesh_numbering.png", fig, px_per_unit=3)
 ```
 
 ![Mesh numbering](fig/mesh_numbering.png)
@@ -196,7 +195,6 @@ Plots.plot!(p1, guidefontsize=12, tickfontsize=10,
             left_margin=5Plots.mm, right_margin=10Plots.mm)
 p = Plots.plot(p1, p2, layout = (2,1), size = (600, 800), dpi=1000)
 display(p)
-Plots.savefig(p, "fig/validation_2d_grey.png")
 ```
 
 ![2D grey validation](fig/validation_2d_grey.png)
@@ -374,7 +372,6 @@ p = Plots.plot(gas_temps, altitudes ./ 1000,
     left_margin = 5Plots.mm, bottom_margin = 10Plots.mm,
     right_margin = 15Plots.mm)
 
-savefig(p, "fig/spectral_greenhouse.png")
 display(p)
 ```
 
@@ -449,7 +446,6 @@ Plots.plot!(p1, guidefontsize=12, tickfontsize=10,
             left_margin=5Plots.mm, right_margin=10Plots.mm,
             title = "Half-hot circular enclosure")
 display(p1)
-Plots.savefig(p1, "fig/circle_halfhot.png")
 
 # Center-limit validation: gas elements adjacent to the center vertex
 T_limit = ((T_hot^4 + 0.0^4) / 2)^(1/4)              # ≈ 840.90 K
@@ -476,8 +472,6 @@ This example solves radiative equilibrium in a unit cube with transparent (non-p
 ```julia
 using RayTraceHeatTransfer
 using GLMakie
-GLMakie.activate!()
-Makie.inline!(true)
 
 # Cube vertices
 points = [
@@ -491,7 +485,9 @@ points = [
     1.0 1.0 1.0   # 8
 ]
 
-# Six faces (right-hand rule for outward normals)
+# Six faces. Winding does not matter: the constructor orients all faces
+# consistently and fixes the global sign from the enclosed volume, so the
+# same face list works for convex and non-convex enclosures alike.
 faces = [
     1 2 4 3;  # Face 1 (x = 0) — hot
     5 6 8 7;  # Face 2 (x = 1) — cold
@@ -515,7 +511,7 @@ domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon) # me
 ```
 Faces 1 and 2 are the hot and cold walls at opposing ends of the cube. The four side faces have `T_in_w = -1.0` (unknown) and `q_in_w = 0.0` (radiative equilibrium), so their temperature distributions emerge from the solution.
 
-### Step 3: visualize the domain for validation
+### Step 3: Visualise the domain and identify elements
 
 ```julia
 fig = Figure(size = (800, 700))
@@ -523,6 +519,41 @@ ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
 plotMesh(ax, domain3D)
 fig
 ```
+
+Each subface is one element: a row and column of the exchange factor matrix and
+one entry of the solution vectors. The mesh is drawn as a single surface built
+in exactly that order, so elements can be identified by hovering over them.
+Pass `inspect = true` and add a `DataInspector`; the hovered element is
+outlined and named in a tooltip, and if a `Label` is supplied its full property
+list is written there:
+
+```julia
+fig  = Figure(size = (1200, 700))
+ax   = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
+info = Label(fig[1, 2], ""; tellheight = false, tellwidth = true,
+             halign = :left, justification = :left,
+             fontsize = 14, font = "DejaVu Sans Mono")
+colsize!(fig.layout, 2, Relative(0.5))
+
+plotMesh(ax, domain3D; inspect = true, label = info)
+DataInspector(fig)
+fig
+```
+
+The panel reports the element's global index and its superface, its area and
+midpoint, its boundary conditions, and — once the domain has been solved — its
+temperature, net heat flux and radiosity. Before the solve those fields read
+`—`.
+
+Elements are numbered superface by superface. With `Ndim = 11` each
+quadrilateral face contributes 121 subfaces, so the hot face is elements 1–121
+and the cold face 122–242. Hovering across the edge between two faces shows the
+index jumping between blocks. Triangular superfaces contribute blocks of a
+different length (Example 6), but the ordering rule is the same. These are the
+indices used in `domain3D.F_smooth` and in the system matrices.
+
+The scene can be zoomed and entered, so elements can be inspected from inside
+the enclosure — which can be useful in a non-convex geometry (Example 7).
 
 ### Step 4: Compute view factors
 
@@ -557,12 +588,59 @@ fig = Figure(size = (800, 700))
 ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
 plotField(ax, domain3D; field = :T)
 fig
-save("fig/3d_cube_temperature.png", fig, px_per_unit = 3)
 ```
 
 ![3D cube temperature field](fig/3d_cube_temperature.png)
 
 The temperature field shows a smooth gradient from the hot face (1000 K) to the cold face (0 K), with the side walls at intermediate temperatures determined by radiative equilibrium. The analytical view factors ensure exact geometric accuracy without statistical noise.
+
+Passing `inspect = true` to `plotField` gives the same hover on the solved
+field, now with every property populated:
+
+```julia
+fig  = Figure(size = (1200, 700))
+ax   = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
+info = Label(fig[1, 2], ""; tellheight = false, tellwidth = true,
+             halign = :left, justification = :left,
+             fontsize = 14, font = "DejaVu Sans Mono")
+colsize!(fig.layout, 2, Relative(0.5))
+
+plotField(ax, domain3D; field = :T, inspect = true, label = info)
+DataInspector(fig)
+fig
+```
+
+This is the quickest check that a solution is what it should be: on a
+prescribed-temperature face, `T` equals `T_in` and `q` is whatever flux
+maintains it; on an equilibrium face, `T_in` reads `unknown` and `q` sits at the
+noise floor.
+
+### Step 7: Cross-validation against Monte Carlo ray tracing
+
+The same enclosure can be solved by tracing rays instead of evaluating view
+factors analytically. Both produce an exchange factor matrix, so everything
+downstream is identical:
+
+```julia
+domainMC = RayTracingDomain3D_surfaces(points, faces, Ndim, q_in_w, T_in_w, epsilon)
+domainMC(100_000_000)                       # total rays, split across emitters
+smooth!(domainMC)
+solveEquilibrium!(domainMC, domainMC.F_smooth)
+
+T_MC = [sf.T_w for f in domainMC.facesMesh for sf in f.subFaces]
+T_VF = [sf.T_w for f in domain3D.facesMesh  for sf in f.subFaces]
+free = findall(sf -> sf.T_in_w < 0, [sf for f in domainMC.facesMesh for sf in f.subFaces])
+
+println("rms |T_MC - T_VF| = ", sqrt(sum(abs2, T_MC[free] - T_VF[free]) / length(free)))
+```
+
+The two agree to a relative rms of about 3 × 10⁻⁴ on the side walls at this ray
+count, and the error falls as 1/√N — a hundredfold increase in rays buys one
+decade of accuracy. That is the essential trade: view factors are machine precision
+and cost nothing to converge, while ray tracing pays for every digit.
+
+Ray tracing earns its cost where view factors cannot go at all: enclosures that
+are not convex, where surfaces shadow one another. See Example 7.
 
 ### Reference
 
@@ -678,7 +756,21 @@ ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
 plotMesh(ax, domain3D)
 fig
 
-save("fig/icosphere_mesh.png", fig, px_per_unit=3)
+```
+
+With `Ndim = 1` each triangle is a single element, so element `k` is triangle
+`k` of the `faces` matrix. Hovering is the direct way to confirm the caps
+landed where intended:
+
+```julia
+fig = Figure(size = (800, 700))
+ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
+info = Label(fig[1, 2], ""; tellheight = false, tellwidth = true,
+             halign = :left, justification = :left,
+             fontsize = 14, font = "DejaVu Sans Mono") # with info as in Example 4
+colsize!(fig.layout, 2, Relative(0.5))
+plotMesh(ax, domain3D; inspect = true, label = info)
+DataInspector(fig)
 ```
 
 ![Icosphere Mesh](fig/icosphere_mesh.png)
@@ -829,8 +921,6 @@ and two triangular gables.
 ```julia
 using RayTraceHeatTransfer
 using GLMakie
-GLMakie.activate!()
-Makie.inline!(true)
 
 points = [
     0.0  0.0  0.0;   # 1
@@ -860,7 +950,6 @@ fig = Figure(size = (800, 700))
 ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
 plotMesh(ax, domain3D)
 fig
-save("fig/shed_mesh.png", fig, px_per_unit = 3)
 ```
 
 ![Mixed-topology shed mesh](fig/shed_mesh.png)
@@ -875,8 +964,107 @@ quadrilateral is divided into `Ndim²` cells, a triangle into `Ndim(Ndim+1)/2`.
 [length(f.subFaces) for f in domain3D.facesMesh]   # [49, 49, 49, 28, 28]
 ```
 
+Because block lengths differ, an element's superface can no longer be worked
+out arithmetically from its index. Hovering reports it directly: the floor is
+elements 1–49, and the first gable starts at 148.
+
 From here the domain proceeds exactly as in Examples 4 and 5 — view factors,
 smoothing, then solve.
+
+---
+
+## Example 7 — Non-Convex Enclosure: an L-Shaped Duct
+
+The reentrant corner of an L-shaped duct shadows one arm from the other. View
+factors have no occlusion test, so this geometry requires ray tracing.
+
+Three unit squares in cross-section, extruded to unit height. The *z* = 0 faces
+are held at 1000 K, the *z* = 1 faces at 0 K, and the eight side walls are in
+radiative equilibrium. All surfaces black.
+
+### Step 1: Geometry and boundary conditions
+
+The L-shaped caps are hexagons, split into three quadrilaterals each. The side
+walls follow the boundary cycle of the cross-section.
+
+```julia
+using RayTraceHeatTransfer, GLMakie, StatsBase
+
+xy = [0.0 0.0; 1.0 0.0; 2.0 0.0; 2.0 1.0;
+      1.0 1.0; 0.0 1.0; 1.0 2.0; 0.0 2.0]
+points = vcat(hcat(xy, zeros(8)), hcat(xy, ones(8)))   # z = 0 then z = 1
+
+faces = [ 1  2  5  6;  2  3  4  5;  6  5  7  8;    # 1–3   z = 0 caps
+          9 10 13 14; 10 11 12 13; 14 13 15 16;    # 4–6   z = 1 caps
+          1  2 10  9;  2  3 11 10;  3  4 12 11;    # 7–9   sides, 9 = x-arm end
+          4  5 13 12;  5  7 15 13;  7  8 16 15;    # 10–12 sides, 12 = y-arm end
+          8  6 14 16;  6  1  9 14]                 # 13–14 sides
+
+Ndim = 11
+domainL = RayTracingDomain3D_surfaces(points, faces, Ndim,
+              zeros(14), [fill(1000.0, 3); zeros(3); fill(-1.0, 8)], ones(14))
+```
+
+Winding does not matter — the constructor orients the faces and fixes the sign
+from the enclosed volume. Holes and non-manifold edges are rejected here.
+
+### Step 2: Trace, smooth and solve
+
+```julia
+domainL(100_000_000)     # total rays, divided across the 1694 elements
+smooth!(domainL)
+solveEquilibrium!(domainL, domainL.F_smooth)
+
+fig = Figure(size = (800, 700))
+ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
+plotField(ax, domainL; field = :T)
+fig
+```
+
+![L-duct temperature field](fig/3d_lduct_temperature.png)
+
+Zoom into the duct and inspect the reentrant corner from within:
+
+```julia
+fig  = Figure(size = (1200, 700))
+ax   = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
+info = Label(fig[1, 2], ""; tellheight = false, tellwidth = true,
+             halign = :left, justification = :left,
+             fontsize = 14, font = "DejaVu Sans Mono")
+colsize!(fig.layout, 2, Relative(0.5))
+
+plotField(ax, domainL; field = :T, inspect = true, label = info)
+DataInspector(fig)
+fig
+```
+
+Rays are traced to first intersection only; reflections are handled by the
+solver, so `F_raw` is geometry alone. Smoothing starts from a reciprocity
+defect of order 10⁻² rather than Example 4's 10⁻¹³ — Monte Carlo breaks
+reciprocity at the noise level, not at roundoff — and reaches 10⁻¹⁵ either way.
+
+The trace uses all threads by default, so results are reproducible per machine
+but vary with thread count. Pass `nthreads` and `seeds` to pin them.
+
+A ray either reaches a facet or it does not, so occlusion appears as exact
+structural zeros. The analytical method returns a substantial value for the
+same pair, having no notion of what lies between two polygons. Analytical
+view factors are exact and converge for free but cannot see around
+corners; ray tracing pays for every digit and has no geometric restriction.
+Example 4 shows the two agreeing on a cube, which is what licenses trusting the
+tracer here.
+
+Rays are traced against a bounding volume hierarchy built with the binned
+surface area heuristic of Wald (2007), using the ray–triangle test of Möller
+and Trumbore (1997). This is what makes occlusion affordable: the cost of
+finding a ray's first intersection grows logarithmically rather than linearly
+in the number of surface elements.
+
+### References
+
+> Möller, T. and Trumbore, B. (1997). "Fast, minimum storage ray-triangle intersection." *Journal of Graphics Tools*, 2(1), 21–28.
+
+> Wald, I. (2007). "On fast construction of SAH-based bounding volume hierarchies." *Proceedings of the 2007 IEEE Symposium on Interactive Ray Tracing*, 33–40.
 
 ---
 

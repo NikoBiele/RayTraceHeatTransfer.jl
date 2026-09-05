@@ -42,7 +42,7 @@ function getBinsEmissionFractions(rtm::RayTracingDomain2D, temperatures::Vector{
     return emitFrac
 end
 
-function getBinsEmissionFractions(domain::ViewFactorDomain3D{G,P}, temperatures::Vector{G}) where {G,P}
+function getBinsEmissionFractions(domain::SurfaceDomain3D{G,P}, temperatures::Vector{G}) where {G,P}
 
     num_surfaces = sum([length(superface.subFaces) for superface in domain.facesMesh])
     emitFrac = zeros(G, num_surfaces, domain.n_spectral_bins)
@@ -85,7 +85,7 @@ function getWeightedEmissionFractions(rtm::RayTracingDomain2D, temperatures)
     return out
 end
 
-function getWeightedEmissionFractions(domain::ViewFactorDomain3D, temperatures)
+function getWeightedEmissionFractions(domain::SurfaceDomain3D, temperatures)
     w = getBinsEmissionFractions(domain, temperatures)
     out = similar(w)
     surf_count = 0

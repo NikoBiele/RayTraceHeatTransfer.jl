@@ -50,11 +50,12 @@ maximum(stats.delta_max) # worst-case distance to the feasible manifold across b
 ```
 
 """
-function smooth!(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D};
+function smooth!(rtm::Union{RayTracingDomain2D,SurfaceDomain3D};
                                  max_iters::Int=1_000,
                                  k_dykstra::Union{Nothing,Int}=nothing,
                                  verbose::Bool=true,
-                                 renorm::Bool=true)
+                                 renorm::Bool=true,
+                                 keep_F_raw::Bool=true)
 
     # Smooth exchange factors based on spectral mode
     if rtm.spectral_mode == :spectral_variable && typeof(rtm) <: RayTracingDomain2D
@@ -142,6 +143,7 @@ function smooth!(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D};
         k_pcg_max_out = [k_pcg_max_i]
     end
 
+    keep_F_raw || (rtm.F_raw = Matrix{Float64}(undef, 2, 2))
     rtm.F_smooth = F_smooth
     return (; converged=converged_out, delta_raw=delta_raw_out, delta_smooth=delta_max_out,
             k_dykstra=k_dykstra_out, k_ap=k_ap_out, k_pcg_tot=k_pcg_tot_out, k_pcg_max=k_pcg_max_out)

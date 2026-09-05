@@ -1,6 +1,6 @@
 function prepareEmitters(rtm::RayTracingDomain2D, nudge::G, spectral_bin::Int=1) where {G}
     emitters = Emitter2D[]
-    total_energy = G(0.0)
+    total_energy = zero(G)
 
     # Get system matrices
     num_surfaces = length(rtm.surface_mapping)

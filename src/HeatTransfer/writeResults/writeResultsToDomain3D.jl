@@ -1,7 +1,9 @@
 # Main interface - dispatches based on spectral mode
-function writeResultsToDomain!(domain::ViewFactorDomain3D, j::Vector{P}, 
+function writeResultsToDomain!(domain::D, j::Vector{P}, 
                                     Abs::Vector{P}, r::Vector{P};
-                                    T::Union{Nothing,Vector{P}}=nothing, spectral_bin::Union{Nothing,Int}=nothing) where P
+                                    T::Union{Nothing,Vector{P}}=nothing,
+                                    spectral_bin::Union{Nothing,Int}=nothing) where
+                                    {P,D<:SurfaceDomain3D}
     
     if domain.spectral_mode == :grey
         # Grey mode
@@ -47,63 +49,51 @@ function writeResultsToDomain!(domain::RayTracingDomain2D, j::Vector{P},
 end
 
 # Grey mode - write scalar results
-function writeResultsToDomainGrey3D!(domain::ViewFactorDomain3D, T::Vector{P}, j::Vector{P}, 
+function writeResultsToDomainGrey3D!(domain::SurfaceDomain3D, T::Vector{P}, j::Vector{P}, 
                                           Abs::Vector{P}, r::Vector{P}) where P
-    surf_count = 0
-    
-    for superface in domain.facesMesh
-        for subface in superface.subFaces
-            surf_count += 1
-            
-            e_surf = max(j[surf_count] - r[surf_count], 0.0)
-            
-            # Grey mode - scalar values
-            subface.j_w = j[surf_count]
-            subface.g_a_w = Abs[surf_count]
-            subface.e_w = e_surf
-            subface.r_w = r[surf_count]
-            subface.g_w = Abs[surf_count] + r[surf_count]
-            subface.i_w = j[surf_count] / (π * subface.area)
-            if subface.T_in_w < -0.1
-                # Prescribed flux
-                subface.q_w = subface.q_in_w
-                subface.T_w = T[surf_count]
-            else
-                subface.T_w = subface.T_in_w
-                subface.q_w = e_surf - Abs[surf_count]
-            end
+    for (k, subface) in enumerate(elementFaces(domain))
+        e_surf = max(j[k] - r[k], 0.0)
+
+        # Grey mode - scalar values
+        subface.j_w = j[k]
+        subface.g_a_w = Abs[k]
+        subface.e_w = e_surf
+        subface.r_w = r[k]
+        subface.g_w = Abs[k] + r[k]
+        subface.i_w = j[k] / (π * subface.area)
+        if subface.T_in_w < -0.1
+            # Prescribed flux
+            subface.q_w = subface.q_in_w
+            subface.T_w = T[k]
+        else
+            subface.T_w = subface.T_in_w
+            subface.q_w = e_surf - Abs[k]
         end
     end
-    
+
 end
 
 # Spectral mode - write results for a specific spectral bin
-function writeResultsToDomainSpectralBin3D!(domain::ViewFactorDomain3D, j::Vector{P}, 
+function writeResultsToDomainSpectralBin3D!(domain::SurfaceDomain3D, j::Vector{P}, 
                                                   Abs::Vector{P}, r::Vector{P}, spectral_bin::Int) where P
-    surf_count = 0
-    
-    for superface in domain.facesMesh
-        for subface in superface.subFaces
-            surf_count += 1
-            
-            e_surf = max(j[surf_count] - r[surf_count], 0.0)
-            
-            # Check if spectral vectors already initialized
-            if isa(subface.j_w, Vector)
-                # Update specific bin
-                subface.j_w[spectral_bin] = j[surf_count]
-                subface.g_a_w[spectral_bin] = Abs[surf_count]
-                subface.e_w[spectral_bin] = e_surf
-                subface.r_w[spectral_bin] = r[surf_count]
-                subface.g_w[spectral_bin] = Abs[surf_count] + r[surf_count]
-                subface.i_w[spectral_bin] = j[surf_count] / (π * subface.area)
-            else
-                error("Domain surface properties are not spectral vectors but spectral_bin=$spectral_bin was specified")
-            end
-            
+    for (k, subface) in enumerate(elementFaces(domain))
+        e_surf = max(j[k] - r[k], 0.0)
+
+        # Check if spectral vectors already initialized
+        if isa(subface.j_w, Vector)
+            # Update specific bin
+            subface.j_w[spectral_bin] = j[k]
+            subface.g_a_w[spectral_bin] = Abs[k]
+            subface.e_w[spectral_bin] = e_surf
+            subface.r_w[spectral_bin] = r[k]
+            subface.g_w[spectral_bin] = Abs[k] + r[k]
+            subface.i_w[spectral_bin] = j[k] / (π * subface.area)
+        else
+            error("Domain surface properties are not spectral vectors but spectral_bin=$spectral_bin was specified")
         end
+
     end
-    
+
 end
 
 # Grey mode - write scalar results (your existing function with minor fixes)

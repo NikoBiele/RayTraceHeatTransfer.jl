@@ -1,8 +1,8 @@
-function lambertSample2D()
-    R_angle1 = Float32(rand())
+function lambertSample2D(rng::AbstractRNG, G)
+    R_angle1 = rand(rng, G)
     cosTheta = sqrt(R_angle1)
     sinTheta = sqrt(1.0 - cosTheta^2)
-    psi = 2*pi*Float32(rand())
+    psi = 2*G(pi)*rand(rng, G)
     
     xdir = sinTheta*cos(psi)
     zdir = cosTheta

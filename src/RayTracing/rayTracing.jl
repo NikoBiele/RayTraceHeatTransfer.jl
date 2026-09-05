@@ -24,7 +24,7 @@ include(joinpath(@__DIR__, "RayTracing2D", "Shared2D", "lambertSample2D.jl"))
 include(joinpath(@__DIR__, "RayTracing2D", "Shared2D", "multiDispatchRayTrace2D.jl"))
 
 # ray tracing 3D
-# empty for now
+include(joinpath(@__DIR__, "RayTracing3D", "ExchangeFactors", "traceSurfaces3D.jl"))
 
 # view factors 3D
 include(joinpath(@__DIR__, "ViewFactor3D", "Cl3D.jl"))

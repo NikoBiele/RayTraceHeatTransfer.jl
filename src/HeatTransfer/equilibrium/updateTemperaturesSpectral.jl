@@ -54,7 +54,7 @@ function updateTemperaturesSpectral!(rtm::RayTracingDomain2D, emissive::Vector{G
     return temperatures
 end
 
-function updateTemperaturesSpectral!(domain::ViewFactorDomain3D{G,P}, 
+function updateTemperaturesSpectral!(domain::SurfaceDomain3D{G,P}, 
                                        emissive::Vector{G}, 
                                        planckFrac::Matrix{G}) where {G,P}
     

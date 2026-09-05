@@ -115,16 +115,55 @@ function delta_R_X_dense(X::Matrix{Float64}, w::AbstractVector, u::Vector{Float6
 end
 
 # ---------------- raw reciprocity floor of the input (Lemma G.2 quantity) ----------------
-function delta_R_raw(F::SparseMatrixCSC, w::AbstractVector)
-    X = Diagonal(w) * F
-    A = X - X'                                  # antisymmetric part, O(nnz)
-    rows = rowvals(A); vals = nonzeros(A)
-    s = 0.0
-    @inbounds for j in 1:size(A, 2), k in nzrange(A, j)
-        i = rows[k]
-        i < j && (s += vals[k]^2 / (w[i]^2 + w[j]^2))
+@inline function _find_nz(F::SparseMatrixCSC, rows, i::Integer, j::Integer)
+    r  = nzrange(F, j)
+    lo = first(r); hi = last(r)
+    @inbounds while lo <= hi
+        m  = (lo + hi) >>> 1
+        ri = rows[m]
+        if ri == i
+            return m
+        elseif ri < i
+            lo = m + 1
+        else
+            hi = m - 1
+        end
     end
-    return sqrt(s)
+    return 0
+end
+
+function delta_R_raw(F::SparseMatrixCSC, w::AbstractVector)
+    rows = rowvals(F)
+    vals = nonzeros(F)
+    n    = size(F, 2)
+    T    = promote_type(eltype(vals), eltype(w))
+
+    nt      = max(1, min(Threads.nthreads(), n))
+    bounds  = round.(Int, range(1, n + 1; length = nt + 1))
+    partial = zeros(T, nt)
+
+    Threads.@threads for t in 1:nt
+        s = zero(T)
+        @inbounds for j in bounds[t]:(bounds[t+1] - 1)
+            wj = w[j]
+            for k in nzrange(F, j)
+                i = rows[k]
+                i == j && continue
+                wi = w[i]
+                if i < j
+                    kt = _find_nz(F, rows, j, i)
+                    d  = wi * vals[k] - (kt == 0 ? zero(T) : wj * vals[kt])
+                else
+                    _find_nz(F, rows, j, i) == 0 || continue
+                    d = -(wi * vals[k])
+                end
+                s += d * d / (wi * wi + wj * wj)
+            end
+        end
+        partial[t] = s
+    end
+
+    return sqrt(sum(partial))
 end
 delta_R_raw(F::AbstractMatrix, w::AbstractVector) =
     length(w) > 1000 ? delta_R_parallel(F, w) : delta_R(F, w)
@@ -300,7 +339,7 @@ function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
               k_dykstra::Int=0, max_iters::Int=1000, verbose::Bool=true,
               nz_over_N::Real=length(w))
 
-    delta_raw = delta_R(F_raw, w)
+    delta_raw = delta_R_raw(F_raw, w)
               
     if k_dykstra <= 0
         F_smooth, k_ap, converged, delta_max = AP(F_raw, w, num_surfaces; max_iters, verbose, nz_over_N)
@@ -331,7 +370,7 @@ function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
     return F_smooth, converged, delta_raw, delta_max, k_dyk_conv, k_ap, k_pcg_tot, k_pcg_max
 end
 
-function get_w(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D}; spectral_bin::Int=1)
+function get_w(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}; spectral_bin::Int=1)
     
     if typeof(rtm) <: RayTracingDomain2D
         # Extract surface areas, volumes, and local extinction for specific spectral bin
@@ -353,7 +392,7 @@ function get_w(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D}; spectral_bin::
             w[element_idx] = max(1e-6, 4*local_beta*face.volume)
         end
         return w
-    elseif typeof(rtm) <: ViewFactorDomain3D
+    elseif typeof(rtm) <: SurfaceDomain3D
         w = Float64[]
         for emitter_face in rtm.facesMesh
             for emitter_sub in emitter_face.subFaces
@@ -366,7 +405,7 @@ function get_w(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D}; spectral_bin::
     end
 end
 
-function get_b(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D})
+function get_b(rtm::Union{RayTracingDomain2D,SurfaceDomain3D})
 
     if typeof(rtm) <: RayTracingDomain2D
         b_mat = Matrix{Float64}(undef, length(rtm.surface_mapping)+length(rtm.volume_mapping), rtm.n_spectral_bins)    
@@ -381,7 +420,7 @@ function get_b(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D})
                 b_mat[element_idx,m] = face.sigma_s_g[m]/(face.sigma_s_g[m]+face.kappa_g[m])
             end
         end
-    elseif typeof(rtm) <: ViewFactorDomain3D
+    elseif typeof(rtm) <: SurfaceDomain3D
         N_surfs = sum([length(superface.subFaces) for superface in rtm.facesMesh])
         b_mat = Matrix{Float64}(undef, N_surfs, rtm.n_spectral_bins)
         for m in 1:rtm.n_spectral_bins
@@ -435,7 +474,7 @@ function get_T_current(rtm::RayTracingDomain2D)
 end
 
 # Updated smoothing algorithm
-function smooth_F(rtm::Union{RayTracingDomain2D,ViewFactorDomain3D}, F_raw::AbstractMatrix;
+function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::AbstractMatrix;
                                  max_iters::Int=1_000,
                                  smooth_surfaces_only::Bool=false,
                                  k_dykstra::Union{Nothing,Int}=nothing,

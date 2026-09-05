@@ -107,35 +107,3 @@ function RayTraceHeatTransfer.plotField(domain::RayTracingDomain2D; field::Symbo
     display(p)
     return p
 end
-
-# 3d plotField
-function RayTraceHeatTransfer.plotField(ax1, domain::ViewFactorDomain3D; field=:T, cmap=:thermal)
-
-    # Function to get the field value
-    value_field = Symbol(string(field) * "_w")
-    
-    value_range = extrema([getfield(subface, value_field) for superface in domain.facesMesh for subface in superface.subFaces])
-    crange = value_range
-
-    for superface in domain.facesMesh # face
-        for subface in superface.subFaces
-            tri1_x = [subface.vertices[1][1], subface.vertices[2][1], subface.vertices[3][1]]
-            tri1_y = [subface.vertices[1][2], subface.vertices[2][2], subface.vertices[3][2]]
-            tri1_z = [subface.vertices[1][3], subface.vertices[2][3], subface.vertices[3][3]]
-            plot = Makie.mesh!(ax1, tri1_x, tri1_y, tri1_z, 
-                                color = getfield(subface, value_field),
-                                colormap = cmap, 
-                                colorrange = crange)
-            if length(subface.vertices) == 4
-                tri2_x = [subface.vertices[1][1], subface.vertices[3][1], subface.vertices[4][1]]
-                tri2_y = [subface.vertices[1][2], subface.vertices[3][2], subface.vertices[4][2]]
-                tri2_z = [subface.vertices[1][3], subface.vertices[3][3], subface.vertices[4][3]]
-                plot = Makie.mesh!(ax1, tri2_x, tri2_y, tri2_z, 
-                            color = getfield(subface, value_field),
-                            colormap = cmap, 
-                            colorrange = crange)
-            end
-        end
-    end
-
-end

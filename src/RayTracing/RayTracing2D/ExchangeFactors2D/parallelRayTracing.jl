@@ -1,5 +1,8 @@
-function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P, 
-                                        nudge::G, verbose::Bool; rec=nothing) where {P<:Integer, G}
+function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::S, 
+                                        nudge::G, verbose::Bool,
+                                        seeds::Union{UnitRange{P},Vector{P}}, rngs::Vector{<:AbstractRNG},
+                                        nthreads::K;
+                                        rec=nothing) where {S<:Integer, P<:Integer, K<:Integer, G}
 
     surface_mapping, volume_mapping, num_surfaces, num_volumes = createIndexMapping(rtm, rays_total)
     num_emitters = num_surfaces + num_volumes
@@ -22,7 +25,7 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
             F_raw_bin = computeExchangeFactorsBin(
                 rtm, rays_per_emitter, nudge, bin,
                 surface_mapping, volume_mapping, num_surfaces,
-                num_volumes, num_emitters, verbose, rec
+                num_volumes, num_emitters, verbose, rec, seeds, rngs, nthreads
             )
             F_raw_vector[bin] = F_raw_bin
         end
@@ -34,7 +37,7 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
             F_raw_bin = computeExchangeFactorsBin(
                 rtm, rays_per_emitter, nudge, representative_bin,
                 surface_mapping, volume_mapping, num_surfaces,
-                num_volumes, num_emitters, verbose, rec
+                num_volumes, num_emitters, verbose, rec, seeds, rngs, nthreads
             )
             for j in idx_group
                 F_raw_vector[j] = F_raw_bin
@@ -54,7 +57,7 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
         F_raw = computeExchangeFactorsBin(
             rtm, rays_per_emitter, nudge, 1,  # Use bin 1 (doesn't matter for uniform)
             surface_mapping, volume_mapping, num_surfaces,
-            num_volumes, num_emitters, verbose, rec
+            num_volumes, num_emitters, verbose, rec, seeds, rngs, nthreads
         )
         
         if rtm.surfaces_only
@@ -65,10 +68,12 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::P,
     end
 end
 
-function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P,
+function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::S,
                                  nudge::G, spectral_bin::P,
                                  surface_mapping, volume_mapping, num_surfaces,
-                                 num_volumes, num_emitters, verbose, rec) where {P<:Integer, G}
+                                 num_volumes, num_emitters, verbose, rec,
+                                 seeds::Union{UnitRange{K},Vector{K}}, rngs::Vector{<:AbstractRNG},
+                                 nthreads::P) where {S<:Integer, P<:Integer, K<:Integer, G}
 
     # Combined, globally-sorted emitter list
     all_emitters = Vector{Tuple{Any, Int}}()
@@ -80,7 +85,6 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P,
     end
     sort!(all_emitters, by = x -> x[2])
 
-    nthreads = Threads.nthreads()
     verbose && println("  Using $nthreads threads for spectral bin $spectral_bin")
 
     # Partition emitters across threads — disjoint ranges, so each thread is independent
@@ -105,6 +109,8 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P,
 
     @threads for tid in 1:nthreads
         Il, Jl, Vl = Is[tid], Js[tid], Vs[tid]
+        local_rng   = rngs[tid]
+        Random.seed!(rngs[tid], seeds[tid])
         row = Dict{Int,Int}()                      # absorber → count, reused per emitter
 
         for global_emitter_idx in thread_assignments[tid]
@@ -116,8 +122,8 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P,
                 coarse_index, fine_index, wall_index = emitter_key
                 face = rtm.fine_mesh[coarse_index][fine_index]
                 for _ in 1:rays_per_emitter
-                    p_emit, dir_emit = emitSurfaceRay2D(face, wall_index, nudge)
-                    result = traceRay(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin)
+                    p_emit, dir_emit = emitSurfaceRay2D(face, wall_index, nudge, local_rng)
+                    result = traceRay(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin, local_rng)
                     result === nothing && continue
                     a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result...)
                     a == -1 && continue
@@ -131,8 +137,8 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::P,
                 coarse_index, fine_index = emitter_key
                 face = rtm.fine_mesh[coarse_index][fine_index]
                 for _ in 1:rays_per_emitter
-                    p_emit, dir_emit = emitVolumeRay2D(face, nudge)
-                    result = traceRay(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin)
+                    p_emit, dir_emit = emitVolumeRay2D(face, nudge, local_rng)
+                    result = traceRay(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin, local_rng)
                     result === nothing && continue
                     a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result...)
                     a == -1 && continue

@@ -208,7 +208,7 @@ end
             solveEquilibrium!(mesh, mesh.F_smooth)
             
             # Extract centerline temperatures
-            centerline_temps = extractCenterlineTemperatures(mesh, Ndim) #, wall_idx)
+            centerline_temps = extractCenterlineTemperatures(mesh, Ndim)
             
             # Convert to dimensionless source function
             source_func_computed = dimensionlessSourceFunction(centerline_temps, T_hot)

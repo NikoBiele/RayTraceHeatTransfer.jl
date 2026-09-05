@@ -57,6 +57,14 @@ using Test
     @testset "Spectral bin refinement" begin
         include("test_spectral_bin_refinement.jl")
     end
+
+    @testset "Geometry" begin
+        include("test_geometry.jl")
+    end
+
+    @testset "Reproducible" begin
+        include("test_reproducible.jl")
+    end
     
     println("\n" * "="^80)
     println("TEST SUITE COMPLETE")

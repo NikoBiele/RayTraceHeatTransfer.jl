@@ -164,7 +164,14 @@ function Base.show(io::IO, d::ViewFactorDomain3D)
               d.spectral_mode, ")")
 end
 
-function Base.show(io::IO, ::MIME"text/plain", d::ViewFactorDomain3D)
+function Base.show(io::IO, d::RayTracingDomain3D_surfaces)
+    nf   = length(d.facesMesh)
+    nsub = sum(length(f.subFaces) for f in d.facesMesh; init = 0)
+    print(io, "RayTracingDomain3D_surfaces(", nf, " faces, ", nsub, " subfaces, ",
+              d.spectral_mode, ")")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", d::D) where {D<:SurfaceDomain3D}
     get(io, :compact, false) && return show(io, d)
 
     nf    = length(d.facesMesh)
@@ -172,7 +179,11 @@ function Base.show(io::IO, ::MIME"text/plain", d::ViewFactorDomain3D)
     nsub  = sum(per; init = 0)
     stage = _stage(d)
 
-    println(io, "ViewFactorDomain3D")
+    if D <: ViewFactorDomain3D
+        println(io, "ViewFactorDomain3D")
+    else
+        println(io, "RayTracingDomain3D_surfaces")
+    end
 
     # geometry — note the topology breakdown, since triangles and quads give
     # different subface counts at the same Ndim
@@ -225,3 +236,6 @@ function Base.show(io::IO, f::PolyFace3D{G}) where {G}
     ns = f.subFaces === nothing ? 0 : length(f.subFaces)
     print(io, "PolyFace3D{", G, "}(", nv, " vertices, ", ns, " subfaces)")
 end
+
+Base.show(io::IO, dp::DomainPlot3D) =
+    print(io, "DomainPlot3D(", length(dp.elements), " elements)")

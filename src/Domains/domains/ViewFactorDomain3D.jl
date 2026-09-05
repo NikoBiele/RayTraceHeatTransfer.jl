@@ -6,6 +6,8 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
                        q_in_w::Vector{G}, T_in_w::Vector{G}, 
                        epsilon::Union{Vector{G}, Vector{Vector{G}}}) where {G, P<:Integer}
     
+    faces_oriented, enclosed_volume = orientFaces(points, faces)
+
     # Determine spectral mode from epsilon
     is_spectral = isa(epsilon[1], Vector)
     if is_spectral
@@ -19,13 +21,9 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
     end
     n_bins = is_spectral ? length(epsilon[1]) : 1
     
-    # Calculate domain midpoint
-    domain_mid = sum(points, dims=1)/size(points, 1)    
-    domain_midpoint = Point3{G}(domain_mid[1], domain_mid[2], domain_mid[3])
-    
     # Create super faces
     superFaces = PolyFace3D[]
-    for (i, face_rows) in enumerate(eachrow(faces))
+    for (i, face_rows) in enumerate(eachrow(faces_oriented))
         if length(unique(face_rows)) == 3 || length(face_rows) == 3
             points3d = [Point3{G}(points[fr,:]) for fr in unique(face_rows)]
         elseif length(face_rows) == 4
@@ -34,11 +32,12 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
             error("Superfaces in 3D must consist of 3 or 4 points")
         end
         
-        push!(superFaces, PolyFace3D(points3d, true, domain_midpoint, epsilon[i], q_in_w[i], T_in_w[i]))
+        inwardNormal = -normalize(cross(points3d[2] - points3d[1], points3d[3] - points3d[1]))
+        push!(superFaces, PolyFace3D(points3d, true, inwardNormal, epsilon[i], q_in_w[i], T_in_w[i]))
     end
     
     # Mesh the faces
-    mesh3D = meshFaces(points, faces, Ndims)
+    mesh3D = meshFaces(points, faces_oriented, Ndims)
     num_faces = length(mesh3D)
     
     first_epsilon = nothing
@@ -53,12 +52,13 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
             p3 = Point3{G}(mesh3D[i][3][j]...)
             p4 = Point3{G}(mesh3D[i][4][j]...)
             
+            inwardNormal = -normalize(cross(p2 - p1, p3 - p1))
             if isapprox(p3, p4, atol=1e-5) 
                 push!(superFaces[i].subFaces, 
-                    PolyFace3D([p1, p2, p3], true, domain_midpoint, epsilon[i], 0.0, T_in_w[i]))
+                    PolyFace3D([p1, p2, p3], true, inwardNormal, epsilon[i], 0.0, T_in_w[i]))
             else
                 push!(superFaces[i].subFaces, 
-                    PolyFace3D([p1, p2, p3, p4], true, domain_midpoint, epsilon[i], 0.0, T_in_w[i]))
+                    PolyFace3D([p1, p2, p3, p4], true, inwardNormal, epsilon[i], 0.0, T_in_w[i]))
             end
         end
         
@@ -83,10 +83,10 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
     end
 
     # Return with superFaces as facesMesh (this is the variable name expected)
-    number_of_elements = size(faces)[1]
+    number_of_elements = size(faces_oriented)[1]
     F_raw = Matrix{G}(undef, number_of_elements, number_of_elements)
     F_smooth = Matrix{G}(undef, number_of_elements, number_of_elements)
-    return ViewFactorDomain3D{G, P}(points, faces, Ndims, superFaces, F_raw, F_smooth, 
+    return ViewFactorDomain3D{G, P}(points, faces_oriented, Ndims, superFaces, F_raw, F_smooth, 
                                 spectral_mode, n_bins, nothing, nothing, uniform_epsilon, true)
 end
     

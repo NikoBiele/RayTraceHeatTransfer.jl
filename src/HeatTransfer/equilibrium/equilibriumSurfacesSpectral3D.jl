@@ -1,5 +1,6 @@
-function equilibriumSurfacesSpectral3D!(domain::ViewFactorDomain3D{G,P}, F::Matrix{G}; 
-                               max_iters::Int=1000, convergence_tol::G=1e-12, verbose::Bool=true) where {G,P<:Integer}
+function equilibriumSurfacesSpectral3D!(domain::SurfaceDomain3D{G,P}, F::AbstractMatrix; 
+                               max_iters::Int=1000, convergence_tol::G=1e-12, verbose::Bool=true) where
+                               {G,P<:Integer}
     """
     Solve 3D spectral surface radiation using the optimal solver.
     
@@ -32,7 +33,7 @@ function equilibriumSurfacesSpectral3D!(domain::ViewFactorDomain3D{G,P}, F::Matr
     end
 end
 
-function equilibriumSurfacesSpectral3D_woodbury!(domain::ViewFactorDomain3D{G,P}, F::AbstractMatrix;
+function equilibriumSurfacesSpectral3D_woodbury!(domain::SurfaceDomain3D{G,P}, F::AbstractMatrix;
                                max_iters::Int=1000,
                                convergence_tol::G=1e-12, verbose::Bool=true) where {G,P<:Integer}
 
@@ -206,7 +207,7 @@ function equilibriumSurfacesSpectral3D_woodbury!(domain::ViewFactorDomain3D{G,P}
     verbose && println("=== 3D Spectral Solution Complete (WOODBURY) ===")
 end
 
-function equilibriumSurfacesSpectral3D_direct!(domain::ViewFactorDomain3D{G,P}, F::AbstractMatrix;
+function equilibriumSurfacesSpectral3D_direct!(domain::SurfaceDomain3D{G,P}, F::AbstractMatrix;
                                                 verbose::Bool=true) where {G,P<:Integer}
     """
     OPTIMIZED direct emission solver for 3D non-scattering, non-reflecting problems.

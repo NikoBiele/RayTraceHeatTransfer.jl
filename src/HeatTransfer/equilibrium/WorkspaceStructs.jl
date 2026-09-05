@@ -117,8 +117,8 @@ function populateWorkspace!(ws::OneMatrixWorkspace{P}, mesh::RayTracingDomain2D,
 end
 
 # Populate workspace from 3D domain (surfaces only!)
-function populateWorkspace!(ws::SurfaceOnlyWorkspace{P}, domain::ViewFactorDomain3D, 
-                                spectral_bin::Int) where P
+function populateWorkspace!(ws::SurfaceOnlyWorkspace{P}, domain::D, 
+                                spectral_bin::Int) where {P,D<:SurfaceDomain3D}
     surf_count = 0
     
     for superface in domain.facesMesh

@@ -1,6 +1,6 @@
-function sample_reflection_direction(normal::Point2{Float64})
+function sampleReflectionDirection(normal::Point2{G}, rng) where G
     # Sample direction in local coordinate system
-    i1_loc = lambertSample3D()
+    i1_loc = lambertSample2D(rng, G)
     
     # Create local coordinate system
     xVecLocal2D = SVector{2}([normal[2], -normal[1]])

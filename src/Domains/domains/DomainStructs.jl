@@ -157,7 +157,7 @@ mutable struct PolyFace3D{G}
     T_w::Union{Nothing, G}                # temperature [K] - scalar (physical quantity)
 end
 
-mutable struct ViewFactorDomain3D{G,P<:Integer}
+mutable struct ViewFactorDomain3D{G,P<:Integer} <: SurfaceDomain3D{G,P}
     points::AbstractMatrix
     faces::AbstractMatrix
     Ndims::P
@@ -189,4 +189,78 @@ struct MacroSurface
     weight::Float64                  # summed element areas
     endpoints::Vector{NTuple{2,Float64}}   # element endpoints (for tests)
     element_ids::Vector{Int}         # global exchange-matrix indices
+end
+
+###################################################
+
+"""
+Intersection primitive. Every subface is triangulated for intersection;
+a quad becomes two of these, both carrying the same `element`.
+Edges precomputed for Möller–Trumbore.
+"""
+struct Tri3D{T<:AbstractFloat}
+    a::Point3{T}
+    ab::Vec3{T}
+    ac::Vec3{T}
+    element::Int32          # row/column index in F
+end
+
+"""
+One radiative element, flattened. This is a row of F.
+Triangles store v[4] == v[3].
+"""
+struct Facet3D{T<:AbstractFloat}
+    v::SVector{4,Point3{T}}
+    nv::Int8                # 3 or 4
+    inwardNormal::Vec3{T}         # unit, into the enclosure
+    e1::Vec3{T}             # tangent frame for cosine-weighted emission
+    e2::Vec3{T}
+    centroid::Point3{T}
+    area::T
+    tri_split::T            # area fraction of first triangle (quad sampling)
+    parent::Int32           # index into facesMesh
+end
+
+struct BVHNode{T<:AbstractFloat}
+    bmin::Point3{T}
+    bmax::Point3{T}
+    left::Int32             # left child; right is left+1. <0 marks a leaf
+    first::Int32            # first primitive in `order` (leaves only)
+    count::Int32
+end
+
+struct BVH{T<:AbstractFloat}
+    nodes::Vector{BVHNode{T}}
+    order::Vector{Int32}    # permutation into domain.tris
+end
+
+mutable struct RayTracingDomain3D_surfaces{G,P<:Integer} <: SurfaceDomain3D{G,P}
+    points::AbstractMatrix
+    faces::AbstractMatrix
+    Ndims::P
+    facesMesh::Vector{PolyFace3D{G}}
+
+    F_raw::AbstractMatrix           # sparse, wavelength-independent
+    F_smooth::AbstractMatrix
+
+    # derived cache, rebuilt by flatten!
+    facets::Union{Nothing, Vector{Facet3D{G}}}
+    tris::Union{Nothing, Vector{Tri3D{G}}}
+    bvh::Union{Nothing, BVH{G}}
+    flattened::Bool
+
+    spectral_mode::Symbol
+    n_spectral_bins::Int
+    wavelength_band_limits::Union{Nothing, Vector{G}}
+    energy_error::Union{Nothing, G, Vector{G}}
+    uniform_epsilon::Bool
+    surfaces_only::Bool             # always true; kept for compatibility
+end
+
+struct DomainPlot3D{P,S,D,F}
+    plot::P
+    selected::S
+    describe::D
+    elements::F
+    parents::Vector{Int}
 end

@@ -27,12 +27,14 @@ const C2 = 1.4387768775039337e-2 # h_P * c0 / k_B
 # Declare plotting function names so they can be extended by an extension:
 function plotMesh end
 function plotField end
+function plotDomain3D end
 
 # throw error if plotting is not enabled
 _notenabled(f) = throw(ArgumentError("$f requires the plotting extension. Install and load GLMakie and Plots to enable it,
                                         or ensure that the correct function arguments are provided."))
 plotMesh(args...; kwargs...) = _notenabled(:plotMesh)
 plotField(args...; kwargs...) = _notenabled(:plotField)
+plotDomain3D(args...; kwargs...) = _notenabled(:plotDomain3D)
 
 # include code
 include(joinpath(@__DIR__, "Domains", "domains.jl"))
@@ -50,8 +52,12 @@ export PolyVolume2D,
        buildSystemMatrix,
        solveEquilibrium!,
        plotMesh,
+       plotDomain3D,
        plotField,
        RayRecorder,
        collect_rays,
-       smooth!
+       smooth!,
+       RayTracingDomain3D_surfaces,
+       elementFaces,
+       elementParents
 end

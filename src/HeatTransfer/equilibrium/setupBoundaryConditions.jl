@@ -106,7 +106,7 @@ function setupBoundaryConditions(rtm::RayTracingDomain2D, F_matrices::Union{Abst
     return boundary, temperatures, emissive
 end
 
-function setupBoundaryConditions(domain::ViewFactorDomain3D{G,P}) where {G,P}
+function setupBoundaryConditions(domain::SurfaceDomain3D{G,P}) where {G,P}
     
     N_surfs = sum([length(superface.subFaces) for superface in domain.facesMesh])
     boundary = zeros(G, N_surfs)

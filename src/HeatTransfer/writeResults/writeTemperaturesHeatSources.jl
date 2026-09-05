@@ -30,7 +30,7 @@ function writeTemperaturesHeatSources!(rtm::RayTracingDomain2D, temperatures)
 end
 
 # Convenience function to update temperatures and heat sources after all spectral bins are computed
-function writeTemperaturesHeatSources!(domain::ViewFactorDomain3D, temperatures)
+function writeTemperaturesHeatSources!(domain::SurfaceDomain3D, temperatures)
 
     surf_count = 0
     for superface in domain.facesMesh

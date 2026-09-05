@@ -1,9 +1,12 @@
-function exchangeRayTracing!(rtm::RayTracingDomain2D, rays_tot::P, 
+function exchangeRayTracing!(rtm::RayTracingDomain2D, rays_tot::S, 
                               nudge::G, verbose::Bool,
-                              rec::Union{Nothing,RayRecorder}) where {G, P<:Integer}
+                              rec::Union{Nothing,RayRecorder},
+                              seeds::Union{UnitRange{P},Vector{P}}, rngs::Vector{<:AbstractRNG},
+                              nthreads::K
+                              ) where {G, S<:Integer, P<:Integer, K<:Integer}
 
     # Ray trace domain - returns different types based on spectral mode
-    F_raw = parallelRayTracing(rtm, rays_tot, nudge, verbose; rec)
+    F_raw = parallelRayTracing(rtm, rays_tot, nudge, verbose, seeds, rngs, nthreads; rec)
     
     # Update mesh with results
     rtm.F_raw = F_raw

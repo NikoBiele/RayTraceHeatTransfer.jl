@@ -1,4 +1,4 @@
-function solveEquilibrium!(domain::Union{RayTracingDomain2D, ViewFactorDomain3D}, F_matrices::Union{AbstractMatrix, Vector{AbstractMatrix}};
+function solveEquilibrium!(domain::Union{RayTracingDomain2D, SurfaceDomain3D}, F_matrices::Union{AbstractMatrix, Vector{AbstractMatrix}};
                             max_iters::Int=1000, convergence_tol::G=1e-12, verbose::Bool=true) where G
     if domain isa RayTracingDomain2D
         if domain.spectral_mode == :grey
@@ -10,7 +10,7 @@ function solveEquilibrium!(domain::Union{RayTracingDomain2D, ViewFactorDomain3D}
         else
             error("Unknown spectral mode: $(domain.spectral_mode)")
         end
-    elseif domain isa ViewFactorDomain3D
+    elseif domain isa SurfaceDomain3D
         if domain.spectral_mode == :grey
             # Grey mode
             equilibriumSurfacesGrey3D!(domain, F_matrices; verbose=verbose)
