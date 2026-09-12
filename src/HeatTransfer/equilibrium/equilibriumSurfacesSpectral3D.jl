@@ -37,25 +37,8 @@ function equilibriumSurfacesSpectral3D_woodbury!(domain::SurfaceDomain3D{G,P}, F
                                max_iters::Int=1000,
                                convergence_tol::G=1e-12, verbose::Bool=true) where {G,P<:Integer}
 
-    if isnothing(domain.wavelength_band_limits)
-        error("""
-        Spectral solve requires wavelength band limits to be set.
- 
-        Please set mesh.wavelength_band_limits before calling steadyStateSpectral3D!:
- 
-        Example, using logarithmic spacing:
-            mesh.wavelength_band_limits = 10 .^ range(log10(0.0000001), log10(0.001), length=51)
-        """)
-    end
-    if length(domain.wavelength_band_limits) < 4
-        error("wavelength_band_limits must have at least 4 values (defining 3 bins)")
-    end
-    if any(domain.wavelength_band_limits .<= 0)
-        error("wavelength_band_limits must all be positive (wavelengths > 0)")
-    end
-    if any(diff(domain.wavelength_band_limits) .<= 0)
-        error("wavelength_band_limits must be strictly increasing (no duplicates)")
-    end
+    # Validate spectral setup at entry (wavelength bands weights)
+    validateSpectralSetup(domain)
  
     verbose && println("=== 3D Spectral Surface Radiation Solver (WOODBURY) ===")
     verbose && println("Spectral mode: $(domain.spectral_mode)")
@@ -218,30 +201,8 @@ function equilibriumSurfacesSpectral3D_direct!(domain::SurfaceDomain3D{G,P}, F::
     Requires: ε=1 everywhere (no reflection) - 3D has no volumes so no scattering check needed
     """
     
-    # Validate spectral setup at entry
-    if isnothing(domain.wavelength_band_limits)
-        error("""
-        Spectral solve requires wavelength band limits to be set.
-        
-        Please set mesh.wavelength_band_limits before calling steadyStateSpectral3D_direct!:
-        
-        Example, using logarithmic spacing:
-            mesh.wavelength_band_limits = 10 .^ range(log10(0.0000001), log10(0.001), length=51)
-        """)
-    end
-    
-    # Additional validation
-    if length(domain.wavelength_band_limits) < 4
-        error("wavelength_band_limits must have at least 4 values (defining 3 bins)")
-    end
-    
-    if any(domain.wavelength_band_limits .<= 0)
-        error("wavelength_band_limits must all be positive (wavelengths > 0)")
-    end
-
-    if any(diff(domain.wavelength_band_limits) .<= 0)
-        error("wavelength_band_limits must be strictly increasing (no duplicates)")
-    end
+    # Validate spectral setup at entry (wavelength bands weights)
+    validateSpectralSetup(domain)
 
     verbose && println("=== 3D Spectral Surface Radiation Solver (DIRECT) ===")
     verbose && println("Spectral mode: $(domain.spectral_mode)")

@@ -80,7 +80,7 @@ CONSISTENCY_TOLERANCE = 0.05  # 5% tolerance for consistency checks (ray tracing
                                      epsilon_spectral)
     domain_spectral()
     smooth!(domain_spectral)
-    domain_spectral.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    domain_spectral.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     solveEquilibrium!(domain_spectral, domain_spectral.F_smooth)
     
     spectral_T = Float64[]
@@ -164,7 +164,7 @@ end
     mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
     mesh.spectral_mode = :spectral_uniform
     mesh.n_spectral_bins = n_bins
-    mesh.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    mesh.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     
     # Solve spectral problem
     N_rays = 1_000_000
@@ -248,7 +248,7 @@ end
                                   epsilon_all_black)
     domain_black()
     smooth!(domain_black)
-    domain_black.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    domain_black.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     solveEquilibrium!(domain_black, domain_black.F_smooth)
     
     black_temps = [sf.T_w for i in 1:6 for sf in domain_black.facesMesh[i].subFaces]
@@ -261,7 +261,7 @@ end
                                       epsilon_all_selective)
     domain_selective()
     smooth!(domain_selective)
-    domain_selective.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    domain_selective.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     solveEquilibrium!(domain_selective, domain_selective.F_smooth)
     
     selective_temps = [sf.T_w for i in 1:6 for sf in domain_selective.facesMesh[i].subFaces]
@@ -321,7 +321,7 @@ end
                                      epsilon_spectral)
     domain_spectral()
     smooth!(domain_spectral)
-    domain_spectral.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    domain_spectral.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     
     @test domain_spectral.spectral_mode == :spectral_uniform || 
           domain_spectral.spectral_mode == :spectral_variable
@@ -365,7 +365,7 @@ end
     domain = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
     domain()
     smooth!(domain)
-    domain.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    domain.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     solveEquilibrium!(domain, domain.F_smooth)
     
     # Check energy balance for each spectral bin separately

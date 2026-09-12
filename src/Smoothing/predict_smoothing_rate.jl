@@ -42,6 +42,8 @@ function predict_rho_data(rtm::RayTracingDomain2D)
 
         w = get_w(rtm; spectral_bin = b)
         rtm.surfaces_only && (w = w[1:n_surf]; F = F[1:n_surf,1:n_surf])
+        act = findall(>(0), w)
+        length(act) < length(w) && (w = w[act]; F = F[act, act])
         W = sum(w)
 
         t   = (2 * wS - W) / W

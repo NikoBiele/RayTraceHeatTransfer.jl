@@ -69,7 +69,7 @@ SHARED_F_J_RTOL   = 1e-9   #     (observed ~1e-12)
     face_spec.epsilon = [fill(eps_val, n_bins) for _ in 1:4]
     mesh_spec = RayTracingDomain2D([face_spec], [(Ndim, Ndim)])
     mesh_spec.n_spectral_bins        = n_bins
-    mesh_spec.wavelength_band_limits = band_limits
+    mesh_spec.spectral_model = PlanckBands(band_limits)
 
     # ---- trace ONCE; both solvers consume the identical F --------------------
     mesh_spec(N_rays; method=:exchange)

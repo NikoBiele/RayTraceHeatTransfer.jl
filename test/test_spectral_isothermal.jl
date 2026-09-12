@@ -41,8 +41,8 @@ function _isothermal_spectral_error(κ_bins::Vector{Float64},
     face.q_in_g    = 0.0
 
     mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
-    mesh.wavelength_band_limits =
-        10 .^ range(log10(λ_min), log10(λ_max), length = n_bins + 1)
+    mesh.spectral_model =
+        PlanckBands(10 .^ range(log10(λ_min), log10(λ_max), length = n_bins + 1))
 
     mesh(N_rays; method = :exchange)
     smooth!(mesh)

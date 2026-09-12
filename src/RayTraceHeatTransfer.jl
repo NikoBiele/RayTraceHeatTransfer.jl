@@ -10,6 +10,7 @@ using Base.Threads
 using StatsBase
 using SparseArrays
 using Krylov
+using ConvolutionInterpolations
 
 # constants
 const xVecGlobal2D = SVector(1.0, 0.0)
@@ -59,5 +60,10 @@ export PolyVolume2D,
        smooth!,
        RayTracingDomain3D_surfaces,
        elementFaces,
-       elementParents
+       elementParents,
+       AbstractSpectralModel,
+       PlanckBands,
+       ConstantWeights,
+       PiecewiseBands,
+       adaptiveSpectralBins
 end

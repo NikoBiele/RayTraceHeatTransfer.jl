@@ -74,7 +74,7 @@ DECOUPLE_J_RTOL = 1e-8    # deterministic shared-F comparison; observed ~1e-10
     face_spec.epsilon = [copy(eps_bins) for _ in 1:4]
     mesh_spec = RayTracingDomain2D([face_spec], [(Ndim, Ndim)])
     mesh_spec.n_spectral_bins        = n_bins
-    mesh_spec.wavelength_band_limits = band_limits
+    mesh_spec.spectral_model = PlanckBands(band_limits)
     # spectral_mode left to the package's own detection where possible; set if required:
     @test mesh_spec.spectral_mode == :spectral_variable
 

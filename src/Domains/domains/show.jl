@@ -63,11 +63,8 @@ function _spectral_line(d)
     mode === :grey && return "grey"
     n = getfield(d, :n_spectral_bins)
     s = string(mode, ", ", n, " bins")
-    lims = getfield(d, :wavelength_band_limits)
-    if lims isa AbstractVector && length(lims) >= 2
-        s *= string(", λ ∈ [", round(first(lims); sigdigits = 3), ", ",
-                    round(last(lims);  sigdigits = 3), "]")
-    end
+    m = getfield(d, :spectral_model)
+    m === nothing || (s *= string(", ", describe(m)))
     return s
 end
 

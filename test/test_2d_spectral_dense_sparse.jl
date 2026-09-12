@@ -43,7 +43,7 @@ function build_cs_spectral(N_side::Int, n_bins::Int)
     face.T_in_g  = -1.0
     face.q_in_g  = 0.0
     mesh = RayTracingDomain2D([face], [(N_side, N_side)])
-    mesh.wavelength_band_limits = 10 .^ range(log10(1e-8), log10(0.1), length = n_bins + 1)
+    mesh.spectral_model = PlanckBands(10 .^ range(log10(1e-8), log10(0.1), length = n_bins + 1))
     return mesh
 end
 

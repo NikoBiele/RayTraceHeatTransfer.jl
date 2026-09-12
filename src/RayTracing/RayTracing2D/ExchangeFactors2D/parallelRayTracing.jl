@@ -165,12 +165,12 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::S,
                num_emitters, num_emitters)
     empty!.(Is); empty!.(Js); empty!.(Vs)    # drop the live buffers
     GC.gc()                                  # now they're dead, so this actually reclaims
-    return row_normalize!(F_raw, rays_per_emitter)
+    return row_normalize!(F_raw, rays_per_emitter, verbose)
 end
 
-function row_normalize!(F::SparseMatrixCSC, rays_per_emitter::Int)
+function row_normalize!(F::SparseMatrixCSC, rays_per_emitter::Int, verbose::Bool)
     rs = vec(sum(F, dims = 2))          # row sums, O(nnz)
-    println("Maximum ray tracing ray loss per emitter: $(round(Int, rays_per_emitter*maximum(abs, 1 .- rs)))/$rays_per_emitter")
+    verbose && println("Maximum ray tracing ray loss per emitter: $(round(Int, rays_per_emitter*maximum(abs, 1 .- rs)))/$rays_per_emitter")
     rv = rowvals(F); nz = nonzeros(F)
     @inbounds for k in eachindex(nz)
         nz[k] /= rs[rv[k]]

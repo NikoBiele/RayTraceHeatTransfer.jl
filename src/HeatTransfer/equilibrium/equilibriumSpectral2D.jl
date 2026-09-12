@@ -54,29 +54,8 @@ function equilibriumSpectral2D_direct!(rtm::RayTracingDomain2D, F_matrices::Abst
     """
     G = Float64
     
-    # Validate spectral setup at entry
-    if isnothing(rtm.wavelength_band_limits)
-        error("""
-        Spectral solve requires wavelength band limits to be set.
-        
-        Please set mesh.wavelength_band_limits before calling steadyStateSpectral2D_direct!:
-        
-        Example, using logarithmic spacing:
-            mesh.wavelength_band_limits = 10 .^ range(log10(0.0000001), log10(0.001), length=51)
-        """)
-    end
-    
-    if length(rtm.wavelength_band_limits) < 4
-        error("wavelength_band_limits must have at least 4 values (defining 3 bins)")
-    end
-    
-    if any(rtm.wavelength_band_limits .<= 0)
-        error("wavelength_band_limits must all be positive (wavelengths > 0)")
-    end
-
-    if any(diff(rtm.wavelength_band_limits) .<= 0)
-        error("wavelength_band_limits must be strictly increasing (no duplicates)")
-    end
+    # Validate spectral setup at entry (wavelength bands weights)
+    validateSpectralSetup(rtm)
 
     # Get system dimensions
     surface_mapping, volume_mapping = rtm.surface_mapping, rtm.volume_mapping
@@ -221,27 +200,8 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
 
     G = Float64
 
-    # ---- Validate spectral setup (unchanged) ---------------------------------
-    if isnothing(rtm.wavelength_band_limits)
-        error("""
-        Spectral solve requires wavelength band limits to be set.
-
-        Please set mesh.wavelength_band_limits before calling
-        equilibriumSpectral2D_woodbury!:
-
-        Example, using logarithmic spacing:
-            mesh.wavelength_band_limits = 10 .^ range(log10(0.0000001), log10(0.001), length=51)
-        """)
-    end
-    if length(rtm.wavelength_band_limits) < 4
-        error("wavelength_band_limits must have at least 4 values (defining 3 bins)")
-    end
-    if any(rtm.wavelength_band_limits .<= 0)
-        error("wavelength_band_limits must all be positive (wavelengths > 0)")
-    end
-    if any(diff(rtm.wavelength_band_limits) .<= 0)
-        error("wavelength_band_limits must be strictly increasing (no duplicates)")
-    end
+    # Validate spectral setup at entry (wavelength bands weights)
+    validateSpectralSetup(rtm)
 
     # ---- System dimensions ---------------------------------------------------
     surface_mapping, volume_mapping = rtm.surface_mapping, rtm.volume_mapping
@@ -257,13 +217,15 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
     end
 
     b = get_b(rtm)
-    use_sparse = F_matrices[1] isa SparseMatrixCSC
+    # sparse path only when every band is sparse; mixed storage (e.g. nearly
+    # transparent bands beside dense ones) is handled on the dense path
+    use_sparse = all(F isa SparseMatrixCSC for F in F_matrices)
 
     # D_k kept explicitly in both paths (RHS assembly + result writing)
     D_matrices = Vector{AbstractMatrix}(undef, K)
     for k in 1:K
         Dk = I - Diagonal(b[:,k]) * F_matrices[k]'
-        D_matrices[k] = use_sparse ? sparse(Dk) : Dk
+        D_matrices[k] = use_sparse ? sparse(Dk) : Matrix(Dk)
     end
 
     # ---- Woodbury precomputation ---------------------------------------------
@@ -601,17 +563,7 @@ function predict_spectral_convergence_rate(rtm::RayTracingDomain2D,
     # --- 3. Φ_k = diag(∂f_k/∂T) at current T (one column per band) ---
     #     ∂f_k/∂T = λ_k · F'(λ_k T) − λ_{k−1} · F'(λ_{k−1} T)
     #     with F'(λT) = dF_blackbody/d(λT) evaluated at λT.
-    Phi = zeros(G, N, K)
-    for i in 1:N
-        T_i = temperatures[i]
-        T_i <= 0 && continue
-        lam = rtm.wavelength_band_limits
-        for k in 1:K
-            dF_lo = (k == 1) ? zero(G) : lam[k]   * dF_blackbody_dlambdaT(lam[k]   * T_i)
-            dF_hi = (k == K) ? zero(G) : lam[k+1] * dF_blackbody_dlambdaT(lam[k+1] * T_i)
-            Phi[i, k] = dF_hi - dF_lo
-        end
-    end
+    Phi = getBinsEmissionFractionDerivatives(rtm, temperatures, N)
 
     # --- 4. Define the matvec  v ∈ ℝᴺ ↦ J_red · v ∈ ℝᴺ ---
     #     a) build 𝓔_J · v band-by-band:
@@ -704,17 +656,7 @@ function predict_spectral_rate_dispatch(rtm, F_matrices, M_matrices, D_matrices,
     end
     J_T_diag = G.(ifelse.(is_radeq, temperatures ./ (4 .* emissive), zero(G)))
 
-    Phi = zeros(G, N, K)
-    for i in 1:N
-        T_i = temperatures[i]
-        T_i <= 0 && continue
-        lam = rtm.wavelength_band_limits
-        for k in 1:K
-            dF_lo = (k == 1) ? zero(G) : lam[k]   * dF_blackbody_dlambdaT(lam[k]   * T_i)
-            dF_hi = (k == K) ? zero(G) : lam[k+1] * dF_blackbody_dlambdaT(lam[k+1] * T_i)
-            Phi[i, k] = dF_hi - dF_lo
-        end
-    end
+    Phi = getBinsEmissionFractionDerivatives(rtm, temperatures, N)
 
     # ---- matrix-free J_red matvec via the solver's own hooks -----------------
     t1 = zeros(G, N); t2 = zeros(G, N); t3 = zeros(G, N)

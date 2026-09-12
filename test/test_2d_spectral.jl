@@ -175,7 +175,7 @@ end
                                                  kappa=kappa, sigma_s=sigma_s,
                                                  epsilon_bins=epsilon_bins,
                                                  Ndim=Ndim, n_bins=n_bins)
-    mesh_spectral.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    mesh_spectral.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     mesh_spectral(N_rays; method=:exchange)
     smooth!(mesh_spectral)
     solveEquilibrium!(mesh_spectral, mesh_spectral.F_smooth)
@@ -234,7 +234,7 @@ end
                                               kappa=kappa, sigma_s=sigma_s,
                                               epsilon_bins=epsilon_bins,
                                               Ndim=Ndim, n_bins=n_bins)
-    mesh_spectral.wavelength_band_limits = 10 .^ range(log10(0.000_000_01), log10(0.1), length=n_bins+1)
+    mesh_spectral.spectral_model = PlanckBands(10 .^ range(log10(0.000_000_01), log10(0.1), length=n_bins+1))
     mesh_spectral(N_rays; method=:exchange)
     smooth!(mesh_spectral)
     solveEquilibrium!(mesh_spectral, mesh_spectral.F_smooth)
@@ -271,7 +271,7 @@ end
                                                  kappa=kappa, sigma_s=sigma_s,
                                                  epsilon_bins=epsilon_bins,
                                                  Ndim=Ndim, n_bins=n_bins)
-    mesh_exchange.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    mesh_exchange.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     mesh_exchange(N_rays; method=:exchange)
     smooth!(mesh_exchange)
     solveEquilibrium!(mesh_exchange, mesh_exchange.F_smooth)
@@ -283,7 +283,7 @@ end
                                                kappa=kappa, sigma_s=sigma_s,
                                                epsilon_bins=epsilon_bins,
                                                Ndim=Ndim, n_bins=n_bins)
-    mesh_direct.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    mesh_direct.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     mesh_direct(N_rays; method=:direct)
     
     direct_temps = [fine_face.T_g for fine_face in mesh_direct.fine_mesh[1]]
@@ -316,7 +316,7 @@ end
                                                   base_sigma_s=base_sigma_s,
                                                   epsilon_bins=epsilon_bins,
                                                   Ndim=Ndim, n_bins=n_bins)
-    mesh_exchange.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    mesh_exchange.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     mesh_exchange(N_rays; method=:exchange)
     smooth!(mesh_exchange)
     solveEquilibrium!(mesh_exchange, mesh_exchange.F_smooth)
@@ -329,7 +329,7 @@ end
                                                 base_sigma_s=base_sigma_s,
                                                 epsilon_bins=epsilon_bins,
                                                 Ndim=Ndim, n_bins=n_bins)
-    mesh_direct.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    mesh_direct.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     mesh_direct(N_rays; method=:direct)
     
     direct_temps = [fine_face.T_g for fine_face in mesh_direct.fine_mesh[1]]
@@ -360,7 +360,7 @@ end
                                        kappa=kappa, sigma_s=sigma_s,
                                        epsilon_bins=epsilon_bins,
                                        Ndim=Ndim, n_bins=n_bins)
-    mesh.wavelength_band_limits = 10 .^ range(log10(1e-9), log10(1.0), length=n_bins+1)
+    mesh.spectral_model = PlanckBands(10 .^ range(log10(1e-9), log10(1.0), length=n_bins+1))
     mesh(N_rays; method=:exchange)
     smooth!(mesh)
     solveEquilibrium!(mesh, mesh.F_smooth)
@@ -395,7 +395,7 @@ end
                                        kappa=kappa, sigma_s=sigma_s,
                                        epsilon_bins=epsilon_selective,
                                        Ndim=Ndim, n_bins=n_bins)
-    mesh.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+    mesh.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     mesh(N_rays; method=:exchange)
     smooth!(mesh)
     solveEquilibrium!(mesh, mesh.F_smooth)
@@ -440,7 +440,7 @@ end
                                                kappa=kappa, sigma_s=sigma_s,
                                                epsilon_bins=epsilon_bins,
                                                Ndim=Ndim, n_bins=n_bins)
-            mesh.wavelength_band_limits = 10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1)
+            mesh.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
             mesh(N_rays; method=:exchange)
             smooth!(mesh)
             solveEquilibrium!(mesh, mesh.F_smooth)

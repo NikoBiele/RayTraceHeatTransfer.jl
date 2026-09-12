@@ -22,34 +22,21 @@ function solveTemperatureNewtonRaphson(rtm, element_size, measured_powers, absor
 
     T = initial_temp
     total_measured_power = sum(measured_powers)
+    f_band  = zeros(rtm.n_spectral_bins)
+    df_band = zeros(rtm.n_spectral_bins)
 
     for iter = 1:max_iter
         # Calculate objective function F(T) = Σ P_measured - Σ [ε_i * σT⁴ * f_band_i(T)]
         F = total_measured_power
         dF_dT = 0.0
 
+        # Bin fractions and their temperature derivatives from the spectral model
+        fill_bin_fractions!(f_band, rtm.spectral_model, T)
+        bin_fraction_derivatives!(df_band, rtm.spectral_model, T)
+
         for i = 1:rtm.n_spectral_bins
-
-            # Cumulative blackbody fractions and derivatives at band boundaries
-            if i == 1
-                F_lower     = 0.0
-                dF_lower_dT = 0.0
-            else
-                F_lower     = emitFracBlackBodySpectrum(rtm.wavelength_band_limits, T, i-1)
-                dF_lower_dT = emitFracBlackBodySpectrumDerivative(rtm.wavelength_band_limits[i-1], T)
-            end
-            if i == rtm.n_spectral_bins
-                F_upper     = 1.0
-                dF_upper_dT = 0.0
-            else
-                F_upper     = emitFracBlackBodySpectrum(rtm.wavelength_band_limits, T, i)
-                dF_upper_dT = emitFracBlackBodySpectrumDerivative(rtm.wavelength_band_limits[i], T)
-            end
-            w = 1.0
-
-            # Band/channel fraction and its derivative
-            f_band_i     = w * (F_upper - F_lower)
-            df_band_i_dT = w * (dF_upper_dT - dF_lower_dT)
+            f_band_i     = f_band[i]
+            df_band_i_dT = df_band[i]
 
             # Predicted emission in this bin/channel
             predicted_power_i = f_band_i * absorption_coeffs[i] * element_size * STEFAN_BOLTZMANN * T^4

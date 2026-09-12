@@ -329,7 +329,7 @@ push!(faces, face_sun)
 push!(divisions, (1, 2)) # each layer must be divided for the ray tracer to work
 
 mesh = RayTracingDomain2D(faces, divisions) # mesh the domain
-mesh.wavelength_band_limits = λ_edges # spectral limits
+mesh.spectral_model = PlanckBands(λ_edges) # spectral limits
 ```
 
 ### Step 5: Ray trace, smooth and solve

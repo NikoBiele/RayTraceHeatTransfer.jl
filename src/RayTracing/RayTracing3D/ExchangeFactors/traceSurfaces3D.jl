@@ -138,7 +138,7 @@ function traceSurfaces3D(domain::RayTracingDomain3D_surfaces{G,P}, rays_tot::Int
     empty!.(Is); empty!.(Js); empty!.(Vs)
     GC.gc()
 
-    domain.F_raw = row_normalize!(F_raw, rays_per_emitter)
+    domain.F_raw = row_normalize!(F_raw, rays_per_emitter, verbose)
     return domain
 end
 

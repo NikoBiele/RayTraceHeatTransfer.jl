@@ -80,7 +80,7 @@ GREY3D_J_RTOL   = 1e-9
                                      eps_spectral)
     domain_spec()
     smooth!(domain_spec)
-    domain_spec.wavelength_band_limits = [1.0e-6, 3.0e-6, 8.0e-6, 1.0e-3]
+    domain_spec.spectral_model = PlanckBands([1.0e-6, 3.0e-6, 8.0e-6, 1.0e-3])
     solveEquilibrium!(domain_spec, domain_spec.F_smooth)
 
     # ---- collect per-subface T and j -----------------------------------------

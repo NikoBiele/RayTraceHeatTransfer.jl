@@ -104,7 +104,8 @@ mutable struct RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}
     # NEW: Spectral metadata
     spectral_mode::Symbol        # :grey, :spectral_uniform, :spectral_variable
     n_spectral_bins::Int        # Number of spectral bins (1 for grey)
-    wavelength_band_limits::Union{Nothing, Vector{Float64}}  # Wavelength boundaries [μm]
+
+    spectral_model::Union{Nothing, AbstractSpectralModel}  # how emission is divided over bins (PlanckBands, ConstantWeights, ...)
     surfaces_only::Bool         # indicates if the mesh includes volumes
     uniform_across_bin::Vector{Float64} # vector of uniform extinction (-1.0 where nonuniform)
     # Optimized cache structures (existing)
@@ -168,7 +169,7 @@ mutable struct ViewFactorDomain3D{G,P<:Integer} <: SurfaceDomain3D{G,P}
     # NEW: Spectral metadata
     spectral_mode::Symbol        # :grey or :spectral
     n_spectral_bins::Int        # Number of spectral bins (1 for grey)
-    wavelength_band_limits::Union{Nothing, Vector{G}}  # Wavelength boundaries [μm]
+    spectral_model::Union{Nothing, AbstractSpectralModel}  # how emission is divided over bins
     energy_error::Union{Nothing, G, Vector{G}}
     uniform_epsilon::Bool        # Whether to use uniform epsilon solver
     surfaces_only::Bool         # dummy, always true, used for dispatch
@@ -251,7 +252,7 @@ mutable struct RayTracingDomain3D_surfaces{G,P<:Integer} <: SurfaceDomain3D{G,P}
 
     spectral_mode::Symbol
     n_spectral_bins::Int
-    wavelength_band_limits::Union{Nothing, Vector{G}}
+    spectral_model::Union{Nothing, AbstractSpectralModel}  # how emission is divided over bins
     energy_error::Union{Nothing, G, Vector{G}}
     uniform_epsilon::Bool
     surfaces_only::Bool             # always true; kept for compatibility

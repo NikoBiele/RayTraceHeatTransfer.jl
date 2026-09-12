@@ -65,6 +65,18 @@ using Test
     @testset "Reproducible" begin
         include("test_reproducible.jl")
     end
+
+    @testset "Transparent bin" begin
+        include("test_transparent_bin.jl")
+    end
+
+    @testset "PiecewiseBands" begin
+        include("test_piecewise_bands.jl")
+    end
+
+    @testset "adaptiveSpectralBins" begin
+        include("test_adaptive_spectral_bins.jl")
+    end
     
     println("\n" * "="^80)
     println("TEST SUITE COMPLETE")

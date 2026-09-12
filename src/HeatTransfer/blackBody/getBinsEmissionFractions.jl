@@ -1,33 +1,3 @@
-"""
-    _blackbody_F(λ, T)
-
-Cumulative blackbody fraction F(0→λT) at a single wavelength λ [m] and
-temperature T [K]. Thin wrapper so channel code can evaluate at arbitrary
-wavelengths; reuses the existing series implementation.
-"""
-_blackbody_F(λ::Real, T::Real) = emitFracBlackBodySpectrum((λ,), T, 1)
-
-"""
-    _fill_emission_fractions!(emitFrac, i, T, limits, n_bins)
-
-Bin-mode row fill: bin k spans [limits[k], limits[k+1]]; first bin extended to
-0, last bin extended to ∞ (fractions sum to 1).
-"""
-function _fill_emission_fractions!(emitFrac::AbstractMatrix, i::Int, T::Real,
-                                   limits::AbstractVector, n_bins::Int)
-    F_prev = 0.0                                   # first bin extends down to λ=0
-    for k in 1:n_bins
-        if k == n_bins
-            emitFrac[i, k] = 1.0 - F_prev          # last bin extends up to λ=∞
-        else
-            F_curr = emitFracBlackBodySpectrum(limits, T, k + 1)  # upper edge of bin k
-            emitFrac[i, k] = F_curr - F_prev
-            F_prev = F_curr
-        end
-    end
-    return nothing
-end
-
 function getBinsEmissionFractions(rtm::RayTracingDomain2D, temperatures::Vector{G}) where {G}
 
     num_surfaces = length(rtm.surface_mapping)
@@ -35,8 +5,7 @@ function getBinsEmissionFractions(rtm::RayTracingDomain2D, temperatures::Vector{
     emitFrac = zeros(G, n_elem, rtm.n_spectral_bins)
 
     for i in 1:n_elem
-        _fill_emission_fractions!(emitFrac, i, temperatures[i],
-                                      rtm.wavelength_band_limits, rtm.n_spectral_bins)
+        _fill_bin_fractions!(emitFrac, i, temperatures[i], rtm)
     end
 
     return emitFrac
@@ -48,8 +17,7 @@ function getBinsEmissionFractions(domain::SurfaceDomain3D{G,P}, temperatures::Ve
     emitFrac = zeros(G, num_surfaces, domain.n_spectral_bins)
 
     for i in 1:num_surfaces
-        _fill_emission_fractions!(emitFrac, i, temperatures[i],
-                                    domain.wavelength_band_limits, domain.n_spectral_bins)
+        _fill_bin_fractions!(emitFrac, i, temperatures[i], domain)
     end
 
     return emitFrac

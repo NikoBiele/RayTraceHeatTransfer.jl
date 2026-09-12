@@ -112,7 +112,7 @@ end
 
 # Updated constructor that builds from scratch (for new meshes) - now with spectral support  
 function RayTracingDomain2D(faces::Vector{PolyVolume2D{G}}, Ndiv::Vector{Tuple{P,P}};
-                            verbose::Bool=true) where {G, P<:Integer}
+                            verbose::Bool=true, surfaces_only::Bool=false) where {G, P<:Integer}
     # First create the standard RayTracingMesh
     verbose && println("Building intermediate mesh...")
     standardMesh = IntermediateMesh2D(faces, Ndiv)
@@ -121,13 +121,6 @@ function RayTracingDomain2D(faces::Vector{PolyVolume2D{G}}, Ndiv::Vector{Tuple{P
     verbose && println("Optimizing mesh...")
     optimMesh = RayTracingDomain2D(standardMesh, verbose)
 
-    surfaces_only = true
-    for face in faces
-        if face.volume*sum(face.kappa_g + face.sigma_s_g)/length(face.kappa_g) > 1e-8
-            surfaces_only = false
-            break
-        end
-    end
     optimMesh.surfaces_only = surfaces_only
 
     # Build spatial acceleration

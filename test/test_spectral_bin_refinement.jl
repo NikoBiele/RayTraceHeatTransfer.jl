@@ -73,7 +73,7 @@ duplicate_bins(v::Vector) = reduce(vcat, [[x, x] for x in v])
         face.T_in_g    = -1.0
         face.q_in_g    = 0.0
         mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
-        mesh.wavelength_band_limits = edges
+        mesh.spectral_model = PlanckBands(edges)
         return mesh
     end
 
@@ -144,7 +144,7 @@ end
                                [copy(e) for e in eps_c_faces])
     dom_c()
     smooth!(dom_c; verbose = false)
-    dom_c.wavelength_band_limits = edges_c
+    dom_c.spectral_model = PlanckBands(edges_c)
     solveEquilibrium!(dom_c, dom_c.F_smooth;
                       max_iters = 10_000, convergence_tol = 1e-14, verbose = false)
 
@@ -153,7 +153,7 @@ end
                                [duplicate_bins(e) for e in eps_c_faces])
     dom_f()
     smooth!(dom_f; verbose = false)
-    dom_f.wavelength_band_limits = edges_f
+    dom_f.spectral_model = PlanckBands(edges_f)
 
     # Precondition: deterministic band-independent view factors => identical F
     @test maximum(abs.(Matrix(dom_f.F_smooth) .- Matrix(dom_c.F_smooth))) < 1e-14

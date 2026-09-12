@@ -370,6 +370,40 @@ function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
     return F_smooth, converged, delta_raw, delta_max, k_dyk_conv, k_ap, k_pcg_tot, k_pcg_max
 end
 
+# DkAP restricted to the elements with positive weight. Elements with w == 0
+# (volumes in a transparent bin, 4κV = 0) neither emit nor absorb in that bin:
+# their columns are exactly zero and reciprocity with a zero weight is 0 = 0,
+# so they are left out of the projection rather than regularised with a
+# floor. Their rows, which the solver only ever multiplies by zero emission,
+# are kept as traced and row-normalised over the active elements. Surfaces
+# always have positive weight and come first, so num_surfaces is unchanged.
+# Returns a matrix of the same size as F_raw.
+function DkAP_active(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
+                     k_dykstra::Int=0, max_iters::Int=1000, verbose::Bool=true,
+                     nz_over_N::Real=length(w))
+    active = findall(>(0), w)
+    length(active) == length(w) &&
+        return DkAP(F_raw, w, num_surfaces; k_dykstra, max_iters, verbose, nz_over_N)
+    inactive = findall(<=(0), w)
+    verbose && println("    $(length(inactive)) zero-weight elements excluded from the projection")
+
+    F_act = F_raw[active, active]
+    rs = sum(F_act, dims=2)
+    rs[rs .== 0] .= 1
+    F_act = F_act ./ rs
+    out = DkAP(F_act, w[active], num_surfaces; k_dykstra, max_iters, verbose, nz_over_N)
+
+    F_sub = out[1]
+    F_smooth = F_sub isa SparseMatrixCSC ? spzeros(eltype(F_sub), size(F_raw)...) :
+                                           zeros(eltype(F_sub), size(F_raw))
+    F_smooth[active, active] = F_sub
+    F_rows = F_raw[inactive, active]
+    rs = sum(F_rows, dims=2)
+    rs[rs .== 0] .= 1
+    F_smooth[inactive, active] = F_rows ./ rs
+    return (F_smooth, out[2:end]...)
+end
+
 function get_w(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}; spectral_bin::Int=1)
     
     if typeof(rtm) <: RayTracingDomain2D
@@ -389,7 +423,7 @@ function get_w(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}; spectral_bin::Int
             else
                 local_beta = face.kappa_g + face.sigma_s_g
             end
-            w[element_idx] = max(1e-6, 4*local_beta*face.volume)
+            w[element_idx] = 4*local_beta*face.volume
         end
         return w
     elseif typeof(rtm) <: SurfaceDomain3D
@@ -417,7 +451,8 @@ function get_b(rtm::Union{RayTracingDomain2D,SurfaceDomain3D})
             for ((coarse_idx, fine_idx), volume_idx) in rtm.volume_mapping
                 face = rtm.fine_mesh[coarse_idx][fine_idx]
                 element_idx = length(rtm.surface_mapping) + volume_idx
-                b_mat[element_idx,m] = face.sigma_s_g[m]/(face.sigma_s_g[m]+face.kappa_g[m])
+                β = face.sigma_s_g[m] + face.kappa_g[m]
+                b_mat[element_idx,m] = β > 0 ? face.sigma_s_g[m] / β : 0.0   # transparent bin: no scattering
             end
         end
     elseif typeof(rtm) <: SurfaceDomain3D
@@ -530,10 +565,10 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
         w = renorm ? w[1:num_surfaces]./minimum(w[1:num_surfaces]) : w[1:num_surfaces]
         F_raw = F_raw[1:num_surfaces,1:num_surfaces]
     else
-        w = renorm ? w./minimum(w) : w
+        w = renorm ? w./minimum(w[w .> 0]) : w
     end
 
-    return DkAP(F_raw, w, num_surfaces; k_dykstra=k_dykstra,
+    return DkAP_active(F_raw, w, num_surfaces; k_dykstra=k_dykstra,
                 max_iters=max_iters, verbose=verbose, nz_over_N=nz_over_N)
 end
 
