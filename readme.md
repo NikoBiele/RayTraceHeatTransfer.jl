@@ -7,6 +7,7 @@ A Julia package for radiative heat transfer using Monte Carlo ray tracing and th
 - **2D participating media** — absorbing, emitting, and scattering gases with enclosing surfaces
 - **3D surface enclosures** — transparent media with semi-analytical view factors or ray tracing
 - **Grey and spectral** — wavelength-independent or band-resolved radiation with automatic solver selection
+- **Adaptive spectral binning** — bins chosen automatically from κ(λ) samples to a user-set tolerance
 - **Exchange factor smoothing** — reciprocity and energy conservation enforcement to machine-precision
 - **Four-step workflow** — mesh → ray trace / view factors → smooth → solve
 - **Plotting extensions** — GLMakie and Plots backends for mesh and field visualisation
@@ -221,7 +222,6 @@ The geometry is a vertical stack of 20 sub-enclosures representing atmospheric l
 using RayTraceHeatTransfer
 using GeometryBasics, StaticArrays
 
-n_bins       = 40            # spectral bins
 atm_height   = 100_000.0     # atmosphere height (m)
 L            = atm_height    # normalization length
 N_layers     = 20            # atmospheric layers
@@ -238,13 +238,13 @@ stretch      = 5.0           # spatial layer clustering near surface
 
 The spectral range spans from 1 nm to 1 m; wide enough to capture the full Planck distribution at all temperatures in the problem. An insufficient spectral range forces energy into edge bins and degrades the solution.
 
-### Step 2: Build the spectral grid and layer geometry
+### Step 2: Build the spectral bins and layer geometry
+
+`adaptiveSpectralBins` groups wavelengths sharing a κ-level into bins and refines until
+a Planck-weighted transmission-error bound meets tol; the bin count follows the κ range and tolerance,
+not the spectrum's complexity. Layers that differ by a scale factor share the bins via scale_range.
 
 ```julia
-# Spectral grid (log-spaced in wavelength)
-λ_edges  = 10 .^ range(log10(λ_min), log10(λ_max), length = n_bins + 1)
-λ_center = [sqrt(λ_edges[b] * λ_edges[b+1]) for b in 1:n_bins]
-
 # Log-spaced spatial layers: thin near the surface where temperature
 # gradients are steepest, thick higher up where the atmosphere thins
 layer_param      = range(0.0, 1.0, length = N_layers + 1)
@@ -256,6 +256,18 @@ sun_layer_height = 1000.0     # 1 km thick
 κ_sun = q_solar * L / (4 * 5.670374419e-8 * T_sun^4 * sun_layer_height) # tuned absorption coefficient (emission)
 
 normalized_scale_height = scale_height / L
+
+# Reference spectrum (ρ = 1) on a fine wavelength grid
+λ = 10 .^ range(log10(λ_min), log10(λ_max), length = 20_001)
+κ_samples = [κ_vis + (κ_ir - κ_vis) / (1 + (4e-6 / x)^6) for x in λ]
+
+ρ_top = exp(-1.0 / normalized_scale_height) # density at top
+model = adaptiveSpectralBins(λ, κ_samples;
+    tol         = 1e-3, # or 1e-4 for higher accuracy
+    L_range     = (layer_edges_norm[2], 1.0),  # thinnest layer .. atmosphere height
+    T_range     = (150.0, T_sun),
+    scale_range = (ρ_top, 1.0))
+n_bins = length(model.κ_ref) # 15 bins
 ```
 
 ### Step 3: Assemble the atmospheric layers
@@ -281,9 +293,7 @@ for j in 1:N_layers
     ρ = exp(-y_mid / normalized_scale_height)
 
     # Spectral absorption: sigmoid from visible-transparent to IR-opaque
-    sigmoid = [(1 / (1 + (4e-6 / λ_center[b])^6)) for b in 1:n_bins]
-    layer_κ = [ρ * (κ_ir * sigmoid[b] + κ_vis * (1 - sigmoid[b]))
-               for b in 1:n_bins]
+    layer_κ = ρ .* model.κ_ref
 
     face = PolyVolume2D{Float64}(verts, solidwalls, n_bins, 1.0, 0.0)
     face.kappa_g   = layer_κ # local spectral absorption coefficients
@@ -329,8 +339,9 @@ push!(faces, face_sun)
 push!(divisions, (1, 2)) # each layer must be divided for the ray tracer to work
 
 mesh = RayTracingDomain2D(faces, divisions) # mesh the domain
-mesh.spectral_model = PlanckBands(λ_edges) # spectral limits
+mesh.spectral_model = model # spectral model
 ```
+Hand-chosen bands remain available as `PlanckBands(λ_edges)`.
 
 ### Step 5: Ray trace, smooth and solve
 
