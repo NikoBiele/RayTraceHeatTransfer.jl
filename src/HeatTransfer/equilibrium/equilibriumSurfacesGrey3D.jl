@@ -182,11 +182,15 @@ function equilibriumSurfacesGrey3D!(domain::D, F::AbstractMatrix;
     writeResultsToDomain!(domain, j, Abs, r; T=T, spectral_bin=spectral_bin)
 
     # Step 11: Compute energy conservation error
-    verbose && println("Computing energy conservation error...")
-    domain.energy_error = sum(j - r - Abs)
+    verbose && println("Computing (relative) energy conservation error...")
+    domain.energy_error = sum(j - r - Abs) / (sum(j) > 1000*eps(Float64) ? sum(j) : one(Float64))
     
     verbose && println("=== 3D Grey Solution Complete ===")
     
+    if verbose
+        show(stdout, MIME"text/plain"(), domain)
+        println()
+    end
     return nothing
 end
 

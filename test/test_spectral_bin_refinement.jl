@@ -1,3 +1,7 @@
+println("\n" * "-"^60)
+println("Testing spectral bin refinement")
+println("-"^60)
+
 # test_spectral_bin_refinement.jl
 #
 # Nested-bin refinement invariance: splitting every spectral bin in two,
@@ -72,14 +76,14 @@ duplicate_bins(v::Vector) = reduce(vcat, [[x, x] for x in v])
         face.q_in_w    = zeros(4)
         face.T_in_g    = -1.0
         face.q_in_g    = 0.0
-        mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
+        mesh = RayTracingDomain2D([face], [(Ndim, Ndim)], verbose = false)
         mesh.spectral_model = PlanckBands(edges)
         return mesh
     end
 
     # ---- coarse: trace, smooth, solve ---------------------------------------
     mesh_c = build_2d(K_coarse, collect(edges_coarse), kappa_c, sigma_c, eps_c)
-    mesh_c(N_rays; method = :exchange)
+    mesh_c(N_rays; method = :exchange, verbose = false)
     smooth!(mesh_c; verbose = false)
     solveEquilibrium!(mesh_c, mesh_c.F_smooth;
                       max_iters = 10_000, convergence_tol = 1e-14, verbose = false)
@@ -142,7 +146,7 @@ end
     # ---- coarse -------------------------------------------------------------
     dom_c = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w,
                                [copy(e) for e in eps_c_faces])
-    dom_c()
+    dom_c(; verbose = false)
     smooth!(dom_c; verbose = false)
     dom_c.spectral_model = PlanckBands(edges_c)
     solveEquilibrium!(dom_c, dom_c.F_smooth;
@@ -151,7 +155,7 @@ end
     # ---- fine: children inherit the parent bin's epsilon --------------------
     dom_f = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w,
                                [duplicate_bins(e) for e in eps_c_faces])
-    dom_f()
+    dom_f(; verbose = false)
     smooth!(dom_f; verbose = false)
     dom_f.spectral_model = PlanckBands(edges_f)
 
@@ -185,3 +189,5 @@ end
         end
     end
 end
+
+println("✓ Spectral bin refinement tests complete")

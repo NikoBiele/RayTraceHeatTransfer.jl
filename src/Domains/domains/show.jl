@@ -55,7 +55,7 @@ end
 _fmt_err(::Nothing) = "not solved"
 _fmt_err(e::Real)   = string(round(e; sigdigits = 3))
 _fmt_err(e::AbstractVector) = isempty(e) ? "not solved" :
-    string(round(maximum(abs, e); sigdigits = 3), " (max over ", length(e), " bins)")
+    string(round(maximum(abs, e); sigdigits = 3), " (max abs relative conservation error over ", length(e), " bins)")
 _fmt_err(::Any) = "—"
 
 function _spectral_line(d)
@@ -140,6 +140,10 @@ function Base.show(io::IO, ::MIME"text/plain", d::RayTracingDomain2D)
         println(io, "  exchange   not computed — call domain(N_rays; method = :exchange)")
     else
         println(io, "  exchange   F_raw     ", _mdesc(d.F_raw))
+        ps = getfield(d, :path_store)
+        ps === nothing || println(io, "             paths     ", length(ps.ray_emitter), " rays, ",
+                                  length(ps.seg_cell), " segments (",
+                                  round(8 * length(ps.seg_cell) / 2^20; digits = 1), " MiB)")
         if stage === :traced
             println(io, "             F_smooth  not computed — call smooth!(domain)")
         else

@@ -18,7 +18,7 @@ path fails this test by ~100 K, not by a marginal tolerance.
 """
 
 println("\n" * "-"^60)
-println("Testing Grey vs Spectral Consistency (Shared F, Nonuniform b)")
+println("Testing grey vs spectral consistency (shared F, nonuniform b)")
 println("-"^60)
 
 using RayTraceHeatTransfer
@@ -50,7 +50,7 @@ SHARED_F_J_RTOL   = 1e-9   #     (observed ~1e-12)
     face_grey.T_in_w  = [T_hot, T_cold, T_cold, T_cold]
     face_grey.epsilon = [eps_val, eps_val, eps_val, eps_val]
     face_grey.T_in_g  = -1.0
-    mesh_grey = RayTracingDomain2D([face_grey], [(Ndim, Ndim)])
+    mesh_grey = RayTracingDomain2D([face_grey], [(Ndim, Ndim)], verbose = false)
 
     # ---- spectral mesh, identical physics ------------------------------------
     face_spec = PolyVolume2D{Float64}(vertices, solidWalls, n_bins, kappa, sigma_s)
@@ -67,17 +67,17 @@ SHARED_F_J_RTOL   = 1e-9   #     (observed ~1e-12)
         face_spec.g_w[w] = zeros(n_bins); face_spec.i_w[w]   = zeros(n_bins)
     end
     face_spec.epsilon = [fill(eps_val, n_bins) for _ in 1:4]
-    mesh_spec = RayTracingDomain2D([face_spec], [(Ndim, Ndim)])
+    mesh_spec = RayTracingDomain2D([face_spec], [(Ndim, Ndim)], verbose = false)
     mesh_spec.n_spectral_bins        = n_bins
     mesh_spec.spectral_model = PlanckBands(band_limits)
 
     # ---- trace ONCE; both solvers consume the identical F --------------------
-    mesh_spec(N_rays; method=:exchange)
-    smooth!(mesh_spec)
+    mesh_spec(N_rays; method=:exchange, verbose = false)
+    smooth!(mesh_spec, verbose = false)
     F_shared = mesh_spec.F_smooth
 
-    solveEquilibrium!(mesh_grey, F_shared[1])
-    solveEquilibrium!(mesh_spec, F_shared)
+    solveEquilibrium!(mesh_grey, F_shared[1], verbose = false)
+    solveEquilibrium!(mesh_spec, F_shared, verbose = false)
 
     # ---- temperature field must agree to solver precision --------------------
     T_grey = [ff.T_g for ff in mesh_grey.fine_mesh[1]]
@@ -124,4 +124,4 @@ SHARED_F_J_RTOL   = 1e-9   #     (observed ~1e-12)
     end
 end
 
-println("✓ Shared-F Grey vs Spectral consistency tests complete")
+println("✓ Shared-F grey vs spectral consistency tests complete")

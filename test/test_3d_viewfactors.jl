@@ -7,7 +7,7 @@ Tests include:
 """
 
 println("\n" * "-"^60)
-println("Testing 3D View Factors")
+println("Testing 3D view factors")
 println("-"^60)
 
 using RayTraceHeatTransfer
@@ -129,8 +129,8 @@ end
     
     # Create domain and compute view factors
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-    domain3D()
-    smooth!(domain3D)
+    domain3D(; verbose = false)
+    smooth!(domain3D, verbose = false)
     
     # Test against EES reference
     @test maximum(abs.(domain3D.F_smooth - F_EES)) < VF_TOLERANCE
@@ -230,8 +230,8 @@ end
             
             # Create domain with rotated geometry
             domain3D = ViewFactorDomain3D(points_rotated, faces, Ndim, q_in_w, T_in_w, epsilon)
-            domain3D()
-            smooth!(domain3D)
+            domain3D(; verbose = false)
+            smooth!(domain3D, verbose = false)
             
             # Extract unique view factor values (excluding self-view)
             F_unique = Float64[]
@@ -266,4 +266,4 @@ end
     end
 end
 
-println("✓ 3D View Factor tests complete")
+println("✓ 3D view factor tests complete")

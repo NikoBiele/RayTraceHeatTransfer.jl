@@ -1,5 +1,5 @@
 println("\n" * "-"^60)
-println("Testing Reproducibility")
+println("Testing reproducibility")
 println("-"^60)
 
 using RayTraceHeatTransfer
@@ -22,7 +22,7 @@ function build_2d_repro()
     face.epsilon = [1.0, 1.0, 1.0, 1.0]
     face.T_in_g  = -1.0
     face.q_in_g  = 0.0
-    return RayTracingDomain2D([face], [(NDIM_REPRO, NDIM_REPRO)])
+    return RayTracingDomain2D([face], [(NDIM_REPRO, NDIM_REPRO)], verbose = false)
 end
 
 const CUBE_POINTS = [0.0 0.0 0.0; 0.0 0.0 1.0; 0.0 1.0 0.0; 0.0 1.0 1.0;
@@ -75,3 +75,5 @@ end
     d(RAYS_REPRO; verbose = false); F2 = copy(d.F_raw)
     @test F1 == F2
 end
+
+println("✓ Reproducibility tests complete")

@@ -39,7 +39,7 @@ end
     cases = [(1.0, PlanckBands([5e-7, 2e-6, 6e-6, 5e-5])),
              (0.5, ConstantWeights([0.4, 0.35, 0.25]))]
     for (ε_wall, model) in cases
-        mesh = RayTracingDomain2D([_transparent_face(κ, ε_wall, T_wall)], [(5, 5)])
+        mesh = RayTracingDomain2D([_transparent_face(κ, ε_wall, T_wall)], [(5, 5)], verbose = false)
         mesh.spectral_model = model
         mesh(1_000_000; method = :exchange, verbose = false)
         smooth!(mesh; verbose = false)
@@ -56,3 +56,5 @@ end
         @test err < 1e-9
     end
 end
+
+println("✓ Transparent spectral bin tests complete")

@@ -7,7 +7,7 @@ Tests include:
 """
 
 println("\n" * "-"^60)
-println("Testing 3D Heat Transfer")
+println("Testing 3D heat transfer")
 println("-"^60)
 
 using RayTraceHeatTransfer
@@ -56,9 +56,9 @@ ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
     T_in_w = fill(T_iso, 6)
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-    domain3D()
-    smooth!(domain3D)
-    solveEquilibrium!(domain3D, domain3D.F_smooth)
+    domain3D(; verbose = false)
+    smooth!(domain3D, verbose = false)
+    solveEquilibrium!(domain3D, domain3D.F_smooth, verbose = false)
     
     # Extract temperatures from all subfaces
     for (i, superface) in enumerate(domain3D.facesMesh)
@@ -107,9 +107,9 @@ end
     q_in_w = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-    domain3D()
-    smooth!(domain3D)
-    solveEquilibrium!(domain3D, domain3D.F_smooth)
+    domain3D(; verbose = false)
+    smooth!(domain3D, verbose = false)
+    solveEquilibrium!(domain3D, domain3D.F_smooth, verbose = false)
     
     # Check that specified temperatures are maintained
     avg_T_face1 = mean([sf.T_w for sf in domain3D.facesMesh[1].subFaces])
@@ -163,9 +163,9 @@ end
     q_in_w = [0.0, 0.0, q_heating, q_heating, 0.0, 0.0]
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-    domain3D()
-    smooth!(domain3D)
-    solveEquilibrium!(domain3D, domain3D.F_smooth)
+    domain3D(; verbose = false)
+    smooth!(domain3D, verbose = false)
+    solveEquilibrium!(domain3D, domain3D.F_smooth, verbose = false)
     
     # Calculate total energy balance
     total_q_in = 0.0
@@ -243,9 +243,9 @@ end
     q_in_w = zeros(6)
     
     domain_base = ViewFactorDomain3D(points_base, faces, Ndim, q_in_w, T_in_w, epsilon)
-    domain_base()
-    smooth!(domain_base)
-    solveEquilibrium!(domain_base, domain_base.F_smooth)
+    domain_base(; verbose = false)
+    smooth!(domain_base, verbose = false)
+    solveEquilibrium!(domain_base, domain_base.F_smooth, verbose = false)
     
     # Get temperature statistics from base case
     base_T_min = minimum(sf.T_w for i in 1:6 for sf in domain_base.facesMesh[i].subFaces)
@@ -264,9 +264,9 @@ end
             points_rot = rotatePoints3D(points_base, axis, angle)
             
             domain_rot = ViewFactorDomain3D(points_rot, faces, Ndim, q_in_w, T_in_w, epsilon)
-            domain_rot()
-            smooth!(domain_rot)
-            solveEquilibrium!(domain_rot, domain_rot.F_smooth)
+            domain_rot(; verbose = false)
+            smooth!(domain_rot, verbose = false)
+            solveEquilibrium!(domain_rot, domain_rot.F_smooth, verbose = false)
             
             # Temperature statistics should be invariant
             rot_T_min = minimum(sf.T_w for i in 1:6 for sf in domain_rot.facesMesh[i].subFaces)
@@ -317,9 +317,9 @@ end
     q_in_w = zeros(6)
     
     domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-    domain3D()
-    smooth!(domain3D)
-    solveEquilibrium!(domain3D, domain3D.F_smooth)
+    domain3D(; verbose = false)
+    smooth!(domain3D, verbose = false)
+    solveEquilibrium!(domain3D, domain3D.F_smooth, verbose = false)
     
     # Solution should still exist and be physically reasonable
     for (i, superface) in enumerate(domain3D.facesMesh)
@@ -337,4 +337,4 @@ end
     @test abs(total_q) < ENERGY_TOLERANCE
 end
 
-println("✓ 3D Heat Transfer tests complete")
+println("✓ 3D heat transfer tests complete")

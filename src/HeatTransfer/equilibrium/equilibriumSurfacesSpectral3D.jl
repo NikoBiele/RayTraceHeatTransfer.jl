@@ -39,13 +39,13 @@ function equilibriumSurfacesSpectral3D_woodbury!(domain::SurfaceDomain3D{G,P}, F
 
     # Validate spectral setup at entry (wavelength bands weights)
     validateSpectralSetup(domain)
+    K = domain.n_spectral_bins
+    N = sum([length(superface.subFaces) for superface in domain.facesMesh])
  
     verbose && println("=== 3D Spectral Surface Radiation Solver (WOODBURY) ===")
     verbose && println("Spectral mode: $(domain.spectral_mode)")
-    verbose && println("Number of spectral bins: $(domain.n_spectral_bins)")
+    verbose && println("Number of spectral bins: $K")
  
-    K = domain.n_spectral_bins
-    N = sum([length(superface.subFaces) for superface in domain.facesMesh])
  
     verbose && println("\nComputing GERT matrices for each spectral band...")
     verbose && println("(Using same view factor matrix F for all bands)")
@@ -147,8 +147,11 @@ function equilibriumSurfacesSpectral3D_woodbury!(domain::SurfaceDomain3D{G,P}, F
  
         if iter > 1 && convergence_error < convergence_tol
             verbose && println("Converged after $iter iterations")
-            domain.energy_error = G.([sum((I - F') * sol_j[(i - 1) * N + 1:i * N])
-                               for i in 1:K])
+            # Compute energy conservation error for each spectral bin
+            # relative: power unaccounted for in the bin over the bin's total power
+            domain.energy_error = G.([let j = sol_j[(i - 1) * N + 1 : i * N]
+                                        sum((I - F') * j) / (sum(j) > 1000*eps(G) ? sum(j) : one(G))
+                                    end for i in 1:K])
             verbose && println("Energy conservation errors by band: $(domain.energy_error)")
             break
         end
@@ -188,6 +191,9 @@ function equilibriumSurfacesSpectral3D_woodbury!(domain::SurfaceDomain3D{G,P}, F
     writeTemperaturesHeatSources!(domain, temperatures)
  
     verbose && println("=== 3D Spectral Solution Complete (WOODBURY) ===")
+
+    verbose && println(domain)
+    return nothing
 end
 
 function equilibriumSurfacesSpectral3D_direct!(domain::SurfaceDomain3D{G,P}, F::AbstractMatrix;
@@ -204,9 +210,10 @@ function equilibriumSurfacesSpectral3D_direct!(domain::SurfaceDomain3D{G,P}, F::
     # Validate spectral setup at entry (wavelength bands weights)
     validateSpectralSetup(domain)
 
+    K = domain.n_spectral_bins
     verbose && println("=== 3D Spectral Surface Radiation Solver (DIRECT) ===")
     verbose && println("Spectral mode: $(domain.spectral_mode)")
-    verbose && println("Number of spectral bins: $(domain.n_spectral_bins)")
+    verbose && println("Number of spectral bins: $K")
     verbose && println("Using optimized direct emission solver")
     
     # Get system size
@@ -215,7 +222,7 @@ function equilibriumSurfacesSpectral3D_direct!(domain::SurfaceDomain3D{G,P}, F::
     verbose && println("\nComputing GERT matrices for each spectral band...")
     verbose && println("(Using same view factor matrix F for all bands)")
     
-    M = buildSystemMatrix(domain, F[1:N_surfs,1:N_surfs]; spectral_bin=1) # C, D
+    M = buildSystemMatrix(domain, F; spectral_bin=1) # C, D
     
     # Setup boundary conditions
     verbose && println("Setting up boundary conditions...")
@@ -230,7 +237,7 @@ function equilibriumSurfacesSpectral3D_direct!(domain::SurfaceDomain3D{G,P}, F::
         
     # Update emissive powers and temperatures
     b = get_b(domain)
-    emissive = (I - Diagonal(b[:,1])*F[1:N_surfs,1:N_surfs]')*j_tot
+    emissive = (I - Diagonal(b[:,1])*F')*j_tot
 
     # iterate to find the correct blackbody spectral fractions
     emitFrac = getBinsEmissionFractions(domain, temperatures)
@@ -247,29 +254,31 @@ function equilibriumSurfacesSpectral3D_direct!(domain::SurfaceDomain3D{G,P}, F::
     end
                     
     # Recover j for each bin: j_bin = emitFrac[:, bin] .* e
-    sol_j = zeros(G, domain.n_spectral_bins * N_surfs)
+    sol_j = zeros(G, K * N_surfs)
     weightedFrac = getWeightedEmissionFractions(domain, temperatures)
-    for bin in 1:domain.n_spectral_bins
+    for bin in 1:K
         bin_start = (bin - 1) * N_surfs + 1
         bin_end = bin * N_surfs
         sol_j[bin_start:bin_end] = weightedFrac[:, bin] .* j_tot
     end
 
-    # Compute energy conservation error for each band
-    domain.energy_error = G.([sum((I - F[1:N_surfs,1:N_surfs]') * sol_j[(i - 1) * N_surfs + 1:i * N_surfs]) 
-                        for i in 1:domain.n_spectral_bins]) # C
+    # Compute energy conservation error for each spectral bin
+    # relative: power unaccounted for in the bin over the bin's total power
+    domain.energy_error = G.([let j = sol_j[(i - 1) * N_surfs + 1 : i * N_surfs]
+                                        sum((I - F') * j) / (sum(j) > 1000*eps(G) ? sum(j) : one(G))
+                                    end for i in 1:K])
     verbose && println("Energy conservation errors by band: $(domain.energy_error)")
 
-    for bin in 1:domain.n_spectral_bins
+    for bin in 1:K
         # Extract solution for this band
         bin_start = (bin - 1) * N_surfs + 1
         bin_end = bin * N_surfs
         j_bin = sol_j[bin_start:bin_end]
         
         # Compute e, r, g_a from GERT matrices and radiosity
-        e_bin = (I - Diagonal(b[:,1])*F[1:N_surfs,1:N_surfs]') * j_bin           # e = D * j
+        e_bin = (I - Diagonal(b[:,1])*F') * j_bin           # e = D * j
         r_bin = j_bin - e_bin                     # r = j - e = R' * j
-        g_a_bin = j_bin - (I - F[1:N_surfs,1:N_surfs]') * j_bin - r_bin  # g_a = A' * j = j - C*j - r # C
+        g_a_bin = j_bin - (I - F') * j_bin - r_bin  # g_a = A' * j = j - C*j - r # C
         
         # Write to mesh for this band
         surf_count = 0
@@ -293,6 +302,11 @@ function equilibriumSurfacesSpectral3D_direct!(domain::SurfaceDomain3D{G,P}, F::
     writeTemperaturesHeatSources!(domain, temperatures)
     
     verbose && println("=== 3D Spectral Solution Complete (DIRECT) ===")
+    if verbose
+        show(stdout, MIME"text/plain"(), domain)
+        println()
+    end
+    return nothing
 end
 
 ###### ORIGINAL SPECTRAL SOLVER - kept for reference ######

@@ -6,21 +6,21 @@ function directRayTracing!(rtm::RayTracingDomain2D, rays_tot::P, nudge::G, verbo
         # Run direct ray tracing for each spectral bin
         for bin in 1:rtm.n_spectral_bins
             verbose && println("Processing spectral bin $bin/$(rtm.n_spectral_bins)")
-            directRayTracingSingleBin!(rtm, rays_tot, nudge, bin, seeds, rngs, nthreads)
+            directRayTracingSingleBin!(rtm, rays_tot, nudge, bin, seeds, rngs, nthreads; verbose=verbose)
         end
     else
         verbose && println("Running direct ray tracing for grey extinction")
-        directRayTracingSingleBin!(rtm, rays_tot, nudge, 1, seeds, rngs, nthreads)  # bin=1 for grey
+        directRayTracingSingleBin!(rtm, rays_tot, nudge, 1, seeds, rngs, nthreads; verbose=verbose)  # bin=1 for grey
     end
 
-    writeTemperaturesHeatSourcesDirect!(rtm)
+    writeTemperaturesHeatSourcesDirect!(rtm; verbose=verbose)
 
 end
 
 function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::S, nudge::G,
                                         spectral_bin::P,
                                         seeds::Union{UnitRange{K},Vector{K}}, rngs::Vector{<:AbstractRNG},
-                                        nthreads::P) where {G,S<:Integer,P<:Integer,K<:Integer}
+                                        nthreads::P; verbose::Bool=true) where {G,S<:Integer,P<:Integer,K<:Integer}
 
     # Prepare emitters
     emitters, total_energy = prepareEmitters(rtm, nudge, spectral_bin) # pass nudge to get the type G
@@ -151,5 +151,5 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::S, nudge:
     
     updateSpectralResults!(rtm, absorbed_count, gas_emitted_count, wall_emitted_count, 
                     reflected_count, scattered_count, wall_absorbed_count, 
-                    total_energy, rays_tot, spectral_bin)
+                    total_energy, rays_tot; spectral_bin=spectral_bin, verbose=verbose)
 end

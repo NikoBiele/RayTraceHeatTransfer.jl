@@ -103,8 +103,8 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::S,
     Js = [Int[] for _ in 1:nthreads]
     Vs = [Float64[] for _ in 1:nthreads]
 
-    progress  = Progress(num_emitters; dt = 1, desc = "  Bin $spectral_bin progress: ")
-    completed = Threads.Atomic{Int}(0)
+    verbose && (progress  = Progress(num_emitters; dt = 1, desc = "  Bin $spectral_bin progress: "))
+    verbose && (completed = Threads.Atomic{Int}(0))
     inv_rays  = 1.0 / rays_per_emitter
 
     @threads for tid in 1:nthreads
@@ -124,8 +124,8 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::S,
                 for _ in 1:rays_per_emitter
                     p_emit, dir_emit = emitSurfaceRay2D(face, wall_index, nudge, local_rng)
                     result = traceRay(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin, local_rng)
-                    result === nothing && continue
-                    a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result...)
+                    result === 0 && continue
+                    a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result[1], result[2], result[3], result[4])
                     a == -1 && continue
                     if recording
                         push!(rec.origins[tid],   p_emit)
@@ -139,8 +139,8 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::S,
                 for _ in 1:rays_per_emitter
                     p_emit, dir_emit = emitVolumeRay2D(face, nudge, local_rng)
                     result = traceRay(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin, local_rng)
-                    result === nothing && continue
-                    a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result...)
+                    result === 0 && continue
+                    a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces,  result[1], result[2], result[3], result[4])
                     a == -1 && continue
                     if recording
                         push!(rec.origins[tid],   p_emit)
@@ -155,11 +155,11 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::S,
                 push!(Il, global_idx); push!(Jl, j); push!(Vl, c * inv_rays)
             end
 
-            Threads.atomic_add!(completed, 1)
-            tid == 1 && update!(progress, completed[])
+            verbose && Threads.atomic_add!(completed, 1)
+            verbose && (tid == 1 && update!(progress, completed[]))
         end
     end
-    finish!(progress)
+    verbose && finish!(progress)
 
     F_raw = sparse(reduce(vcat, Is), reduce(vcat, Js), reduce(vcat, Vs),
                num_emitters, num_emitters)

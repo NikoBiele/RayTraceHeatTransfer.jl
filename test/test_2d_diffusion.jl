@@ -35,7 +35,7 @@ function build_diffusion_grey(N_side::Int)
     face.epsilon = [1.0, 1.0, 1.0, 1.0]
     face.T_in_g  = -1.0
     face.q_in_g  = 0.0
-    return RayTracingDomain2D([face], [(N_side, N_side)])
+    return RayTracingDomain2D([face], [(N_side, N_side)], verbose = false)
 end
 
 # ---- extraction + error ------------------------------------------------------
@@ -59,18 +59,18 @@ end
 
     @testset "$label grey" begin
         mesh = build_diffusion_grey(N_side)
-        mesh(N_rays; method = :exchange)
-        smooth!(mesh)
+        mesh(N_rays; method = :exchange, verbose = false)
+        smooth!(mesh, verbose = false)
 
         @test (mesh.F_smooth isa SparseMatrixCSC) == expect_sparse
         @test count(<(0.0), mesh.F_smooth) == 0
 
         # raw solve
-        solveEquilibrium!(mesh, mesh.F_raw)
+        solveEquilibrium!(mesh, mesh.F_raw, verbose = false)
         err_raw = centerline_rms_S(mesh, N_side)
 
         # smoothed solve
-        solveEquilibrium!(mesh, mesh.F_smooth)
+        solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
         err_ap = centerline_rms_S(mesh, N_side)
 
         @test err_ap < RMS_TOL
@@ -78,3 +78,5 @@ end
         @test abs(sum(mesh.energy_error)) < 1e-6
     end
 end
+
+println("✓ 2D diffusion tests complete")

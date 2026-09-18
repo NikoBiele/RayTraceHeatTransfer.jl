@@ -42,7 +42,7 @@ function build_cs_spectral(N_side::Int, n_bins::Int)
     face.epsilon = [fill(1.0, n_bins) for _ in 1:4]
     face.T_in_g  = -1.0
     face.q_in_g  = 0.0
-    mesh = RayTracingDomain2D([face], [(N_side, N_side)])
+    mesh = RayTracingDomain2D([face], [(N_side, N_side)], verbose = false)
     mesh.spectral_model = PlanckBands(10 .^ range(log10(1e-8), log10(0.1), length = n_bins + 1))
     return mesh
 end
@@ -64,18 +64,18 @@ end
 
     @testset "Sparse/dense spectral C&S" begin
         mesh = build_cs_spectral(N_side, n_bins)
-        mesh(N_rays; method = :exchange)
-        smooth!(mesh)
+        mesh(N_rays; method = :exchange, verbose = false)
+        smooth!(mesh, verbose = false)
 
         @test mesh.spectral_mode == :spectral_variable        # Woodbury dispatch
         @test all(count(<(0.0), F) == 0 for F in mesh.F_smooth)
 
         # raw solve (sparse)
-        solveEquilibrium!(mesh, mesh.F_raw)
+        solveEquilibrium!(mesh, mesh.F_raw, verbose = false)
         err_raw = centerline_rms_cs(mesh, N_side)
 
         # smoothed solve (sparse or dense)
-        solveEquilibrium!(mesh, mesh.F_smooth)
+        solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
         err_smooth = centerline_rms_cs(mesh, N_side)
 
         # improvement is the primary assertion (ray-starved sparse case
@@ -86,3 +86,5 @@ end
         @test maximum(abs.(mesh.energy_error)) < 1e-8
     end
 end
+
+println("✓ 2D spectral dense/sparse tests complete")

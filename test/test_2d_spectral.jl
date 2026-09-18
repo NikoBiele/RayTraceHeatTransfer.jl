@@ -8,7 +8,7 @@ Tests include:
 """
 
 println("\n" * "-"^60)
-println("Testing 2D Spectral Participating Media")
+println("Testing 2D spectral participating media")
 println("-"^60)
 
 using RayTraceHeatTransfer
@@ -75,7 +75,7 @@ function createSpectralUniformMesh(; T_hot=1000.0, T_cold=0.0, kappa=1.0,
     end
     face.epsilon = [epsilon_bins, epsilon_bins, epsilon_bins, epsilon_bins]
     
-    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
+    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)], verbose = false)
     mesh.n_spectral_bins = n_bins
     
     return mesh
@@ -130,7 +130,7 @@ function createSpectralVariableMesh(; T_hot=1000.0, T_cold=0.0, base_kappa=1.0,
     end
     face.epsilon = [epsilon_bins, epsilon_bins, epsilon_bins, epsilon_bins]
     
-    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
+    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)], verbose = false)
     mesh.n_spectral_bins = n_bins
     
     return mesh
@@ -162,10 +162,10 @@ end
     face_grey.epsilon = [1.0, 1.0, 1.0, 1.0]
     face_grey.T_in_g = -1.0
     
-    mesh_grey = RayTracingDomain2D([face_grey], [(Ndim, Ndim)])
-    mesh_grey(N_rays; method=:exchange)
-    smooth!(mesh_grey)
-    solveEquilibrium!(mesh_grey, mesh_grey.F_smooth)
+    mesh_grey = RayTracingDomain2D([face_grey], [(Ndim, Ndim)], verbose = false)
+    mesh_grey(N_rays; method=:exchange, verbose = false)
+    smooth!(mesh_grey, verbose = false)
+    solveEquilibrium!(mesh_grey, mesh_grey.F_smooth, verbose = false)
     
     grey_temps = [fine_face.T_g for fine_face in mesh_grey.fine_mesh[1]]
     
@@ -176,9 +176,9 @@ end
                                                  epsilon_bins=epsilon_bins,
                                                  Ndim=Ndim, n_bins=n_bins)
     mesh_spectral.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
-    mesh_spectral(N_rays; method=:exchange)
-    smooth!(mesh_spectral)
-    solveEquilibrium!(mesh_spectral, mesh_spectral.F_smooth)
+    mesh_spectral(N_rays; method=:exchange, verbose = false)
+    smooth!(mesh_spectral, verbose = false)
+    solveEquilibrium!(mesh_spectral, mesh_spectral.F_smooth, verbose = false)
     
     spectral_temps = [fine_face.T_g for fine_face in mesh_spectral.fine_mesh[1]]
     
@@ -221,10 +221,10 @@ end
     face_grey.epsilon = [eps_val, eps_val, eps_val, eps_val]
     face_grey.T_in_g = -1.0
 
-    mesh_grey = RayTracingDomain2D([face_grey], [(Ndim, Ndim)])
-    mesh_grey(N_rays; method=:exchange)
-    smooth!(mesh_grey)
-    solveEquilibrium!(mesh_grey, mesh_grey.F_smooth)
+    mesh_grey = RayTracingDomain2D([face_grey], [(Ndim, Ndim)], verbose = false)
+    mesh_grey(N_rays; method=:exchange, verbose = false)
+    smooth!(mesh_grey, verbose = false)
+    solveEquilibrium!(mesh_grey, mesh_grey.F_smooth, verbose = false)
 
     grey_temps = [fine_face.T_g for fine_face in mesh_grey.fine_mesh[1]]
 
@@ -235,9 +235,9 @@ end
                                               epsilon_bins=epsilon_bins,
                                               Ndim=Ndim, n_bins=n_bins)
     mesh_spectral.spectral_model = PlanckBands(10 .^ range(log10(0.000_000_01), log10(0.1), length=n_bins+1))
-    mesh_spectral(N_rays; method=:exchange)
-    smooth!(mesh_spectral)
-    solveEquilibrium!(mesh_spectral, mesh_spectral.F_smooth)
+    mesh_spectral(N_rays; method=:exchange, verbose = false)
+    smooth!(mesh_spectral, verbose = false)
+    solveEquilibrium!(mesh_spectral, mesh_spectral.F_smooth, verbose = false)
 
     spectral_temps = [fine_face.T_g for fine_face in mesh_spectral.fine_mesh[1]]
 
@@ -272,9 +272,9 @@ end
                                                  epsilon_bins=epsilon_bins,
                                                  Ndim=Ndim, n_bins=n_bins)
     mesh_exchange.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
-    mesh_exchange(N_rays; method=:exchange)
-    smooth!(mesh_exchange)
-    solveEquilibrium!(mesh_exchange, mesh_exchange.F_smooth)
+    mesh_exchange(N_rays; method=:exchange, verbose = false)
+    smooth!(mesh_exchange, verbose = false)
+    solveEquilibrium!(mesh_exchange, mesh_exchange.F_smooth, verbose = false)
     
     exchange_temps = [fine_face.T_g for fine_face in mesh_exchange.fine_mesh[1]]
     
@@ -284,7 +284,7 @@ end
                                                epsilon_bins=epsilon_bins,
                                                Ndim=Ndim, n_bins=n_bins)
     mesh_direct.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
-    mesh_direct(N_rays; method=:direct)
+    mesh_direct(N_rays; method=:direct, verbose = false)
     
     direct_temps = [fine_face.T_g for fine_face in mesh_direct.fine_mesh[1]]
     
@@ -317,9 +317,9 @@ end
                                                   epsilon_bins=epsilon_bins,
                                                   Ndim=Ndim, n_bins=n_bins)
     mesh_exchange.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
-    mesh_exchange(N_rays; method=:exchange)
-    smooth!(mesh_exchange)
-    solveEquilibrium!(mesh_exchange, mesh_exchange.F_smooth)
+    mesh_exchange(N_rays; method=:exchange, verbose = false)
+    smooth!(mesh_exchange, verbose = false)
+    solveEquilibrium!(mesh_exchange, mesh_exchange.F_smooth, verbose = false)
     
     exchange_temps = [fine_face.T_g for fine_face in mesh_exchange.fine_mesh[1]]
     
@@ -330,7 +330,7 @@ end
                                                 epsilon_bins=epsilon_bins,
                                                 Ndim=Ndim, n_bins=n_bins)
     mesh_direct.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
-    mesh_direct(N_rays; method=:direct)
+    mesh_direct(N_rays; method=:direct, verbose = false)
     
     direct_temps = [fine_face.T_g for fine_face in mesh_direct.fine_mesh[1]]
     
@@ -360,10 +360,10 @@ end
                                        kappa=kappa, sigma_s=sigma_s,
                                        epsilon_bins=epsilon_bins,
                                        Ndim=Ndim, n_bins=n_bins)
-    mesh.spectral_model = PlanckBands(10 .^ range(log10(1e-9), log10(1.0), length=n_bins+1))
-    mesh(N_rays; method=:exchange)
-    smooth!(mesh)
-    solveEquilibrium!(mesh, mesh.F_smooth)
+    mesh.spectral_model = PlanckBands(10 .^ range(log10(1e-7), log10(1e-4), length=n_bins+1))
+    mesh(N_rays; method=:exchange, verbose = false)
+    smooth!(mesh, verbose = false)
+    solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
     
     # Energy error must exist after a solve, and be small per bin and in total
     @test !isnothing(mesh.energy_error)
@@ -396,9 +396,9 @@ end
                                        epsilon_bins=epsilon_selective,
                                        Ndim=Ndim, n_bins=n_bins)
     mesh.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
-    mesh(N_rays; method=:exchange)
-    smooth!(mesh)
-    solveEquilibrium!(mesh, mesh.F_smooth)
+    mesh(N_rays; method=:exchange, verbose = false)
+    smooth!(mesh, verbose = false)
+    solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
     
     # Solution should exist and be physical
     for fine_face in mesh.fine_mesh[1]
@@ -441,9 +441,9 @@ end
                                                epsilon_bins=epsilon_bins,
                                                Ndim=Ndim, n_bins=n_bins)
             mesh.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
-            mesh(N_rays; method=:exchange)
-            smooth!(mesh)
-            solveEquilibrium!(mesh, mesh.F_smooth)
+            mesh(N_rays; method=:exchange, verbose = false)
+            smooth!(mesh, verbose = false)
+            solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
             
             temps = [fine_face.T_g for fine_face in mesh.fine_mesh[1]]
 
@@ -455,4 +455,4 @@ end
     
 end
 
-println("✓ 2D Spectral Participating Media tests complete")
+println("✓ 2D spectral participating media tests complete")

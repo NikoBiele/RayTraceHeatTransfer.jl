@@ -8,7 +8,7 @@ Tests include:
 """
 
 println("\n" * "-"^60)
-println("Testing 2D Grey Participating Media")
+println("Testing 2D grey participating media")
 println("-"^60)
 
 using RayTraceHeatTransfer
@@ -86,7 +86,7 @@ function createSquareDomain2D(; T_hot=1000.0, T_cold=0.0, kappa=1.0, sigma_s=0.0
     face.q_in_g = 0.0   # Radiative equilibrium
     
     # Create mesh
-    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
+    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)], verbose = false)
     
     return mesh
 end
@@ -201,11 +201,11 @@ end
             mesh.coarse_mesh[1].T_in_w = T_walls
             
             # Run ray tracing with exchange factor method
-            mesh(N_rays_total; method=:exchange)
-            smooth!(mesh)
+            mesh(N_rays_total; method=:exchange, verbose = false)
+            smooth!(mesh, verbose = false)
             
             # Solve steady state
-            solveEquilibrium!(mesh, mesh.F_smooth)
+            solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
             
             # Extract centerline temperatures
             centerline_temps = extractCenterlineTemperatures(mesh, Ndim)
@@ -253,11 +253,11 @@ end
                                           rotation_angle=angle)
             
             # Run ray tracing
-            mesh(N_rays_total; method=:exchange)
-            smooth!(mesh)
+            mesh(N_rays_total; method=:exchange, verbose = false)
+            smooth!(mesh, verbose = false)
 
             # Solve steady state
-            solveEquilibrium!(mesh, mesh.F_smooth)
+            solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
             
             # Collect statistics
             temps = [fine_face.T_g for fine_face in mesh.fine_mesh[1]]
@@ -307,9 +307,9 @@ end
                                           kappa=kappa, sigma_s=sigma_s,
                                           epsilon=epsilon, Ndim=Ndim)
             
-            mesh(N_rays_total; method=:exchange)
-            smooth!(mesh)
-            solveEquilibrium!(mesh, mesh.F_smooth)
+            mesh(N_rays_total; method=:exchange, verbose = false)
+            smooth!(mesh, verbose = false)
+            solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
             
             temps = [fine_face.T_g for fine_face in mesh.fine_mesh[1]]
             push!(mean_temps, mean(temps))
@@ -343,9 +343,9 @@ end
                                   kappa=kappa, sigma_s=sigma_s,
                                   epsilon=epsilon, Ndim=Ndim)
     
-    mesh(N_rays_total; method=:exchange)
-    smooth!(mesh)
-    solveEquilibrium!(mesh, mesh.F_smooth)
+    mesh(N_rays_total; method=:exchange, verbose = false)
+    smooth!(mesh, verbose = false)
+    solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
     
     # Check energy error if available
     if !isnothing(mesh.energy_error)
@@ -369,4 +369,4 @@ end
     @test rel_error < ANALYTICAL_TOLERANCE # 5% relative error
 end
 
-println("✓ 2D Grey Participating Media tests complete")
+println("✓ 2D grey participating media tests complete")

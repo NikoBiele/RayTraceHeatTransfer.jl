@@ -1,8 +1,6 @@
 # Replace your find_face_uniform_grid function with this more flexible version:
-@inline function findFaceUniformGrid2D(faces::Vector{PolyVolume2D{G}}, point, 
-                                        grid) where {G}
-    # Convert point to the right type if needed
-    pt = Point2{G}(point[1], point[2])
+@inline function findFaceUniformGrid2D(faces::Vector{PolyVolume2D{G}}, pt::Point2{G}, 
+                                        grid::UniformGrid{G}) where {G}
     
     # Find grid cell
     rel_x = pt[1] - grid.origin[1]
@@ -13,7 +11,7 @@
     
     # Check bounds
     if cell_i < 1 || cell_i > grid.nx || cell_j < 1 || cell_j > grid.ny
-        return nothing
+        return 0
     end
     
     # Test faces in this cell
@@ -23,14 +21,12 @@
         end
     end
     
-    return nothing
+    return 0
 end
 
 # Replace your find_face_with_bbox_prefilter function with this more flexible version:
-@inline function findFaceWithBboxPrefilter2D(faces::Vector{PolyVolume2D{G}}, point, 
-                                              bboxes) where {G}
-    # Convert point to the right type if needed
-    pt = Point2{G}(point[1], point[2])
+@inline function findFaceWithBboxPrefilter2D(faces::Vector{PolyVolume2D{G}}, pt::Point2{G}, 
+                                              bboxes::Vector{BoundingBox2D{G}}) where {G}
     
     @inbounds for i in eachindex(faces)
         # Quick bounding box test first
@@ -41,19 +37,17 @@ end
             end
         end
     end
-    return nothing
+    return 0
 end
 
 # Replace your current find_face_optimized function with this more flexible version:
-@inline function findFace2D(faces::Vector{PolyVolume2D{G}}, point, 
-                                    grid, bboxes) where {G}
-    # Convert point to the right type if needed
-    pt = Point2{G}(point[1], point[2])
+@inline function findFace2D(faces::Vector{PolyVolume2D{G}}, pt::Point2{G},
+                                    grid::UniformGrid{G}, bboxes::Vector{BoundingBox2D{G}}) where {G}
     
     # Try uniform grid first (fastest for regular grids)
     if grid !== nothing
         result = findFaceUniformGrid2D(faces, pt, grid)
-        if result !== nothing
+        if result !== 0
             return result
         end
     end
@@ -64,7 +58,7 @@ end
     end
     
     # Last resort: return nothing
-    return nothing
+    return 0
 end
 
 # Fast point-in-bounding-box test

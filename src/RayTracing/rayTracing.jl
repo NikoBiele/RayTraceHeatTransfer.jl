@@ -10,6 +10,7 @@ include(joinpath(@__DIR__, "RayTracing2D", "DirectTracing2D", "updateHeatSource.
 # exchange factors
 include(joinpath(@__DIR__, "RayTracing2D", "ExchangeFactors2D", "exchangeRayTracing.jl"))
 include(joinpath(@__DIR__, "RayTracing2D", "ExchangeFactors2D", "parallelRayTracing.jl"))
+include(joinpath(@__DIR__, "RayTracing2D", "ExchangeFactors2D", "pathRayTracing.jl"))
 
 # shared functions
 include(joinpath(@__DIR__, "RayTracing2D", "Shared2D", "traceRay.jl"))

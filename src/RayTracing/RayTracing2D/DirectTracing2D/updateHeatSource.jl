@@ -1,13 +1,13 @@
 function updateSpectralResults!(domain::RayTracingDomain2D, absorbed_count::Vector{Vector{P}},
                             gas_emitted_count::Vector{Vector{P}}, wall_emitted_count::Vector{Vector{Vector{P}}},
                             reflected_count::Vector{Vector{Vector{P}}}, scattered_count::Vector{Vector{P}},
-                            wall_absorbed_count::Vector{Vector{Vector{P}}}, total_energy::G, num_rays::P,
-                            spectral_bin::P=1) where {G, P<:Integer}
+                            wall_absorbed_count::Vector{Vector{Vector{P}}}, total_energy::G, num_rays::P;
+                            spectral_bin::P=1, verbose::Bool=true) where {G, P<:Integer}
 
     energy_per_ray = G(total_energy / num_rays)
 
-    println("Updating spectral results for spectral bin $spectral_bin")
-    println("Energy per ray: $energy_per_ray")
+    verbose && println("Updating spectral results for spectral bin $spectral_bin")
+    verbose && println("Energy per ray: $energy_per_ray")
     
     for ((coarse_index, fine_index, wall_index), surface_index) in domain.surface_mapping
         sub_face = domain.fine_mesh[coarse_index][fine_index]
@@ -64,7 +64,7 @@ function updateSpectralResults!(domain::RayTracingDomain2D, absorbed_count::Vect
     end
 end
 
-function writeTemperaturesHeatSourcesDirect!(domain::RayTracingDomain2D)
+function writeTemperaturesHeatSourcesDirect!(domain::RayTracingDomain2D; verbose::Bool=true)
     G = eltype(domain.fine_mesh[1][1].T_g)
 
     if domain.spectral_mode != :spectral_variable
@@ -120,7 +120,7 @@ function writeTemperaturesHeatSourcesDirect!(domain::RayTracingDomain2D)
             if sub_face.T_in_w[wall_index] < -0.1
                 sub_face.T_w[wall_index] = solveTemperatureNewtonRaphson(domain, sub_face.area[wall_index], sub_face.e_w[wall_index],
                                         sub_face.epsilon[wall_index]; 
-                                        initial_temp=maximum_temperature, max_iter=10_000, tolerance=sqrt(eps(G)))
+                                        initial_temp=maximum_temperature, max_iter=10_000, tolerance=sqrt(eps(G)), verbose=verbose)
             end
         end
         for ((coarse_idx, fine_idx), volume_idx) in domain.volume_mapping
@@ -128,7 +128,7 @@ function writeTemperaturesHeatSourcesDirect!(domain::RayTracingDomain2D)
             if sub_face.T_in_g < -0.1
                 sub_face.T_g = solveTemperatureNewtonRaphson(domain, 4*sub_face.volume, sub_face.e_g,
                                         sub_face.kappa_g; 
-                                        initial_temp=maximum_temperature, max_iter=10_000, tolerance=sqrt(eps(G)))
+                                        initial_temp=maximum_temperature, max_iter=10_000, tolerance=sqrt(eps(G)), verbose=verbose)
             end
         end
     end

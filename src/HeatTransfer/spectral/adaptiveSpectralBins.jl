@@ -77,7 +77,7 @@ end
 """
     adaptiveSpectralBins(λ, κ; tol, L_range, T_range,
                          τ_window = (0.01, 100.0), scale_range = (1.0, 1.0),
-                         r0 = 2.0, max_bins = 5000, kernel = :b7) -> PiecewiseBands
+                         r0 = 2.0, max_bins = 5000, kernel = :n3) -> PiecewiseBands
 
 Build κ-level-set spectral bins from absorption-coefficient samples `κ`
 [1/m] at wavelengths `λ` [m] (increasing), refined until the energy-weighted
@@ -89,7 +89,9 @@ the range of scale factors in `scale_range`; bins are then valid for all
 elements. `τ_window` sets the initial coarse levels (ratio `r0`) in optical
 depth; refinement is driven by the tolerance alone. `kernel` is the
 ConvolutionInterpolations kernel used to locate crossing wavelengths between
-samples.
+samples. The default `:n3` is fast on arbitrary (nonuniform) sample grids.
+Users with smooth, sparsely sampled spectra can opt into `:b7` or `:b13`
+(these cost a per-interval projection on nonuniform grids).
 
 The returned model carries `κ_ref` (use `face.kappa_g = model.κ_ref .* s_e`)
 and `achieved_error`, the bound actually reached.
@@ -98,7 +100,7 @@ function adaptiveSpectralBins(λ::AbstractVector, κ::AbstractVector;
                               tol::Real, L_range::Tuple{<:Real,<:Real}, T_range::Tuple{<:Real,<:Real},
                               τ_window::Tuple{<:Real,<:Real} = (0.01, 100.0),
                               scale_range::Tuple{<:Real,<:Real} = (1.0, 1.0),
-                              r0::Real = 2.0, max_bins::Int = 5000, kernel::Symbol = :b7)
+                              r0::Real = 2.0, max_bins::Int = 5000, kernel::Symbol = :n3)
     λ = Float64.(λ); κ = Float64.(κ)
     n = length(λ)
     n == length(κ) || throw(ArgumentError("λ and κ must have the same length"))

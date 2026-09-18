@@ -8,9 +8,23 @@ function updateSpectralEmission!(domain::SurfaceDomain3D{G,P}, iter::Int,
     if iter > 1
         # Update from previous iteration ( using e=sum(D*j) )
         if isa(F_matrices, AbstractVector)
-            emissive .= max.(sum([(I-Diagonal(b[:,i])*F_matrices[i]')*sol_j[n*(i-1)+1:i*n] for i in 1:domain.n_spectral_bins]), 10*eps(G))
+            fill!(emissive, zero(G))
+            tmp = zeros(G, n)
+            for i in 1:domain.n_spectral_bins
+                jb = view(sol_j, n*(i-1)+1:i*n)
+                mul!(tmp, F_matrices[i]', jb)
+                @views emissive .+= jb .- b[:, i] .* tmp
+            end
+            emissive .= max.(emissive, 10*eps(G))
         elseif isa(F_matrices, AbstractMatrix)
-            emissive .= max.(sum([(I-Diagonal(b[:,i])*F_matrices')*sol_j[n*(i-1)+1:i*n] for i in 1:domain.n_spectral_bins]), 10*eps(G))
+            fill!(emissive, zero(G))
+            tmp = zeros(G, n)
+            for i in 1:domain.n_spectral_bins
+                jb = view(sol_j, n*(i-1)+1:i*n)
+                mul!(tmp, F_matrices', jb)
+                @views emissive .+= jb .- b[:, i] .* tmp
+            end
+            emissive .= max.(emissive, 10*eps(G))
         else
             error("Incorrect type of 'F_matrices', must be 'Vector{Matrix}' or 'Matrix', got: $(typeof(F_matrices))")
         end
@@ -42,7 +56,14 @@ function updateSpectralEmission!(rtm::RayTracingDomain2D, iter::Int, F_matrices:
 
     if iter > 1
         # Update from previous iteration ( using e=sum(D*j) )
-        emissive .= max.(sum([(I-Diagonal(b[:,i])*F_matrices[i]')*sol_j[n*(i-1)+1:i*n] for i in 1:rtm.n_spectral_bins]), 10*eps(G))
+        fill!(emissive, zero(G))
+        tmp = zeros(G, n)
+        for i in 1:rtm.n_spectral_bins
+            jb = view(sol_j, n*(i-1)+1:i*n)
+            mul!(tmp, F_matrices[i]', jb)
+            @views emissive .+= jb .- b[:, i] .* tmp
+        end
+        emissive .= max.(emissive, 10*eps(G))
     else
         for ((coarse_face, fine_face, wall_index), surface_index) in rtm.surface_mapping
             face = rtm.fine_mesh[coarse_face][fine_face]

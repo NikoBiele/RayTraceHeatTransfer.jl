@@ -13,7 +13,7 @@ GERT method. This file exercises the reflection-scattering path:
 """
 
 println("\n" * "-"^60)
-println("Testing 2D Grey with Surface Reflection")
+println("Testing 2D grey with surface reflection")
 println("-"^60)
 
 using RayTraceHeatTransfer
@@ -61,10 +61,10 @@ const SIGMA = 5.670374419e-8  # Stefan-Boltzmann constant, W/(m^2 K^4)
     face.T_in_g  = -1.0
     face.q_in_g  = 0.0
 
-    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
-    mesh(N_rays_total; method = :exchange)
-    smooth!(mesh)
-    solveEquilibrium!(mesh, mesh.F_smooth)
+    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)], verbose = false)
+    mesh(N_rays_total; method = :exchange, verbose = false)
+    smooth!(mesh, verbose = false)
+    solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
 
     @test abs(mesh.energy_error) < ENERGY_TOLERANCE
 end
@@ -109,10 +109,10 @@ end
     face.T_in_g  = -1.0
     face.q_in_g  = 0.0
 
-    mesh = RayTracingDomain2D([face], [(Nx, Ny)])
-    mesh(N_rays_total; method = :exchange)
-    smooth!(mesh, k_dykstra=500)
-    solveEquilibrium!(mesh, mesh.F_smooth)
+    mesh = RayTracingDomain2D([face], [(Nx, Ny)], verbose = false)
+    mesh(N_rays_total; method = :exchange, verbose = false)
+    smooth!(mesh, k_dykstra=500, verbose = false)
+    solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
 
     @test abs(mesh.energy_error) < ENERGY_TOLERANCE
 
@@ -138,4 +138,4 @@ end
     @test abs(q_per_area_mean - q_textbook) / q_textbook < ANALYTICAL_TOLERANCE
 end
 
-println("✓ 2D Grey with Surface Reflection tests complete")
+println("✓ 2D grey with surface reflection tests complete")

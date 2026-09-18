@@ -101,7 +101,7 @@ function traceSurfaces3D(domain::RayTracingDomain3D_surfaces{G,P}, rays_tot::Int
     Js = [Int[] for _ in 1:nthreads]
     Vs = [G[]   for _ in 1:nthreads]
 
-    progress  = Progress(num_emitters; dt = 1, desc = "  Tracing progress: ")
+    verbose && (progress  = Progress(num_emitters; dt = 1, desc = "  Tracing progress: "))
     completed = Threads.Atomic{Int}(0)
 
     @threads for tid in 1:nthreads
@@ -127,11 +127,11 @@ function traceSurfaces3D(domain::RayTracingDomain3D_surfaces{G,P}, rays_tot::Int
                 push!(Il, Int(global_idx)); push!(Jl, Int(j)); push!(Vl, c * inv_rays)
             end
 
-            Threads.atomic_add!(completed, 1)
-            tid == 1 && update!(progress, completed[])
+            verbose && Threads.atomic_add!(completed, 1)
+            verbose && (tid == 1 && update!(progress, completed[]))
         end
     end
-    finish!(progress)
+    verbose && finish!(progress)
 
     F_raw = sparse(reduce(vcat, Is), reduce(vcat, Js), reduce(vcat, Vs),
                    num_emitters, num_emitters)

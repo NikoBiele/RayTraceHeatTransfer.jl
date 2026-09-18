@@ -65,5 +65,6 @@ export PolyVolume2D,
        PlanckBands,
        ConstantWeights,
        PiecewiseBands,
-       adaptiveSpectralBins
+       adaptiveSpectralBins,
+       exchangeFactors!
 end

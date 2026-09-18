@@ -1,9 +1,10 @@
 name = "RayTraceHeatTransfer"
 uuid = "7cf1493d-886e-405c-b582-53b49fa147b6"
-version = "0.16.0"
+version = "0.17.0"
 authors = ["Nikolaj Maack Bielefeld"]
 
 [deps]
+ConvolutionInterpolations = "75b5ba44-29d7-490a-960d-52c835d47405"
 GeometryBasics = "5c1252a2-5f33-56bf-86c9-59e7332b4326"
 Krylov = "ba0b0d4f-ebba-5204-a429-3ac8c609bfb7"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -12,7 +13,6 @@ Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
-ConvolutionInterpolations = "75b5ba44-29d7-490a-960d-52c835d47405"
 
 [weakdeps]
 Makie = "ee78f7c6-11fb-53f2-987a-cfe4a2b5a57a"
@@ -23,7 +23,7 @@ RayTraceHeatTransferMakieExt = "Makie"
 RayTraceHeatTransferPlotsExt = "Plots"
 
 [compat]
-ConvolutionInterpolations = "0.17.1 - 0.22.0"
+ConvolutionInterpolations = "0.23.0 - 0.23.0"
 GeometryBasics = "0.1.0 - 0.5.11"
 Krylov = "0.9.0 - 0.10.9"
 Makie = "0.15.1 - 0.24.13"
@@ -31,12 +31,14 @@ Plots = "1.30 - 1.41.7"
 ProgressMeter = "1.0.0 - 1.11"
 Random = "1.0 - 1.11"
 SparseArrays = "1.0.0 - 1.13.0"
+SpecialFunctions = "1.0.0 - 2.9.0"
 StaticArrays = "1.0 - 1.9.19"
 StatsBase = "0.25.1 - 0.34.13"
 julia = "1.10"
 
 [extras]
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 
 [targets]
-test = ["Test"]
+test = ["Test","SpecialFunctions"]

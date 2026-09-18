@@ -1,3 +1,7 @@
+println("\n" * "-"^60)
+println("Testing spectral isothermal")
+println("-"^60)
+
 # Isothermal enclosure regression tests — spectral solver paths
 #
 # Physics pinned here: a closed cavity with every wall at a single temperature
@@ -40,14 +44,14 @@ function _isothermal_spectral_error(κ_bins::Vector{Float64},
     face.T_in_g    = -1.0
     face.q_in_g    = 0.0
 
-    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
+    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)], verbose = false)
     mesh.spectral_model =
         PlanckBands(10 .^ range(log10(λ_min), log10(λ_max), length = n_bins + 1))
 
-    mesh(N_rays; method = :exchange)
-    smooth!(mesh)
+    mesh(N_rays; method = :exchange, verbose = false)
+    smooth!(mesh, verbose = false)
     solveEquilibrium!(mesh, mesh.F_smooth;
-                      max_iters = 10_000, convergence_tol = 1e-14)
+                      max_iters = 10_000, convergence_tol = 1e-14, verbose = false)
 
     return maximum(abs(ff.T_g - T_wall) for ff in mesh.fine_mesh[1])
 end
@@ -76,3 +80,5 @@ end
         @test err < tol
     end
 end
+
+println("✓ Spectral isothermal tests complete")

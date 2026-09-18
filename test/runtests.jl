@@ -77,7 +77,15 @@ using Test
     @testset "adaptiveSpectralBins" begin
         include("test_adaptive_spectral_bins.jl")
     end
+
+    @testset "Pathlength tracer" begin
+        include("test_pathlength_tracer.jl")
+    end
     
+    @testset "Line-by-line solve validation" begin
+        include("test_lbl_slab.jl")
+    end
+
     println("\n" * "="^80)
     println("TEST SUITE COMPLETE")
     println("="^80)

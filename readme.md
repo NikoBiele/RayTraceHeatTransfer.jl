@@ -51,7 +51,11 @@ factor, the raw reciprocity defect becomes significant; smoothing brings it to 1
 be inspected or exported, but `F_smooth` is what should be passed to the solver.
 
 Smoothing is cheap relative to the tracing step, so `F_raw` can be traced once
-and smoothed repeatedly with different settings.
+and smoothed repeatedly with different settings. Spectral problems trace once
+with `mesh(n; method = :pathlength)`, which builds `F_raw` for every bin from
+the recorded paths; with `chunk_rays = n` the paths are kept and
+`exchangeFactors!(mesh)` rebuilds `F_raw` for new coefficients or bins without
+retracing (Example 3).
 
 ---
 
@@ -116,7 +120,7 @@ Volume elements are labelled **g*i*** and wall surfaces **w*i***. The indices sh
 ```julia
 record_ids = [10, 20, 30]  # optional ray recording for plotting (element numbers to record emission from)
 rec = RayRecorder(record_ids)  # create the ray recorder (also works in parallel)
-mesh(1_000_000; method = :exchange, rec = rec)  # Monte Carlo ray tracing (optional ray recorder keyword)
+mesh(10^6; method = :exchange, rec = rec)  # Monte Carlo ray tracing (optional ray recorder keyword)
 origins, endpoints = collect_rays(rec)  # collect the results, can be used for plotting (one line per ray)
 ```
 
@@ -346,7 +350,7 @@ Hand-chosen bands remain available as `PlanckBands(λ_edges)`.
 ### Step 5: Ray trace, smooth and solve
 
 ```julia
-mesh(2_000_000; method = :exchange)
+mesh(2*10^6; method = :exchange)
 # smooth the ray tracing result to enforce energy conservation and reciprocity
 # opt-in to pure Dykstra smoothing
 smooth!(mesh, k_dykstra=1000)
@@ -396,7 +400,127 @@ The spectral solver is an unpublished extension of the grey GERT method describe
 
 ---
 
-## Example 3 — Circular Enclosure from Triangular Elements
+## Example 3 — Line Spectrum vs Line-by-Line Reference
+
+A slab of gas between two black plates at 1000 K and 500 K, with a synthetic
+line spectrum: 400 Lorentzian lines on a weak continuum, absorption
+coefficients spanning five decades, from optically thin to thick across the
+1 m slab. Fixed wavelength bands cannot resolve such a spectrum — a band
+straddling a line averages opaque and transparent wavelengths into a meaningless
+mean. Adaptive binning groups wavelengths by κ instead, so line cores, wings and
+continuum land in bins of their own regardless of where they sit in the
+spectrum, and one pathlength trace serves every bin.
+
+The result is checked against an independent line-by-line solution of the
+same slab: exact exponential-integral quadrature at every wavelength, radiative
+equilibrium by Newton on the cell temperatures, itself verified against
+Heaslet & Warming (1965) in the grey limit. The reference lives in
+`examples/lbl_slab_reference.jl` and is exercised by the test suite.
+
+The formulation follows [Modest & Mazumder (2022)](https://doi.org/10.1016/C2018-0-03206-5),
+*Radiative Heat Transfer*, 4th ed., Ch. 13, with the grey benchmark values of
+[Heaslet & Warming (1965)](https://doi.org/10.1016/0017-9310(65)90083-9), Table 13.1 therein.
+
+### Step 1: Spectrum and reference solution
+
+```julia
+using RayTraceHeatTransfer
+using GeometryBasics, StaticArrays, Random
+include(joinpath(pkgdir(RayTraceHeatTransfer), "examples", "lbl_slab_reference.jl"))
+
+T1, T2 = 1000.0, 500.0
+NX = 32                                       # slab cells
+
+λ = 10 .^ range(log10(1e-8), log10(1e-2), length = 200_001)
+lines = let rng = MersenneTwister(1)
+    centres = 10 .^ (log10(1.5e-6) .+ (log10(30e-6) - log10(1.5e-6)) .* rand(rng, 400))
+    peaks   = 10 .^ (log10(0.1) .+ 5.0 .* rand(rng, 400))
+    widths  = 1e-4 .+ 2e-4 .* rand(rng, 400)
+    collect(zip(centres, widths, peaks))
+end
+κ = 0.1 .* [1e-3 + sum(p / (1 + (log10(x / c) / hw)^2) for (c, hw, p) in lines) for x in λ]
+
+T_lbl, q_lbl, _ = lbl_slab_equilibrium(λ, κ, 1.0, T1, T2; Nx = NX)
+ψ_lbl = q_lbl / (LBL_σ * (T1^4 - T2^4))       # net flux, normalised
+```
+
+### Step 2: Adaptive bins
+
+```julia
+model = adaptiveSpectralBins(λ, κ; tol = 1e-2, L_range = (1 / NX, 3.0), T_range = (T2, T1))
+K = length(model.κ_ref)                       # 20 bins from 1881 wavelength pieces
+```
+
+`tol` bounds the Planck-weighted transmission error of every bin over path
+lengths from one cell to a few slab thicknesses; the bin count is an output.
+
+### Step 3: Slab as a wide cavity
+
+The 2D solver has no plane-parallel mode, so the slab is a cavity 100_000× wider
+than tall with adiabatic, nearly non-reflecting sides; the centre column is the
+1D solution.
+
+```julia
+W, NX_H = 100_000.0, 5
+verts = SVector(Point2(0.0, 0.0), Point2(W, 0.0), Point2(W, 1.0), Point2(0.0, 1.0))
+face  = PolyVolume2D{Float64}(verts, SVector(true, true, true, true), K, 1.0, 0.0)
+face.kappa_g   = copy(model.κ_ref)
+face.sigma_s_g = zeros(K)
+face.epsilon   = [fill(1.0, K), fill(1.0, K), fill(1.0, K), fill(1.0, K)]
+face.T_in_w    = [T1, 0.0, T2, 0.0]          # bottom T1, top T2, sides adiabatic
+face.q_in_w    = zeros(4)
+face.T_in_g    = -1.0
+face.q_in_g    = 0.0
+
+mesh = RayTracingDomain2D([face], [(NX_H, NX)])
+mesh.spectral_model = model
+```
+
+### Step 4: Trace once, smooth, solve
+
+```julia
+mesh(10^7; method = :pathlength, chunk_rays=10^7) # one chunk: paths kept, re-binnable via `exchangeFactors!(mesh)`
+smooth!(mesh; k_dykstra=200, k_ap=10^4) # smoothing: 200 dykstra rounds, ≤ 10⁴ alternating-projections
+solveEquilibrium!(mesh, mesh.F_smooth; max_iters = 20_000, convergence_tol = 1e-12)
+
+ic  = (NX_H + 1) ÷ 2
+col = sort([f for f in mesh.fine_mesh[1] if abs(f.midPoint[1] - (ic - 0.5) * W / NX_H) < 1e-9],
+           by = f -> f.midPoint[2])
+T_pkg = [f.T_g for f in col]
+ψ_pkg = (col[1].q_w[1] / col[1].area[1]) / (LBL_σ * (T1^4 - T2^4))
+```
+
+### Step 5: Compare
+
+```julia
+using Plots
+
+# bin index of every wavelength sample, from the piecewise model
+piece = clamp.(searchsortedlast.(Ref(model.edges), λ), 1, length(model.piece_bin))
+bin   = model.piece_bin[piece]
+sel   = 1e-6 .<= λ .<= 1e-4
+
+p1 = Plots.plot(λ[sel] .* 1e6, κ[sel]; line_z = bin[sel], color = :turbo, linewidth = 1,
+    xscale = :log10, yscale = :log10, xlabel = "Wavelength / μm", ylabel = "κ / m⁻¹",
+    colorbar_title = "bin", legend = false, title = "Spectrum coloured by adaptive bin")
+
+x_c = ((1:NX) .- 0.5) ./ NX
+p2 = Plots.plot(x_c, T_lbl; linewidth = 2, color = :black, label = "line-by-line",
+    xlabel = "x / L", ylabel = "Temperature / K", title = "Slab temperature profile")
+Plots.scatter!(p2, x_c, T_pkg; color = :red, markersize = 3, label = "20 bins, one trace")
+
+p = Plots.plot(p1, p2; layout = (1, 2), size = (1000, 400), dpi = 500,
+    left_margin = 5Plots.mm, bottom_margin = 8Plots.mm)
+display(p)
+```
+
+![Line spectrum vs line-by-line reference](fig/lbl_slab.png)
+
+Tightening the tolerances or increasing the ray count improves accuracy.
+
+---
+
+## Example 4 — Circular Enclosure from Triangular Elements
 
 The meshing in RayTraceHeatTransfer.jl is not limited to rectangles: domains can be assembled from arbitrary triangular and quadrilateral elements, with any wall of any element declared either solid (radiatively active) or open (transparent to radiation, used to join elements). This example builds a circular enclosure of radius R = 1 m from 16 triangular wedges sharing a center vertex, fills it with an absorbing gas (κ = 1 m⁻¹, no scattering), and heats half the rim to 1000 K while the other half is held at 0 K. All surfaces are black (ε = 1).
 
@@ -441,7 +565,7 @@ Each wedge is subdivided 11 × 11, exactly as the square in Example 1 — the fi
 ### Step 2: Ray trace, smooth and solve
 
 ```julia
-mesh(10_000_000; method = :exchange)      # Monte Carlo ray tracing
+mesh(10^7; method = :exchange)      # Monte Carlo ray tracing
 smooth!(mesh) # smooth the ray tracing result to enforce energy conservation and reciprocity
 solveEquilibrium!(mesh, mesh.F_smooth)    # solve GERT system
 ```
@@ -474,7 +598,7 @@ The package test suite additionally verifies the isothermal limit on this geomet
 
 ---
 
-## Example 4 — 3D Surface Enclosure
+## Example 5 — 3D Surface Enclosure
 
 This example solves radiative equilibrium in a unit cube with transparent (non-participating) media. Two opposing faces have prescribed temperatures (1000 K and 0 K); the four side walls are in radiative equilibrium (unknown temperature, zero net heat flux). All surfaces are black (ε = 1). View factors are computed semi-analytically using the formulation of Narayanaswamy (2015), which means no ray tracing is needed.
 
@@ -634,7 +758,7 @@ downstream is identical:
 
 ```julia
 domainMC = RayTracingDomain3D_surfaces(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-domainMC(100_000_000)                       # total rays, split across emitters
+domainMC(10^8)                       # total rays, split across emitters
 smooth!(domainMC)
 solveEquilibrium!(domainMC, domainMC.F_smooth)
 
@@ -659,7 +783,7 @@ are not convex, where surfaces shadow one another. See Example 7.
 
 ---
 
-## Example 5 — Triangulated Icosphere
+## Example 6 — Triangulated Icosphere
 
 This example extends Example 4 from axis-aligned quads to an arbitrary convex triangulated geometry: a unit sphere approximated by recursively subdividing a regular icosahedron. A small hot cap of triangles is placed at the north pole and a matching cold cap at the south pole; all remaining triangles are in radiative equilibrium.
 
@@ -674,73 +798,7 @@ using RayTraceHeatTransfer
 using GLMakie
 using LinearAlgebra
 
-"""
-    icosphere_mesh(subdivision_level)
-
-Build a triangulated unit sphere by recursively subdividing a regular
-icosahedron `subdivision_level` times and projecting new vertices onto
-the unit sphere.
-
-Level 0 → 20 triangles, 1 → 80, 2 → 320, 3 → 1280.
-"""
-function icosphere_mesh(subdivision_level::Int)
-    φ = (1 + sqrt(5)) / 2
-
-    ico_points_raw = [
-         0.0   1.0    φ;    0.0   1.0   -φ;
-         0.0  -1.0    φ;    0.0  -1.0   -φ;
-         1.0    φ   0.0;    1.0   -φ   0.0;
-        -1.0    φ   0.0;   -1.0   -φ   0.0;
-           φ  0.0   1.0;      φ  0.0  -1.0;
-          -φ  0.0   1.0;     -φ  0.0  -1.0
-    ]
-
-    points = similar(ico_points_raw)
-    for i in 1:size(ico_points_raw, 1)
-        v = ico_points_raw[i, :]
-        points[i, :] = v / norm(v)
-    end
-
-    faces = [
-         1  3  9;   1  9  5;   1  5  7;   1  7 11;   1 11  3;
-         4  2 10;   4 10  6;   4  6  8;   4  8 12;   4 12  2;
-         3  6  9;   9  6 10;   9 10  5;   5 10  2;   5  2  7;
-         7  2 12;   7 12 11;  11 12  8;  11  8  3;   3  8  6
-    ]
-
-    for _ in 1:subdivision_level
-        midpoint_cache = Dict{Tuple{Int,Int},Int}()
-        new_points = [points[i, :] for i in 1:size(points, 1)]
-
-        function get_midpoint(i::Int, j::Int)
-            key = (min(i, j), max(i, j))
-            haskey(midpoint_cache, key) && return midpoint_cache[key]
-            m = (points[i, :] + points[j, :]) / 2
-            m = m / norm(m)
-            push!(new_points, m)
-            midpoint_cache[key] = length(new_points)
-            return length(new_points)
-        end
-
-        n_faces = size(faces, 1)
-        new_faces = Matrix{Int}(undef, 4 * n_faces, 3)
-        for k in 1:n_faces
-            a, b, c = faces[k, 1], faces[k, 2], faces[k, 3]
-            ab = get_midpoint(a, b)
-            bc = get_midpoint(b, c)
-            ca = get_midpoint(c, a)
-            new_faces[4k - 3, :] = [a,  ab, ca]
-            new_faces[4k - 2, :] = [ab, b,  bc]
-            new_faces[4k - 1, :] = [ca, bc, c ]
-            new_faces[4k,     :] = [ab, bc, ca]
-        end
-
-        points = reduce(vcat, (p' for p in new_points))
-        faces  = new_faces
-    end
-
-    return points, faces
-end
+include(joinpath(pkgdir(RayTraceHeatTransfer), "examples", "icosphere_mesh.jl")) # include icosphere mesh
 
 subdivision_level = 2       # → 320 triangles
 points, faces = icosphere_mesh(subdivision_level)
@@ -917,7 +975,7 @@ Narayanaswamy, A. (2015). "An analytic expression for radiation view factor betw
 
 ---
 
-## Example 6 — Mixed Triangular and Quadrilateral Faces
+## Example 7 — Mixed Triangular and Quadrilateral Faces
 
 Examples 4 and 5 are single-topology: the cube is all quadrilaterals, the
 icosphere all triangles. A 3D domain can mix the two.
@@ -984,7 +1042,7 @@ smoothing, then solve.
 
 ---
 
-## Example 7 — Non-Convex Enclosure: an L-Shaped Duct
+## Example 8 — Non-Convex Enclosure: an L-Shaped Duct
 
 The reentrant corner of an L-shaped duct shadows one arm from the other. View
 factors have no occlusion test, so this geometry requires ray tracing.
@@ -1022,7 +1080,7 @@ from the enclosed volume. Holes and non-manifold edges are rejected here.
 ### Step 2: Trace, smooth and solve
 
 ```julia
-domainL(100_000_000)     # total rays, divided across the 1694 elements
+domainL(10^8)     # total rays, divided across the 1694 elements
 smooth!(domainL)
 solveEquilibrium!(domainL, domainL.F_smooth)
 
@@ -1085,7 +1143,7 @@ The documentation of this package will gradually be rolled out in an online book
 
 ## References
 
-The core methodology is presented in [Bielefeld (2025)](https://arxiv.org/abs/2512.22157). The 3D view factor implementation follows [Narayanaswamy (2015)](https://doi.org/10.1016/j.ijheatmasstransfer.2015.07.131). This work was inspired in part by [Howell, Mengüç, Daun & Siegel (2020)](https://www.routledge.com/Thermal-Radiation-Heat-Transfer/Howell-Menguc-Daun-Siegel/p/book/9780367347079).
+The core methodology is presented in [Bielefeld (2026)](https://arxiv.org/abs/2512.22157). The 3D view factor implementation follows [Narayanaswamy (2015)](https://doi.org/10.1016/j.ijheatmasstransfer.2015.07.131). This work was inspired in part by [Howell, Mengüç, Daun & Siegel (2020)](https://www.routledge.com/Thermal-Radiation-Heat-Transfer/Howell-Menguc-Daun-Siegel/p/book/9780367347079).
 
 ## Authors
 

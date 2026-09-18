@@ -1,5 +1,5 @@
 """
-    smooth!(rtm; max_iters=1_000, k_dykstra=nothing, verbose=true, renorm=true)
+    smooth!(rtm; k_ap=1_000, k_dykstra=nothing, verbose=true, renorm=true)
 
 Project the raw exchange factors in `rtm.F_raw` onto the set of physically
 admissible exchange factors, storing the result in `rtm.F_smooth`.
@@ -18,7 +18,7 @@ smoothed repeatedly under different settings.
   minimum-norm correction. The default `nothing` picks whichever performs best
   for the problem at hand, based on the structure of `F_raw`. Rounds stop early
   once the iterate is feasible.
-- `max_iters`: cap on alternating projection iterations. Reaching it warns and
+- `k_ap`: cap on alternating projection iterations. Reaching it warns and
   leaves `converged` false.
 - `renorm`: scale the weight vector by its smallest entry before projecting.
 - `verbose`: print per-bin progress and per-iteration defect bounds.
@@ -51,8 +51,8 @@ maximum(stats.delta_max) # worst-case distance to the feasible manifold across b
 
 """
 function smooth!(rtm::Union{RayTracingDomain2D,SurfaceDomain3D};
-                                 max_iters::Int=1_000,
-                                 k_dykstra::Union{Nothing,Int}=nothing,
+                                 k_ap::Int=1_000,
+                                 k_dykstra::Int=1,
                                  verbose::Bool=true,
                                  renorm::Bool=true,
                                  keep_F_raw::Bool=true)
@@ -77,7 +77,7 @@ function smooth!(rtm::Union{RayTracingDomain2D,SurfaceDomain3D};
             verbose && println("Smoothing F matrix for nonuniform spectral bin $bin/$(rtm.n_spectral_bins)")
             F_smooth_bin, converged_i, delta_raw_i, delta_max_i, k_dykstra_i, k_ap_i, k_pcg_tot_i, k_pcg_max_i = smooth_F(
                 rtm, rtm.F_raw[bin];
-                max_iters=max_iters,
+                k_ap=k_ap,
                 k_dykstra=k_dykstra,
                 verbose=verbose,
                 smooth_surfaces_only=rtm.surfaces_only,
@@ -99,7 +99,7 @@ function smooth!(rtm::Union{RayTracingDomain2D,SurfaceDomain3D};
             verbose && println("Smoothing F matrix for uniform spectral bin $representative_bin/$(rtm.n_spectral_bins)")
             F_smooth_bin, converged_i, delta_raw_i, delta_max_i, k_dykstra_i, k_ap_i, k_pcg_tot_i, k_pcg_max_i = smooth_F(
                 rtm, rtm.F_raw[representative_bin],
-                max_iters=max_iters,
+                k_ap=k_ap,
                 k_dykstra=k_dykstra,
                 verbose=verbose,
                 smooth_surfaces_only=rtm.surfaces_only,
@@ -128,7 +128,7 @@ function smooth!(rtm::Union{RayTracingDomain2D,SurfaceDomain3D};
         
         F_smooth, converged_i, delta_raw_i, delta_max_i, k_dykstra_i, k_ap_i, k_pcg_tot_i, k_pcg_max_i = smooth_F(
             rtm, rtm.F_raw,
-            max_iters=max_iters,
+            k_ap=k_ap,
             k_dykstra=k_dykstra,
             verbose=verbose,
             smooth_surfaces_only=rtm.surfaces_only,

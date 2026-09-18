@@ -8,7 +8,7 @@
 # 4. Isothermal enclosure with an adaptive model on the sigmoid spectrum.
 
 println("\n" * "-"^60)
-println("Testing adaptiveSpectralBins")
+println("Testing adaptive spectral bins")
 println("-"^60)
 
 using Test
@@ -65,8 +65,6 @@ const AB_T = (600.0, 2000.0)
         @test length(m4.κ_ref) > length(m3.κ_ref)
         @test issorted(m4.κ_lo)
         @test all(m4.κ_lo .<= m4.κ_ref .<= m4.κ_hi)
-        println("  $name: tol 1e-3 → $(length(m3.κ_ref)) bins / $(n_pieces(m3)) pieces; ",
-                "tol 1e-4 → $(length(m4.κ_ref)) bins / $(n_pieces(m4)) pieces")
     end
 end
 
@@ -113,12 +111,13 @@ end
     face.q_in_w    = zeros(4)
     face.T_in_g    = -1.0
     face.q_in_g    = 0.0
-    mesh = RayTracingDomain2D([face], [(5, 5)])
+    mesh = RayTracingDomain2D([face], [(5, 5)], verbose = false)
     mesh.spectral_model = model
     mesh(400_000; method = :exchange, verbose = false)
     smooth!(mesh; verbose = false)
     solveEquilibrium!(mesh, mesh.F_smooth; max_iters = 10_000, convergence_tol = 1e-14, verbose = false)
     err = maximum(abs(ff.T_g - T_wall) for ff in mesh.fine_mesh[1])
-    println("  adaptive isothermal: $K bins, max |T_g − T_wall| = $err")
     @test err < 1e-9
 end
+
+println("✓ Adaptive spectral bins tests complete")

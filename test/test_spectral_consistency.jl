@@ -7,7 +7,7 @@ Tests for both 2D and 3D cases to ensure that:
 """
 
 println("\n" * "-"^60)
-println("Testing Spectral Consistency")
+println("Testing spectral consistency")
 println("-"^60)
 
 using RayTraceHeatTransfer
@@ -59,9 +59,9 @@ CONSISTENCY_TOLERANCE = 0.05  # 5% tolerance for consistency checks (ray tracing
     # Grey case
     epsilon_grey = ones(6)
     domain_grey = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon_grey)
-    domain_grey()
-    smooth!(domain_grey)
-    solveEquilibrium!(domain_grey, domain_grey.F_smooth)
+    domain_grey(; verbose = false)
+    smooth!(domain_grey, verbose = false)
+    solveEquilibrium!(domain_grey, domain_grey.F_smooth, verbose = false)
     
     grey_T = Float64[]
     grey_q = Float64[]
@@ -78,10 +78,10 @@ CONSISTENCY_TOLERANCE = 0.05  # 5% tolerance for consistency checks (ray tracing
     
     domain_spectral = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, 
                                      epsilon_spectral)
-    domain_spectral()
-    smooth!(domain_spectral)
+    domain_spectral(; verbose = false)
+    smooth!(domain_spectral, verbose = false)
     domain_spectral.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
-    solveEquilibrium!(domain_spectral, domain_spectral.F_smooth)
+    solveEquilibrium!(domain_spectral, domain_spectral.F_smooth, verbose = false)
     
     spectral_T = Float64[]
     spectral_q = Float64[]
@@ -161,16 +161,16 @@ end
     epsilon_bins = fill(1.0, n_bins)
     face.epsilon = [epsilon_bins, epsilon_bins, epsilon_bins, epsilon_bins]
     
-    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)])
+    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)], verbose = false)
     mesh.spectral_mode = :spectral_uniform
     mesh.n_spectral_bins = n_bins
     mesh.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     
     # Solve spectral problem
     N_rays = 1_000_000
-    mesh(N_rays; method=:exchange)
-    smooth!(mesh)
-    solveEquilibrium!(mesh, mesh.F_smooth)
+    mesh(N_rays; method=:exchange, verbose = false)
+    smooth!(mesh, verbose = false)
+    solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
     
     # Check that spectral results integrate properly
     for fine_face in mesh.fine_mesh[1]
@@ -246,10 +246,10 @@ end
     
     domain_black = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, 
                                   epsilon_all_black)
-    domain_black()
-    smooth!(domain_black)
+    domain_black(; verbose = false)
+    smooth!(domain_black, verbose = false)
     domain_black.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
-    solveEquilibrium!(domain_black, domain_black.F_smooth)
+    solveEquilibrium!(domain_black, domain_black.F_smooth, verbose = false)
     
     black_temps = [sf.T_w for i in 1:6 for sf in domain_black.facesMesh[i].subFaces]
     
@@ -259,10 +259,10 @@ end
     
     domain_selective = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w,
                                       epsilon_all_selective)
-    domain_selective()
-    smooth!(domain_selective)
+    domain_selective(; verbose = false)
+    smooth!(domain_selective, verbose = false)
     domain_selective.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
-    solveEquilibrium!(domain_selective, domain_selective.F_smooth)
+    solveEquilibrium!(domain_selective, domain_selective.F_smooth, verbose = false)
     
     selective_temps = [sf.T_w for i in 1:6 for sf in domain_selective.facesMesh[i].subFaces]
     
@@ -306,8 +306,8 @@ end
     # Grey mode: scalar epsilon
     epsilon_grey = ones(6)
     domain_grey = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon_grey)
-    domain_grey()
-    smooth!(domain_grey)
+    domain_grey(; verbose = false)
+    smooth!(domain_grey, verbose = false)
     
     @test domain_grey.spectral_mode == :grey
     @test domain_grey.n_spectral_bins == 1
@@ -319,8 +319,8 @@ end
     
     domain_spectral = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, 
                                      epsilon_spectral)
-    domain_spectral()
-    smooth!(domain_spectral)
+    domain_spectral(; verbose = false)
+    smooth!(domain_spectral, verbose = false)
     domain_spectral.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
     
     @test domain_spectral.spectral_mode == :spectral_uniform || 
@@ -363,10 +363,10 @@ end
     epsilon = [epsilon_bins for _ in 1:6]
     
     domain = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-    domain()
-    smooth!(domain)
+    domain(; verbose = false)
+    smooth!(domain, verbose = false)
     domain.spectral_model = PlanckBands(10 .^ range(log10(0.00000001), log10(0.1), length=n_bins+1))
-    solveEquilibrium!(domain, domain.F_smooth)
+    solveEquilibrium!(domain, domain.F_smooth, verbose = false)
     
     # Check energy balance for each spectral bin separately
     # and for the integrated total
@@ -394,4 +394,4 @@ end
     @test abs(q_total) < ENERGY_TOLERANCE
 end
 
-println("✓ Spectral Consistency tests complete")
+println("✓ Spectral consistency tests complete")

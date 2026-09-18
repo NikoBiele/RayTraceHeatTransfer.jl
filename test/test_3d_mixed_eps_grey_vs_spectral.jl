@@ -20,7 +20,7 @@ tolerances. A regression fails by tens of percent, not marginally.
 """
 
 println("\n" * "-"^60)
-println("Testing 3D Grey vs Spectral Consistency (Nonuniform b)")
+println("Testing 3D grey vs spectral consistency (nonuniform b)")
 println("-"^60)
 
 using RayTraceHeatTransfer
@@ -70,18 +70,18 @@ GREY3D_J_RTOL   = 1e-9
     # ---- grey domain ---------------------------------------------------------
     domain_grey = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w,
                                      copy(eps_faces))
-    domain_grey()
-    smooth!(domain_grey)
-    solveEquilibrium!(domain_grey, domain_grey.F_smooth)
+    domain_grey(; verbose = false)
+    smooth!(domain_grey, verbose = false)
+    solveEquilibrium!(domain_grey, domain_grey.F_smooth, verbose = false)
 
     # ---- spectral twin: same epsilon replicated over bins --------------------
     eps_spectral = [fill(eps_faces[i], n_bins) for i in 1:6]
     domain_spec = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w,
                                      eps_spectral)
-    domain_spec()
-    smooth!(domain_spec)
+    domain_spec(; verbose = false)
+    smooth!(domain_spec, verbose = false)
     domain_spec.spectral_model = PlanckBands([1.0e-6, 3.0e-6, 8.0e-6, 1.0e-3])
-    solveEquilibrium!(domain_spec, domain_spec.F_smooth)
+    solveEquilibrium!(domain_spec, domain_spec.F_smooth, verbose = false)
 
     # ---- collect per-subface T and j -----------------------------------------
     T_grey = Float64[]; j_grey = Float64[]
@@ -137,4 +137,4 @@ GREY3D_J_RTOL   = 1e-9
     @test all(isapprox.(e_spec[mask], e_grey[mask]; rtol=1e-9))
 end
 
-println("✓ 3D Grey vs Spectral consistency tests complete")
+println("✓ 3D grey vs spectral consistency tests complete")

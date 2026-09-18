@@ -85,6 +85,26 @@ struct UniformGrid{G}
     ny::Int                   # Number of cells in y direction
 end
 
+# Geometric ray paths recorded once, from which exchange factors follow for
+# any absorption coefficients (see exchangeFactors!). Flat CSR layout:
+# segments of ray r are seg_cell[ray_start[r]:ray_start[r+1]-1] with lengths
+# seg_len[...]; the ray was emitted by global element ray_emitter[r] with
+# in-plane direction ray_dir[r] and ended on global surface ray_end[r]
+# (0 if it escaped). Cell indices are global volume indices
+# (num_surfaces + volume index). Lengths are Float32: 1e-7 relative is far
+# below Monte-Carlo noise.
+struct RayPathStore
+    seg_cell::Vector{Int32}
+    seg_len::Vector{Float32}
+    ray_start::Vector{Int}            # length n_rays + 1
+    ray_emitter::Vector{Int32}
+    ray_end::Vector{Int32}
+    ray_dir::Vector{Point2{Float32}}
+    num_surfaces::Int
+    num_volumes::Int
+    rays_per_emitter::Int
+end
+
 # Enhanced RayTracingDomain2D with spectral support
 mutable struct RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}
     # Original fields (matching your exact RayTracingMesh structure)
@@ -106,6 +126,7 @@ mutable struct RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}
     n_spectral_bins::Int        # Number of spectral bins (1 for grey)
 
     spectral_model::Union{Nothing, AbstractSpectralModel}  # how emission is divided over bins (PlanckBands, ConstantWeights, ...)
+    path_store::Union{Nothing, RayPathStore}   # recorded geometric ray paths (method = :pathlength)
     surfaces_only::Bool         # indicates if the mesh includes volumes
     uniform_across_bin::Vector{Float64} # vector of uniform extinction (-1.0 where nonuniform)
     # Optimized cache structures (existing)
@@ -124,9 +145,9 @@ mutable struct RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}
     
     # Optimized spatial acceleration structures
     coarse_grid_opt::Union{Nothing, UniformGrid}
-    coarse_bboxes_opt::Union{Nothing, Vector{BoundingBox2D}}
-    fine_grids_opt::Union{Nothing, Vector{UniformGrid}}
-    fine_bboxes_opt::Union{Nothing, Vector{Vector{BoundingBox2D}}}
+    coarse_bboxes_opt::Union{Nothing, Vector{<:BoundingBox2D}}
+    fine_grids_opt::Union{Nothing, Vector{<:UniformGrid}}
+    fine_bboxes_opt::Union{Nothing, Vector{<:Vector{<:BoundingBox2D}}}
 
     # automatic calculation of global energy conservation error
     energy_error::Union{Nothing, G, Vector{G}} where {G}

@@ -1,5 +1,5 @@
 println("\n" * "-"^60)
-println("Testing 3D Surface Ray Tracing")
+println("Testing 3D surface ray tracing")
 println("-"^60)
 
 using RayTraceHeatTransfer
@@ -205,3 +205,5 @@ end
     # so a dead tracer returning an all-zero F would not pass the block above
     @test count(!iszero, d.F_raw[r[7], r[9]]) > 0
 end
+
+println("✓ Geometry tests complete")

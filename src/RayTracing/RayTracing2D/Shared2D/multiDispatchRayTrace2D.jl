@@ -2,7 +2,7 @@ function (rtm::RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; me
                                 nthreads::S=Threads.nthreads(),
                                 seeds::Union{Vector{K},K,UnitRange{K},Nothing}=nothing,
                                 rngs::Union{Vector{<:Random.AbstractRNG},<:Random.AbstractRNG,Nothing}=nothing,
-                                nudge=nothing, verbose=true, rec=nothing) where
+                                nudge=nothing, verbose=true, rec=nothing, chunk_rays::Integer=10_000_000) where
                                 {VPF,VVPF,MT,VT,DIII,DII,P<:Integer,GRID,S<:Integer,K<:Integer}
     
     if nthreads > Threads.nthreads()
@@ -39,7 +39,9 @@ function (rtm::RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; me
         exchangeRayTracing!(rtm, rays_tot, trace_nudge, verbose, rec, seeds, rngs, nthreads)
     elseif method == :direct
         directRayTracing!(rtm, rays_tot, trace_nudge, verbose, seeds, rngs, nthreads)
+    elseif method == :pathlength
+        pathRayTracing!(rtm, rays_tot, trace_nudge, verbose, seeds, rngs, nthreads; chunk_rays=chunk_rays)
     else
-        error("Unknown ray tracing method: $method, must be :exchange or :direct.")
+        error("Unknown ray tracing method: $method, must be :exchange, :direct or :pathlength.")
     end
 end

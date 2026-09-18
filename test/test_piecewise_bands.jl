@@ -8,7 +8,7 @@
 # 4. Isothermal enclosure with a PiecewiseBands model solves to T_wall.
 
 println("\n" * "-"^60)
-println("Testing PiecewiseBands spectral model")
+println("Testing piecewise bands spectral model")
 println("-"^60)
 
 using Test
@@ -84,7 +84,7 @@ end
         face.q_in_w    = zeros(4)
         face.T_in_g    = -1.0
         face.q_in_g    = 0.0
-        mesh = RayTracingDomain2D([face], [(5, 5)])
+        mesh = RayTracingDomain2D([face], [(5, 5)], verbose = false)
         mesh.spectral_model = model
         mesh(1_000_000; method = :exchange, verbose = false)
         smooth!(mesh; verbose = false)
@@ -94,3 +94,5 @@ end
         @test err < 1e-9
     end
 end
+
+println("✓ Piecewise bands tests complete")

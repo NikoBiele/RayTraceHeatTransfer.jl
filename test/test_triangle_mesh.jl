@@ -36,11 +36,11 @@ rim(j) = Point2(R * cos(2π * (j - 1) / N_seg), R * sin(2π * (j - 1) / N_seg));
         push!(faces, face)
         push!(divisions, (2, 2))
     end;
-    mesh = RayTracingDomain2D(faces, divisions);
-    mesh(10_000_000; method = :exchange);
-    smooth!(mesh)
-    solveEquilibrium!(mesh, mesh.F_smooth);
-    T_g = [ff.T_g for fine in mesh.fine_mesh for ff in fine];
+    mesh = RayTracingDomain2D(faces, divisions, verbose = false)
+    mesh(10_000_000; method = :exchange, verbose = false)
+    smooth!(mesh, verbose = false)
+    solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
+    T_g = [ff.T_g for fine in mesh.fine_mesh for ff in fine]
     # test for isothermal
     @test extrema(T_g)[1] > T_hot - 1e-3
     @test extrema(T_g)[2] < T_hot + 1e-3
@@ -60,10 +60,10 @@ end
         push!(faces2, face)
         push!(divisions2, (11, 11))
     end;
-    mesh2 = RayTracingDomain2D(faces2, divisions2);
-    mesh2(10_000_000; method = :exchange);
-    smooth!(mesh2)
-    solveEquilibrium!(mesh2, mesh2.F_smooth);
+    mesh2 = RayTracingDomain2D(faces2, divisions2, verbose = false);
+    mesh2(10_000_000; method = :exchange, verbose = false);
+    smooth!(mesh2, verbose = false)
+    solveEquilibrium!(mesh2, mesh2.F_smooth, verbose = false);
 
     T_limit = ((T_hot^4 + 0.0^4) / 2)^(1/4);      # ≈ 840.896 K
     # gas elements adjacent to the center
@@ -75,3 +75,5 @@ end
     @test abs(mean((T_g_all ./ T_hot).^4) - 0.5) < 0.1
      
 end
+
+println("✓ Triangle mesh tests complete")

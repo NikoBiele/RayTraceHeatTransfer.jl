@@ -94,13 +94,9 @@ function buildSpatialAcceleration!(domain::RayTracingDomain2D)
     # Build for coarse mesh
     domain.coarse_grid_opt, domain.coarse_bboxes_opt = buildOptimizedSpatialStructure(domain.coarse_mesh)
     
-    # Build for each fine domain
-    domain.fine_grids_opt = Vector{Union{Nothing, UniformGrid}}(undef, length(domain.fine_mesh))
-    domain.fine_bboxes_opt = Vector{Union{Nothing, Vector{BoundingBox2D}}}(undef, length(domain.fine_mesh))
-    
-    for i in eachindex(domain.fine_mesh)
-        domain.fine_grids_opt[i], domain.fine_bboxes_opt[i] = buildOptimizedSpatialStructure(domain.fine_mesh[i])
-    end
+    built = map(buildOptimizedSpatialStructure, domain.fine_mesh)
+    domain.fine_grids_opt  = first.(built)     # Vector{UniformGrid{G}}
+    domain.fine_bboxes_opt = last.(built)      # Vector{Vector{BoundingBox2D{G}}}
     
     return domain
 end

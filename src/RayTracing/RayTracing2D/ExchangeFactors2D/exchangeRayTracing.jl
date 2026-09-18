@@ -19,14 +19,14 @@ function exchangeRayTracing!(rtm::RayTracingDomain2D, rays_tot::S,
         iters = trunc(Int, log(guard / pred.delta_init) / log(pred.rho_est))
         @warn "Parallel-plate-like coupling detected in the traced exchange factors.\n" *
               "Pure alternating-projection smoothing predicted to converge at ρ ≈ $(round(pred.rho_est; digits=8)).\n" *
-              "Consider pure Dykstra smoothing if feasible: 'smooth!(mesh; k_dykstra=1000, max_iters=0)',\n" *
-              "or raise 'max_iters' to at least $(5*iters) for AP to reach the target."
+              "Consider Dykstra smoothing if feasible: 'smooth!(mesh; k_dykstra=1000)',\n" *
+              "or raise 'k_ap' to at least $(5*iters) for AP to reach the target."
     end
     if pred.rho_est > 0.99 && !pred.exact
         @warn "Parallel-plate-like coupling detected in the traced exchange factors.\n"
                 "ρ ≥ $(round(pred.rho_est; digits=6)); slow alternating-projection convergence possible.\n" *
                 "The estimate is a lower bound; if alternating-projection smoothing stalls, rerun with more rays,\n"
-                "or use Dykstra, if feasible: 'smooth!(mesh; k_dykstra=1000, max_iters=0)'."
+                "or use Dykstra, if feasible: 'smooth!(mesh; k_dykstra=1000)'."
     end
     nothing
 end

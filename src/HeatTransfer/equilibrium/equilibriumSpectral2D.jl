@@ -56,6 +56,7 @@ function equilibriumSpectral2D_direct!(rtm::RayTracingDomain2D, F_matrices::Abst
     
     # Validate spectral setup at entry (wavelength bands weights)
     validateSpectralSetup(rtm)
+    K = rtm.n_spectral_bins
 
     # Get system dimensions
     surface_mapping, volume_mapping = rtm.surface_mapping, rtm.volume_mapping
@@ -93,21 +94,21 @@ function equilibriumSpectral2D_direct!(rtm::RayTracingDomain2D, F_matrices::Abst
     end
 
     # Reconstruct final sol_j from final j_tot and emitFrac
-    elements_tot = rtm.surfaces_only ? length(rtm.surface_mapping) : total_elements
+    N = rtm.surfaces_only ? length(rtm.surface_mapping) : total_elements
     weightedFrac = getWeightedEmissionFractions(rtm, temperatures)
-    sol_j = zeros(G, rtm.n_spectral_bins * elements_tot)
-    for bin in 1:rtm.n_spectral_bins
-        bin_start = (bin - 1) * elements_tot + 1
-        bin_end = bin * elements_tot
-        sol_j[bin_start:bin_end] = weightedFrac[1:elements_tot, bin] .* j_tot
+    sol_j = zeros(G, K * N)
+    for bin in 1:K
+        bin_start = (bin - 1) * N + 1
+        bin_end = bin * N
+        sol_j[bin_start:bin_end] = weightedFrac[1:N, bin] .* j_tot
     end
     
     # Write spectral results for each bin to mesh
     verbose && println("Writing spectral results to mesh...")
-    for bin in 1:rtm.n_spectral_bins
+    for bin in 1:K
         # Extract solution for this bin
-        bin_start = (bin - 1) * elements_tot + 1
-        bin_end = bin * elements_tot
+        bin_start = (bin - 1) * N + 1
+        bin_end = bin * N
         j_bin = sol_j[bin_start:bin_end]
         
         # Compute e, r, g_a from GERT matrices
@@ -123,8 +124,16 @@ function equilibriumSpectral2D_direct!(rtm::RayTracingDomain2D, F_matrices::Abst
     writeTemperaturesHeatSources!(rtm, temperatures)
     
     # Compute energy conservation error for each spectral bin
-    rtm.energy_error = G.([sum((I - F_matrices') * sol_j[(i - 1) * elements_tot + 1:i * elements_tot]) 
-                        for i in 1:rtm.n_spectral_bins])    
+    # relative: power unaccounted for in the bin over the bin's total power
+    rtm.energy_error = G.([let j = sol_j[(i - 1) * N + 1 : i * N]
+                               sum((I - F_matrices') * j) / (sum(j) > 1000*eps(G) ? sum(j) : one(G))
+                           end for i in 1:K])
+
+    if verbose
+        show(stdout, MIME"text/plain"(), rtm)
+        println()
+    end
+    return nothing
 end
 
 ###### NEWTON-ACCELERATED WOODBURY SOLVER ######
@@ -370,6 +379,10 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
     is_radeq_n    = falses(N)
     emissive_prev = copy(emissive)
     consec_rejects = 0; n_reassemble = 0
+    λ_prev        = one(G)            # last accepted step length; first try is min(1, 2λ_prev)
+    reassemble_at = 1e-4              # refresh the chord Jacobian once below this error
+    reassembled_late = false
+    convergence_error = one(G)
     for iter = 1:max_iters
 
         # one sweep step
@@ -378,6 +391,10 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
         # === Newton acceleration on total emissive =========================
         f_newton = emissive .- emissive_prev            # residual of the sweep
         if iter > 1 && iter % newton_every == 0
+            if !reassembled_late && convergence_error < reassemble_at && J_newton !== nothing
+                J_newton = nothing; n_reassemble += 1; reassembled_late = true
+                verbose && println("  Newton: refreshing Jacobian (error $(round(convergence_error, sigdigits=3)))")
+            end
             if J_newton === nothing
                 _, J_newton, is_radeq_n = predict_spectral_rate_dispatch(
                     rtm, F_matrices, M_matrices, D_matrices, b,
@@ -399,6 +416,9 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
                     stats.solved || @warn "Newton GMRES not fully converged" stats.niter
                     δ[req] .= δ_req
                 end
+                # (I − J)⁻¹ f is the correction to e_prev; `emissive` already holds
+                # e_new = e_prev + f, so the correction to it is J(I − J)⁻¹ f = δ − f.
+                δ[req] .-= f_newton[req]
                 # probe: one sweep at e + λ·δ; returns residual norm and resulting state
                 function ϕ_probe(λd)
                     e_t = max.(emissive .+ λd .* δ, zero(G))
@@ -409,27 +429,37 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
                     return norm(em_v .- e_t), (copy(em_v), copy(ef_v), copy(T_v), j_v)
                 end
 
-                # --- capped line search: fixed candidates, plain step as floor ----
-                ϕ0, s0 = ϕ_probe(0.0)                      # plain-step baseline
-                ϕ_best, s_best, λ_best = ϕ0, s0, 0.0
-                for λd in (0.05, 0.1, 0.25, 0.5, 1.0, 2.0)
+                # --- backtracking line search from the unit step -----------------
+                # Baseline is the residual of the sweep just taken (already in
+                # hand); a candidate is accepted as soon as it beats it by the
+                # Armijo margin, so the common case (λ = 1 works) costs one probe.
+                ϕ0     = norm(f_newton)
+                c_arm  = 0.1
+                λ_best = 0.0
+                ϕ_best = ϕ0
+                s_best = nothing
+                λd = min(one(G), 2λ_prev)
+                while λd >= 0.1
                     ϕt, st = ϕ_probe(λd)
-                    if ϕt < ϕ_best
+                    if ϕt <= (one(G) - c_arm) * ϕ0
                         ϕ_best, s_best, λ_best = ϕt, st, λd
+                        break
                     end
+                    λd /= 2
                 end
-                emissive, emitFrac, temperatures, j_b = s_best
-                sol_j .= j_b
                 if λ_best > 0
+                    emissive, emitFrac, temperatures, j_b = s_best
+                    sol_j .= j_b
+                    λ_prev = λ_best
                     verbose && println("  Newton: accepted λ = $λ_best, ",
-                            "residual $(round(ϕ_best/ϕ0, sigdigits=3))× plain step")
-                    # after an acceptance: 
+                            "residual $(round(ϕ_best/ϕ0, sigdigits=3))× sweep residual")
                     consec_rejects = 0
+                    newton_every   = 1        # keep stepping while it works
                 else
                     verbose && println("  Newton: direction rejected (plain step kept)")
-                    # after a rejection:  
                     consec_rejects += 1
-                    if consec_rejects >= 3 # && n_reassemble < 3
+                    newton_every   = 5        # back off to plain sweeps
+                    if consec_rejects >= 3
                         J_newton = nothing; n_reassemble += 1; consec_rejects = 0
                     end
                 end
@@ -482,10 +512,17 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
 
     writeTemperaturesHeatSources!(rtm, temperatures)
 
-    rtm.energy_error = G.([sum((I - F_matrices[i]') *
-                               sol_j[(i - 1) * N + 1 : i * N]) for i in 1:K])
+    # Compute energy conservation error for each spectral bin
+    # relative: power unaccounted for in the bin over the bin's total power
+    rtm.energy_error = G.([let j = sol_j[(i - 1) * N + 1 : i * N]
+                               sum((I - F_matrices[i]') * j) / (sum(j) > 1000*eps(G) ? sum(j) : one(G))
+                           end for i in 1:K])
 
-    return rtm
+    if verbose
+        show(stdout, MIME"text/plain"(), rtm)
+        println()
+    end
+    return nothing
 end
 
 
@@ -590,17 +627,27 @@ function predict_spectral_convergence_rate(rtm::RayTracingDomain2D,
     end
 
     # --- 5. Get ρ ---
+        # --- 4. Materialise J_red = D_sum · j(𝓔_J) in block form (BLAS-3):
+    #        E_k   = diag(emitFrac[:,k] .+ emissive .* Phi[:,k] .* J_T_diag)   (N×N diagonal)
+    #        U_k   = (D_kᵀD_k)⁻¹ D_kᵀ E_k                                       (N×N)
+    #        W     = inner⁻¹ Σ_k M_k U_k                                         (N×N)
+    #        J_red = Σ_k D_k (U_k − (D_kᵀD_k)⁻¹M_kᵀ W)
     if use_reduced
-        # Materialize J_red (N × N, small) by applying matvec to N basis vectors,
-        # then dense eigensolve. For larger N, swap in KrylovKit.eigsolve.
-        J_red = zeros(G, N, N)
-        e_basis = zeros(G, N)
-        for j in 1:N
-            fill!(e_basis, zero(G)); e_basis[j] = one(G)
-            J_red[:, j] .= jred_matvec(e_basis)
+        D_k = [F isa SparseMatrixCSC ? Matrix(I - Diagonal(b[:,k]) * F') : (I - Diagonal(b[:,k]) * F')
+               for (k, F) in enumerate(F_matrices)]
+        U = Vector{Matrix{G}}(undef, K)
+        MU = zeros(G, N, N)
+        for k in 1:K
+            e_k  = emitFrac[:, k] .+ emissive .* Phi[:, k] .* J_T_diag
+            U[k] = DtD_factors[k] \ (D_k[k]' * Diagonal(e_k))
+            MU  .+= M_matrices[k] * U[k]
         end
-        # return Float64(maximum(abs.(eigvals(J_red))))
-        return Float64(-1), J_red, is_radeq # Float64(maximum(abs.(eigvals(J_red))))
+        W = inner_factor \ MU
+        J_red = zeros(G, N, N)
+        for k in 1:K
+            J_red .+= D_k[k] * (U[k] .- DtDinv_Mt[k] * W)
+        end
+        return Float64(-1), J_red, is_radeq
     else
         # Full K·N × K·N assembly (for cross-validation only; do not use for big problems)
         Dtil = zeros(G, K*N, K*N)
@@ -616,7 +663,7 @@ function predict_spectral_convergence_rate(rtm::RayTracingDomain2D,
         Mtil = hcat(M_matrices...)
         H    = Dtil' * Dtil + Mtil' * Mtil
         J    = H \ (Dtil' * EJ * Dsum)
-        return Float64(-1) # Float64(maximum(abs.(eigvals(J))))
+        return Float64(-1), J, is_radeq # Float64(maximum(abs.(eigvals(J))))
     end
 end
 

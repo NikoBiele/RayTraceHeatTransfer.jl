@@ -1,5 +1,6 @@
 function solveTemperatureNewtonRaphson(rtm, element_size, measured_powers, absorption_coeffs;
-                                        initial_temp=1000.0, max_iter=10_000, tolerance=1e-12)
+                                        initial_temp=1000.0, max_iter=10_000, tolerance=1e-12,
+                                        verbose::Bool=true)
     """
     Solve for temperature given measured spectral emission powers using Newton-Raphson.
 
@@ -64,7 +65,7 @@ function solveTemperatureNewtonRaphson(rtm, element_size, measured_powers, absor
         # Check convergence
         relative_change = abs(delta_T / T)
         if relative_change < tolerance
-            println("Converged in $iter iterations to T = $T_new K")
+            verbose && println("Converged in $iter iterations to T = $T_new K")
             return T_new
         end
 
@@ -72,7 +73,7 @@ function solveTemperatureNewtonRaphson(rtm, element_size, measured_powers, absor
 
         # Debug output
         if iter <= 3 || iter % 20 == 0
-            println("Iter $iter: T = $T K, relative_change = $relative_change")
+            verbose && println("Iter $iter: T = $T K, relative_change = $relative_change")
         end
     end
 

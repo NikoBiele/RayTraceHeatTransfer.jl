@@ -27,7 +27,7 @@ splitting governs.
 """
 
 println("\n" * "-"^60)
-println("Testing Selective Emissivity via Exact Bin Decoupling")
+println("Testing selective emissivity via exact bin decoupling")
 println("-"^60)
 
 using RayTraceHeatTransfer
@@ -72,18 +72,18 @@ DECOUPLE_J_RTOL = 1e-8    # deterministic shared-F comparison; observed ~1e-10
         face_spec.g_w[w] = zeros(n_bins); face_spec.i_w[w]   = zeros(n_bins)
     end
     face_spec.epsilon = [copy(eps_bins) for _ in 1:4]
-    mesh_spec = RayTracingDomain2D([face_spec], [(Ndim, Ndim)])
+    mesh_spec = RayTracingDomain2D([face_spec], [(Ndim, Ndim)], verbose = false)
     mesh_spec.n_spectral_bins        = n_bins
     mesh_spec.spectral_model = PlanckBands(band_limits)
     # spectral_mode left to the package's own detection where possible; set if required:
     @test mesh_spec.spectral_mode == :spectral_variable
 
     # ---- trace ONCE ----------------------------------------------------------
-    mesh_spec(N_rays; method=:exchange)
-    smooth!(mesh_spec)
+    mesh_spec(N_rays; method=:exchange, verbose = false)
+    smooth!(mesh_spec, verbose = false)
     F_shared = mesh_spec.F_smooth
 
-    solveEquilibrium!(mesh_spec, F_shared)
+    solveEquilibrium!(mesh_spec, F_shared, verbose = false)
 
     num_s = length(mesh_spec.surface_mapping)
     num_v = length(mesh_spec.volume_mapping)
@@ -119,9 +119,9 @@ DECOUPLE_J_RTOL = 1e-8    # deterministic shared-F comparison; observed ~1e-10
         face_g.T_in_w  = T_w_eff
         face_g.epsilon = fill(eps_bins[bin], 4)
         face_g.T_in_g  = T_g_eff
-        mesh_g = RayTracingDomain2D([face_g], [(Ndim, Ndim)])
+        mesh_g = RayTracingDomain2D([face_g], [(Ndim, Ndim)], verbose = false)
 
-        solveEquilibrium!(mesh_g, F_shared[1])     # no trace: shared F
+        solveEquilibrium!(mesh_g, F_shared[1], verbose = false)     # no trace: shared F
 
         j_grey = zeros(n_elem)
         for ((ci, fi, wi), si) in mesh_g.surface_mapping
@@ -138,4 +138,4 @@ DECOUPLE_J_RTOL = 1e-8    # deterministic shared-F comparison; observed ~1e-10
     end
 end
 
-println("✓ Selective Emissivity Decoupling tests complete")
+println("✓ Selective emissivity decoupling tests complete")

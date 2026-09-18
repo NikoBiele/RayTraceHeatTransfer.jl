@@ -82,7 +82,7 @@ function RayTracingDomain2D(rtm::IntermediateMesh2D, verbose::Bool)
         rtm.coarse_mesh, rtm.fine_mesh, rtm.coarse_grid, rtm.fine_grids,
         rtm.F_raw, rtm.F_smooth,
         surface_areas, volumes, surface_mapping, volume_mapping,
-        :not_yet_set, n_spectral_bins, nothing, # NEW spectral fields
+        :not_yet_set, n_spectral_bins, nothing, nothing, # spectral fields (mode, bins, model), path store
         false, [0.0],
         coarse_face_cache, fine_face_cache,
         coarse_wall_normals, coarse_wall_midpoints,

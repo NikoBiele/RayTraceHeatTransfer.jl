@@ -36,8 +36,8 @@ function traceRayUniform(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit:
             fine_index = findFace2D(hmesh.fine_mesh[current_coarse_index], point, 
                                            hmesh.fine_grids_opt[current_coarse_index],
                                            hmesh.fine_bboxes_opt[current_coarse_index])
-            if fine_index === nothing
-                return nothing  # Ray escaped
+            if fine_index === 0
+                return 0  # Ray escaped
             end
             return (current_coarse_index, fine_index, zero(P), point)
             
@@ -47,8 +47,8 @@ function traceRayUniform(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit:
             fine_index = findFace2D(hmesh.fine_mesh[current_coarse_index], point,
                                            hmesh.fine_grids_opt[current_coarse_index],
                                            hmesh.fine_bboxes_opt[current_coarse_index])
-            if fine_index === nothing
-                return nothing  # Ray escaped
+            if fine_index === 0
+                return 0  # Ray escaped
             end
             u_real, u_index = distToSurface2D(point, direction, hmesh.fine_mesh[current_coarse_index][fine_index])
             return (current_coarse_index, fine_index, u_index, point)
@@ -61,14 +61,14 @@ function traceRayUniform(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit:
             next_coarse_index = findFace2D(hmesh.coarse_mesh, point,
                                                    hmesh.coarse_grid_opt, 
                                                    hmesh.coarse_bboxes_opt)
-            if next_coarse_index === nothing
-                return nothing  # Ray escaped
+            if next_coarse_index === 0
+                return 0  # Ray escaped
             end
             current_coarse_index = next_coarse_index
         end
     end
     
-    return nothing  # Maximum iterations reached
+    return 0  # Maximum iterations reached
 end
 
 # Updated variable ray tracing with spectral bin support
@@ -90,8 +90,8 @@ function traceRayVariable(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit
         fine_index = findFace2D(hmesh.fine_mesh[current_coarse_index], point,
                                         hmesh.fine_grids_opt[current_coarse_index],
                                         hmesh.fine_bboxes_opt[current_coarse_index])
-        if fine_index === nothing
-            return nothing  # Ray escaped
+        if fine_index === 0
+            return 0  # Ray escaped
         end
         current_fine_face = hmesh.fine_mesh[current_coarse_index][fine_index]
         
@@ -113,8 +113,8 @@ function traceRayVariable(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit
             fine_index = findFace2D(hmesh.fine_mesh[current_coarse_index], point, 
                                            hmesh.fine_grids_opt[current_coarse_index],
                                            hmesh.fine_bboxes_opt[current_coarse_index])
-            if fine_index === nothing
-                return nothing  # Ray escaped
+            if fine_index === 0
+                return 0  # Ray escaped
             end
             return (current_coarse_index, fine_index, zero(P), point)
             
@@ -124,8 +124,8 @@ function traceRayVariable(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit
             fine_index = findFace2D(hmesh.fine_mesh[current_coarse_index], point,
                                            hmesh.fine_grids_opt[current_coarse_index],
                                            hmesh.fine_bboxes_opt[current_coarse_index])
-            if fine_index === nothing
-                return nothing  # Ray escaped
+            if fine_index === 0
+                return 0  # Ray escaped
             end
             u_real, u_index = distToSurface2D(point, direction, hmesh.fine_mesh[current_coarse_index][fine_index])
             return (current_coarse_index, fine_index, u_index, point)
@@ -139,12 +139,67 @@ function traceRayVariable(hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit
             next_coarse_index = findFace2D(hmesh.coarse_mesh, point,
                                                    hmesh.coarse_grid_opt, 
                                                    hmesh.coarse_bboxes_opt)
-            if next_coarse_index === nothing
-                return nothing  # Ray escaped
+            if next_coarse_index === 0
+                return 0  # Ray escaped
             end
             current_coarse_index = next_coarse_index
         end
     end
     
-    return nothing  # Maximum iterations reached
+    return 0  # Maximum iterations reached
+end
+
+
+#    traceRayPath!(seg_cell, seg_len, hmesh, p_emit, dir_emit, nudge, coarse_index,
+#                  volume_mapping, num_surfaces)
+#
+# Walk a ray fine cell by fine cell with no absorption, appending the global
+# volume index and geometric length of every cell crossed to `seg_cell` and
+# `seg_len`. Returns `(coarse_index, fine_index, wall_index, point)` at the
+# first solid wall hit, or `nothing` if the ray escaped (the caller discards
+# the segments appended for such a ray).
+
+function traceRayPath!(seg_cell::Vector{Int32}, seg_len::Vector{Float32},
+                       hmesh::RayTracingDomain2D, p_emit::Point2{G}, dir_emit::Point2{G},
+                       nudge, coarse0::P,
+                       volume_mapping::Dict{Tuple{P,P},P}, num_surfaces::P) where {G, P<:Integer}
+    grids  = hmesh.fine_grids_opt::Vector{UniformGrid{G}}
+    bboxes = hmesh.fine_bboxes_opt::Vector{Vector{BoundingBox2D{G}}}
+    cgrid  = hmesh.coarse_grid_opt::UniformGrid{G}
+    cbbox  = hmesh.coarse_bboxes_opt::Vector{BoundingBox2D{G}}
+    coarse_mesh = hmesh.coarse_mesh
+    all_fine    = hmesh.fine_mesh
+
+    point = p_emit
+    direction = dir_emit
+    ci::P = coarse0
+    fine_mesh = all_fine[ci]
+    f0 = findFace2D(fine_mesh, point, grids[ci], bboxes[ci])
+    f0 === 0 && return 0
+    fi::P = f0
+
+    @inbounds for _ in 1:100_000
+        fine_face = fine_mesh[fi]
+        u_real, u_index = distToSurface2D(point, direction, fine_face)
+        push!(seg_cell, Int32(num_surfaces + volume_mapping[(ci, fi)]))
+        push!(seg_len, Float32(u_real))
+
+        if fine_face.solidWalls[u_index]
+            @fastmath point = point + (u_real - nudge) * direction
+            return (ci, fi, u_index, point)
+        end
+
+        @fastmath point = point + (u_real + nudge) * direction
+        nf = findFace2D(fine_mesh, point, grids[ci], bboxes[ci])
+        if nf === 0
+            nc = findFace2D(coarse_mesh, point, cgrid, cbbox)
+            nc === 0 && return 0
+            ci = nc
+            fine_mesh = all_fine[ci]
+            nf = findFace2D(fine_mesh, point, grids[ci], bboxes[ci])
+            nf === 0 && return 0
+        end
+        fi = nf
+    end
+    return 0
 end

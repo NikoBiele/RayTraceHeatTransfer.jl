@@ -336,13 +336,13 @@ function OP(F_OP::AbstractMatrix, w::AbstractVector, dual::DualSolver)
 end
 
 function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
-              k_dykstra::Int=0, max_iters::Int=1000, verbose::Bool=true,
+              k_dykstra::Int=0, k_ap::Int=1000, verbose::Bool=true,
               nz_over_N::Real=length(w))
 
     delta_raw = delta_R_raw(F_raw, w)
               
     if k_dykstra <= 0
-        F_smooth, k_ap, converged, delta_max = AP(F_raw, w, num_surfaces; max_iters, verbose, nz_over_N)
+        F_smooth, k_ap, converged, delta_max = AP(F_raw, w, num_surfaces; k_ap, verbose, nz_over_N)
         k_dykstra = 0; k_pcg_tot = 0; k_pcg_max = 0
         return F_smooth, converged, delta_raw, delta_max, k_dykstra, k_ap, k_pcg_tot, k_pcg_max
     end
@@ -366,7 +366,7 @@ function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
         P = G + P - F_smooth
     end
     F_smooth ./= sum(F_smooth, dims = 2)               # always renormalise, always finalise
-    F_smooth, k_ap, converged, delta_max = AP(F_smooth, w, num_surfaces; max_iters, verbose, nz_over_N)
+    F_smooth, k_ap, converged, delta_max = AP(F_smooth, w, num_surfaces; k_ap, verbose, nz_over_N)
     return F_smooth, converged, delta_raw, delta_max, k_dyk_conv, k_ap, k_pcg_tot, k_pcg_max
 end
 
@@ -379,11 +379,11 @@ end
 # always have positive weight and come first, so num_surfaces is unchanged.
 # Returns a matrix of the same size as F_raw.
 function DkAP_active(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
-                     k_dykstra::Int=0, max_iters::Int=1000, verbose::Bool=true,
+                     k_dykstra::Int=0, k_ap::Int=1000, verbose::Bool=true,
                      nz_over_N::Real=length(w))
     active = findall(>(0), w)
     length(active) == length(w) &&
-        return DkAP(F_raw, w, num_surfaces; k_dykstra, max_iters, verbose, nz_over_N)
+        return DkAP(F_raw, w, num_surfaces; k_dykstra, k_ap, verbose, nz_over_N)
     inactive = findall(<=(0), w)
     verbose && println("    $(length(inactive)) zero-weight elements excluded from the projection")
 
@@ -391,7 +391,7 @@ function DkAP_active(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int
     rs = sum(F_act, dims=2)
     rs[rs .== 0] .= 1
     F_act = F_act ./ rs
-    out = DkAP(F_act, w[active], num_surfaces; k_dykstra, max_iters, verbose, nz_over_N)
+    out = DkAP(F_act, w[active], num_surfaces; k_dykstra, k_ap, verbose, nz_over_N)
 
     F_sub = out[1]
     F_smooth = F_sub isa SparseMatrixCSC ? spzeros(eltype(F_sub), size(F_raw)...) :
@@ -510,9 +510,9 @@ end
 
 # Updated smoothing algorithm
 function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::AbstractMatrix;
-                                 max_iters::Int=1_000,
+                                 k_ap::Int=1_000,
                                  smooth_surfaces_only::Bool=false,
-                                 k_dykstra::Union{Nothing,Int}=nothing,
+                                 k_dykstra::Int=1,
                                  verbose::Bool=true,
                                  renorm::Bool=true,
                                  spectral_bin::Int=1)
@@ -545,19 +545,15 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
     end
 
     verbose && println("Off-diagonal cross-coupling of F_raw is χ = $off_diag_chi")
-    if k_dykstra === nothing
-        if typeof(rtm) <: ViewFactorDomain3D ||
-            (typeof(rtm) <: RayTracingDomain2D && off_diag_chi < 0.4) ||
-            F_raw isa SparseMatrixCSC
-            
-            verbose && println("    Using AP only (0 Dykstra rounds)")
-            k_dykstra = 0
-        else # chi > 0.4 || typeof(rtm) <: RayTracingDomain3D_surfaces || typeof(F_raw) <: Matrix
+    if typeof(rtm) <: ViewFactorDomain3D ||
+        (typeof(rtm) <: RayTracingDomain2D && off_diag_chi < 0.4) ||
+        F_raw isa SparseMatrixCSC
+        
+        verbose && println("    Using AP only (0 Dykstra rounds)")
+        k_dykstra = 0
+    
+    else # chi > 0.4 || typeof(rtm) <: RayTracingDomain3D_surfaces || typeof(F_raw) <: Matrix
 
-            verbose && println("    Using OP+AP (1 Dykstra round)")
-            k_dykstra = 1
-        end
-    else
         verbose && println("    Using prescribed $k_dykstra Dykstra rounds")
     end
 
@@ -569,7 +565,7 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
     end
 
     return DkAP_active(F_raw, w, num_surfaces; k_dykstra=k_dykstra,
-                max_iters=max_iters, verbose=verbose, nz_over_N=nz_over_N)
+                k_ap=k_ap, verbose=verbose, nz_over_N=nz_over_N)
 end
 
 function AP_convergence_check(w::AbstractVector, num_surfaces::Int)
@@ -660,7 +656,7 @@ end
 recover_F(X::Matrix{Float64}, r::Vector{Float64}) = X ./ r
 
 function AP(F_AP::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
-            max_iters::Int=1_000, verbose::Bool=true,
+            k_ap::Int=1_000, verbose::Bool=true,
             nz_over_N::Real=length(w))
 
     AP_convergence_check(w, num_surfaces)
@@ -680,14 +676,14 @@ function AP(F_AP::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
     r = zeros(N); u = zeros(N); e = ones(N)
     hunger!(r, u, X_iter, w, e)                        # (X_0, u_0)
     delta = delta_R_X(X_iter, w, u)                    # defect of the iterate recovered from X_0
-    delta < target && (max_iters = 0)                    # already converged, exit
+    delta < target && (k_ap = 0)                    # already converged, exit
     delta_init = delta; delta_best = delta
     verbose && println("  raw input: δ_R = $delta_raw;  after first reciprocity projection: $delta ≤ δ⟂ ≤ $(mult*delta)")
 
     k = 0; k_next = 0; c = 0; flat = 0
     k_prev = 0; delta_prev = delta; rho_est = 0.5; floor_accepted = false
 
-    while k < max_iters && delta > target
+    while k < k_ap && delta > target
         scale!(X_iter, u)                              # X_k -> X_{k+1}
         k += 1
         hunger!(r, u, X_iter, w, e)                    # (X_k, u_k), needed for the next step anyway
@@ -718,7 +714,7 @@ function AP(F_AP::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
     if converged
         verbose && println("Converged after $k iterations. Final: $delta ≤ δ⟂ ≤ $(mult*delta)")
     else
-        @warn "AP reached max_iters = $max_iters. Final: $delta ≤ δ⟂ ≤ $(mult*delta)"
+        @warn "AP reached k_ap = $k_ap. Final: $delta ≤ δ⟂ ≤ $(mult*delta)"
     end
     if delta > max(delta_init, guard)
         @warn "Smoothing increased the distance to the target manifold; use F_raw instead of F_smooth."
