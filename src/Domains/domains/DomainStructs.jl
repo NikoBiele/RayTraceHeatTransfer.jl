@@ -1,3 +1,74 @@
+# ---- directional (angular) model and element-level descriptors --------------
+# Functions operating on these live in HeatTransfer/directional/DirectionalModels.jl.
+
+"""
+    AngularBins(n_azimuth, n_polar)
+
+Angular discretisation of a 2D (projected 3D) domain: `n_azimuth` uniform bins
+in the in-plane azimuth φ ∈ [−π, π) times `n_polar` uniform bins in the
+out-of-plane direction cosine |μ_z| ∈ [0, 1] (±z folded), so all bins have equal
+solid angle. `n_azimuth` must be even, so that every bin has a reversed bin;
+a multiple of 4 puts bin edges on the tangents of axis-aligned walls.
+"""
+struct AngularBins <: AbstractDirectionalModel
+    n_azimuth::Int
+    n_polar::Int
+end
+
+"Isotropic scattering (the default for volumes)."
+struct IsotropicScattering <: AbstractPhaseFunction end
+
+"""
+    HenyeyGreenstein(g)
+
+Henyey–Greenstein phase function with asymmetry factor −1 < g < 1.
+"""
+struct HenyeyGreenstein <: AbstractPhaseFunction
+    g::Float64
+    function HenyeyGreenstein(g::Real)
+        -1 < g < 1 || error("HenyeyGreenstein: asymmetry factor must satisfy −1 < g < 1, got $g")
+        return new(Float64(g))
+    end
+end
+
+"""
+    TabulatedScattering(table)
+
+User-supplied redistribution table Φ[b, b′] (incident bin b → outgoing bin b′)
+at the domain's angular resolution; rows must sum to 1 and columns must sum to 1.
+"""
+struct TabulatedScattering <: AbstractPhaseFunction
+    table::Matrix{Float64}
+end
+
+"Diffuse (Lambertian) reflection (the default for walls)."
+struct DiffuseReflection <: AbstractWallReflection end
+
+"""
+    SpecularReflection(specularity = 1.0)
+
+Fraction `specularity` of the reflected power is mirrored about the wall
+normal, the rest is reflected diffusely; 0 ≤ specularity ≤ 1.
+"""
+struct SpecularReflection <: AbstractWallReflection
+    specularity::Float64
+    function SpecularReflection(specularity::Real = 1.0)
+        0 <= specularity <= 1 || error("SpecularReflection: specularity must lie in [0, 1], got $specularity")
+        return new(Float64(specularity))
+    end
+end
+
+"""
+    TabulatedReflection(table)
+
+User-supplied wall redistribution table Φ[b, b′] at the domain's angular
+resolution; rows must sum to 1 and the table must satisfy detailed balance
+against the wall's Lambertian emission shares (see `check_redistribution_table`).
+"""
+struct TabulatedReflection <: AbstractWallReflection
+    table::Matrix{Float64}
+end
+
 # Define a custom PolyVolume2D type
 mutable struct PolyVolume2D{G}
 
@@ -13,11 +84,17 @@ mutable struct PolyVolume2D{G}
 
     # boundary properties (unchanged)
     epsilon::Vector{Union{G, Vector{G}}} # spectral emissivity
+    # per wall: how reflected power is redistributed over direction bins -
+    # one descriptor (all spectral bins) or a vector with one per spectral bin
+    reflection::Vector{Union{AbstractWallReflection, Vector{<:AbstractWallReflection}}}
 
     # UPDATED: local gas extinction properties - now Union for spectral support
     kappa_g::Union{G, Vector{G}}     # absorption coefficient [m^-1] - scalar (grey) or vector (spectral)
     sigma_s_g::Union{G, Vector{G}}   # scattering coefficient [m^-1] - scalar (grey) or vector (spectral)
-
+    # how scattered power is redistributed over direction bins -
+    # one descriptor (all spectral bins) or a vector with one per spectral bin
+    phase::Union{AbstractPhaseFunction, Vector{<:AbstractPhaseFunction}}
+    
     # UPDATED: state variables (volume) - now Union for spectral support
     j_g::Union{G, Vector{G}}         # outgoing power [W]
     g_a_g::Union{G, Vector{G}}       # incident absorbed power [W]
@@ -127,6 +204,19 @@ mutable struct RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}
 
     spectral_model::Union{Nothing, AbstractSpectralModel}  # how emission is divided over bins (PlanckBands, ConstantWeights, ...)
     path_store::Union{Nothing, RayPathStore}   # recorded geometric ray paths (method = :pathlength)
+    directional_model::Union{Nothing, AbstractDirectionalModel}  # angular bins; nothing = diffuse walls, isotropic scattering
+    # angular exchange factors, one sparse N×N matrix per direction bin: G_raw[a][i, j] is the
+    # fraction of i's emission first interacting at j while travelling in bin a, so that
+    # sum(G_raw) == F_raw. Grey: G_raw[a]; spectral: G_raw[k][a] for spectral bin k.
+    G_raw::Union{Nothing, Vector{SparseMatrixCSC{Float64, Int64}}, Vector{Vector{SparseMatrixCSC{Float64, Int64}}}}
+    G_smooth::Union{Nothing, Vector{SparseMatrixCSC{Float64, Int64}}, Vector{Vector{SparseMatrixCSC{Float64, Int64}}}}
+    # solution of the last solve, in global element order, with the layout of the exchange
+    # factors it pairs with: power [W] leaving each element
+    #   grey                 J[i]            (pairs with F)
+    #   spectral             J[k][i]         (pairs with F[k])
+    #   grey directional     J[i, b]         (pairs with G[b]; sum over b is the grey J)
+    #   spectral directional J[k][i, b]      (pairs with G[k][b])
+    J::Union{Nothing, Vector{Float64}, Vector{Vector{Float64}}, Matrix{Float64}, Vector{Matrix{Float64}}}
     surfaces_only::Bool         # indicates if the mesh includes volumes
     uniform_across_bin::Vector{Float64} # vector of uniform extinction (-1.0 where nonuniform)
     # Optimized cache structures (existing)
@@ -192,6 +282,7 @@ mutable struct ViewFactorDomain3D{G,P<:Integer} <: SurfaceDomain3D{G,P}
     n_spectral_bins::Int        # Number of spectral bins (1 for grey)
     spectral_model::Union{Nothing, AbstractSpectralModel}  # how emission is divided over bins
     energy_error::Union{Nothing, G, Vector{G}}
+    J::Union{Nothing, Vector{G}, Vector{Vector{G}}}   # solution of the last solve: J[i] (grey) or J[k][i] (spectral), power [W] leaving each subface
     uniform_epsilon::Bool        # Whether to use uniform epsilon solver
     surfaces_only::Bool         # dummy, always true, used for dispatch
 end
@@ -275,6 +366,7 @@ mutable struct RayTracingDomain3D_surfaces{G,P<:Integer} <: SurfaceDomain3D{G,P}
     n_spectral_bins::Int
     spectral_model::Union{Nothing, AbstractSpectralModel}  # how emission is divided over bins
     energy_error::Union{Nothing, G, Vector{G}}
+    J::Union{Nothing, Vector{G}, Vector{Vector{G}}}   # solution of the last solve: J[i] (grey) or J[k][i] (spectral), power [W] leaving each subface
     uniform_epsilon::Bool
     surfaces_only::Bool             # always true; kept for compatibility
 end

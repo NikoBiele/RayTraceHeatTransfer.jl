@@ -76,4 +76,24 @@ end
     @test F1 == F2
 end
 
+# ---- integer seeds -----------------------------------------------------------
+
+@testset "integer seeds select disjoint blocks" begin
+    nt = Threads.nthreads()
+    default = build_2d_repro(); default(RAYS_REPRO; method = :exchange, verbose = false)
+    one = build_2d_repro(); one(RAYS_REPRO; method = :exchange, seeds = 1, verbose = false)
+    @test one.F_raw == default.F_raw                           # seeds = 1 is the default 1:nthreads
+    two = build_2d_repro(); two(RAYS_REPRO; method = :exchange, seeds = 2, verbose = false)
+    blk = build_2d_repro(); blk(RAYS_REPRO; method = :exchange, seeds = (nt + 1):(2nt), verbose = false)
+    @test two.F_raw == blk.F_raw                               # seeds = 2 is the next block
+    @test two.F_raw != one.F_raw
+    @test_throws ErrorException build_2d_repro()(RAYS_REPRO; method = :exchange, seeds = 0, verbose = false)
+
+    a = build_3d_mc(); a(RAYS_REPRO; verbose = false)
+    b = build_3d_mc(); b(RAYS_REPRO; seeds = 1, verbose = false)
+    c = build_3d_mc(); c(RAYS_REPRO; seeds = 2, verbose = false)
+    @test a.F_raw == b.F_raw
+    @test c.F_raw != a.F_raw
+end
+
 println("✓ Reproducibility tests complete")

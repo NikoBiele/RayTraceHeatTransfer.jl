@@ -12,7 +12,9 @@ function (rtm::RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; me
     if seeds === nothing
         seeds = 1:nthreads
     elseif seeds isa Integer
-        seeds = seeds:(seeds + nthreads - 1)
+        # the seeds-th block of nthreads seeds, so different integers never share a thread stream
+        seeds >= 1 || error("an integer seed must be ≥ 1, got $seeds")
+        seeds = ((seeds - 1) * nthreads + 1):(seeds * nthreads)
     end
     length(seeds) == nthreads ||
         error("got $(length(seeds)) seeds for $nthreads threads; supply one per thread, a single starting seed, or none")

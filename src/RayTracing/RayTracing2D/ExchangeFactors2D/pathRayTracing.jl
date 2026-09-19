@@ -7,8 +7,13 @@
 # deposited into every bin's exchange factors and then discarded, so memory is
 # bounded by the chunk size while the trace is still done once for all bins.
 # The recorded paths are not kept in that case (rtm.path_store = nothing), so
-# a later change of κ requires a new trace; with the default (one chunk) the
-# store is kept and exchangeFactors! can be called again at no tracing cost.
+# a later change of κ requires a new trace; when the whole trace fits in one
+# chunk (rays_total ≤ chunk_rays, default 10 M) the store is kept and
+# exchangeFactors! can be called again at no tracing cost.
+# A chunked trace visits every emitter once per chunk, so it consumes the
+# per-thread random streams in a different order than a single-chunk trace:
+# with the same seeds the two are independent realisations, equal only
+# statistically. Compare runs at the same chunk_rays.
 
 function pathRayTracing!(rtm::RayTracingDomain2D, rays_total::S, nudge::G, verbose::Bool,
                          seeds::Union{UnitRange{P},Vector{P}}, rngs::Vector{<:AbstractRNG},
@@ -90,7 +95,12 @@ function pathRayTracing!(rtm::RayTracingDomain2D, rays_total::S, nudge::G, verbo
     N = num_surfaces + num_volumes
     n_bins = rtm.n_spectral_bins
     βT = permutedims(_extinction_table(rtm, num_volumes, n_bins))   # bin-major for the inner loop
-    acc = [spzeros(Float64, Int, N, N) for _ in 1:n_bins]   # unnormalised row sums, merged per chunk
+    dm = rtm.directional_model
+    dm === nothing || validate(dm)
+    A = dm === nothing ? 0 : n_angular_bins(dm)
+    # unnormalised row sums, merged per chunk: acc[k] without a directional model, accG[k][a] with one
+    acc  = [spzeros(Float64, Int, N, N) for _ in 1:(dm === nothing ? n_bins : 0)]
+    accG = [[spzeros(Float64, Int, N, N) for _ in 1:A] for _ in 1:(dm === nothing ? 0 : n_bins)]
     recorded = 0; segments = 0
 
     for (ic, rays_this_chunk) in enumerate(chunk_sizes)
@@ -101,9 +111,18 @@ function pathRayTracing!(rtm::RayTracingDomain2D, rays_total::S, nudge::G, verbo
 
         recorded += n_rays(store); segments += n_segments(store)
 
-        I, J, V = _deposit_all_bins(store, βT, num_surfaces, N)
-        Threads.@threads for k in 1:n_bins
-            acc[k] = acc[k] + sparse(I[k], J[k], V[k], N, N)   # bounded by nnz(F), not by chunk count
+        if dm === nothing
+            I, J, V = _deposit_all_bins(store, βT, num_surfaces, N)
+            Threads.@threads for k in 1:n_bins
+                acc[k] = acc[k] + sparse(I[k], J[k], V[k], N, N)   # bounded by nnz(F), not by chunk count
+            end
+        else
+            Id, Jd, Vd = _deposit_all_bins_directional(store, βT, num_surfaces, N, dm)
+            Threads.@threads for q in 1:(n_bins * A)
+                k = (q - 1) ÷ A + 1
+                a = (q - 1) % A + 1
+                accG[k][a] = accG[k][a] + sparse(Id[k][a], Jd[k][a], Vd[k][a], N, N)
+            end
         end
         store = nothing
         GC.gc()
@@ -114,15 +133,25 @@ function pathRayTracing!(rtm::RayTracingDomain2D, rays_total::S, nudge::G, verbo
     verbose && println("Recorded $recorded rays in $n_chunks chunks, $segments segments ",
                        "(≤ $(round(8 * div(segments, n_chunks) / 2^20; digits = 1)) MiB held at once); lost rays: $lost")
 
-    F_bins = Vector{SparseMatrixCSC{Float64,Int}}(undef, n_bins)
-    Threads.@threads for k in 1:n_bins
-        I, J, V = findnz(acc[k])
-        F_bins[k] = _assemble_bin(I, J, V, N)
-    end
-    verbose && println("Exchange factors from $recorded recorded rays for $n_bins bin(s)")
-
     rtm.path_store = nothing                      # nothing kept: re-binning needs a new trace
-    _set_F_raw!(rtm, F_bins)
+    if dm === nothing
+        F_bins = Vector{SparseMatrixCSC{Float64,Int}}(undef, n_bins)
+        Threads.@threads for k in 1:n_bins
+            I, J, V = findnz(acc[k])
+            F_bins[k] = _assemble_bin(I, J, V, N)
+        end
+        _set_F_raw!(rtm, F_bins)
+        rtm.G_raw = nothing; rtm.G_smooth = nothing
+    else
+        trip = [[findnz(accG[k][a]) for a in 1:A] for k in 1:n_bins]
+        F_bins, G_bins = _assemble_all_directional([[trip[k][a][1] for a in 1:A] for k in 1:n_bins],
+                                                   [[trip[k][a][2] for a in 1:A] for k in 1:n_bins],
+                                                   [[trip[k][a][3] for a in 1:A] for k in 1:n_bins], N)
+        _set_F_raw!(rtm, F_bins)
+        _set_G_raw!(rtm, G_bins)
+    end
+    verbose && println("Exchange factors from $recorded recorded rays for $n_bins bin(s)",
+                       dm === nothing ? "" : " × $A direction bins")
     return nothing
 end
 
@@ -231,12 +260,22 @@ function exchangeFactors!(rtm::RayTracingDomain2D; verbose::Bool = true)
     n_bins = rtm.n_spectral_bins
     βT = permutedims(_extinction_table(rtm, nv, n_bins))
 
-    I, J, V = _deposit_all_bins(store, βT, ns, N)
-    F_bins = Vector{SparseMatrixCSC{Float64,Int}}(undef, n_bins)
-    Threads.@threads for k in 1:n_bins
-        F_bins[k] = _assemble_bin(I[k], J[k], V[k], N)
+    dm = rtm.directional_model
+    if dm === nothing
+        I, J, V = _deposit_all_bins(store, βT, ns, N)
+        F_bins = Vector{SparseMatrixCSC{Float64,Int}}(undef, n_bins)
+        Threads.@threads for k in 1:n_bins
+            F_bins[k] = _assemble_bin(I[k], J[k], V[k], N)
+        end
+        rtm.G_raw = nothing; rtm.G_smooth = nothing
+    else
+        validate(dm)
+        Id, Jd, Vd = _deposit_all_bins_directional(store, βT, ns, N, dm)
+        F_bins, G_bins = _assemble_all_directional(Id, Jd, Vd, N)
+        _set_G_raw!(rtm, G_bins)
     end
-    verbose && println("Exchange factors from $(n_rays(store)) recorded rays for $n_bins bin(s)")
+    verbose && println("Exchange factors from $(n_rays(store)) recorded rays for $n_bins bin(s)",
+                       dm === nothing ? "" : " × $(n_angular_bins(dm)) direction bins")
 
     return _set_F_raw!(rtm, F_bins)
 end
@@ -330,4 +369,119 @@ function _deposit_all_bins(store::RayPathStore, βT::Matrix{Float64}, ns::Int, N
     J = [reduce(vcat, (Jb[b][k] for b in 1:nb)) for k in 1:n_bins]
     V = [reduce(vcat, (Vb[b][k] for b in 1:nb)) for k in 1:n_bins]
     return I, J, V
+end
+
+# ---- directional deposition ---------------------------------------------------
+# Same walk as _deposit_all_bins with one more index: every ray deposits into the
+# angular bin of its direction (fixed along the ray, since exchange factors are
+# first-interaction only), so the row buffer is n_bins × (N·A) with column
+# (a − 1)·N + c. Returns triplets I[k][a], J[k][a], V[k][a] with UNNORMALISED sums.
+function _deposit_all_bins_directional(store::RayPathStore, βT::Matrix{Float64}, ns::Int, N::Int,
+                                       dm::AbstractDirectionalModel)
+    n_bins = size(βT, 1)
+    A = n_angular_bins(dm)
+    seg_cell, seg_len, ray_start = store.seg_cell, store.seg_len, store.ray_start
+    ray_emitter, ray_end, ray_dir = store.ray_emitter, store.ray_end, store.ray_dir
+
+    # emitter e owns rays e_start[e]:e_start[e+1]-1
+    cnt = zeros(Int, N)
+    for e in ray_emitter
+        cnt[e] += 1
+    end
+    e_start = cumsum(vcat(1, cnt))
+
+    nt = Threads.nthreads()
+    blocks = collect(Iterators.partition(1:N, cld(N, nt)))
+    nb = length(blocks)
+    Ib = [[[Int[] for _ in 1:A] for _ in 1:n_bins] for _ in 1:nb]
+    Jb = [[[Int[] for _ in 1:A] for _ in 1:n_bins] for _ in 1:nb]
+    Vb = [[[Float64[] for _ in 1:A] for _ in 1:n_bins] for _ in 1:nb]
+
+    Threads.@threads for b in 1:nb
+        row     = zeros(n_bins, N * A)
+        t       = ones(n_bins)
+        marker  = falses(N * A)
+        touched = Int[]
+        Is, Js, Vs = Ib[b], Jb[b], Vb[b]
+
+        @inbounds for e in blocks[b]
+            for r in e_start[e]:e_start[e+1]-1
+                off = (angular_bin(dm, ray_dir[r]) - 1) * N
+                fill!(t, 1.0)
+                for s in ray_start[r]:ray_start[r+1]-1
+                    c  = Int(seg_cell[s])
+                    v  = c - ns
+                    ℓ  = Float64(seg_len[s])
+                    cc = off + c
+                    if !marker[cc]
+                        marker[cc] = true; push!(touched, cc)
+                    end
+                    @simd for k in 1:n_bins
+                        ek = exp(-βT[k, v] * ℓ)
+                        row[k, cc] += t[k] * (1.0 - ek)
+                        t[k] *= ek
+                    end
+                end
+                wc = off + Int(ray_end[r])
+                if !marker[wc]
+                    marker[wc] = true; push!(touched, wc)
+                end
+                @simd for k in 1:n_bins
+                    row[k, wc] += t[k]
+                end
+            end
+            for cc in touched
+                c = (cc - 1) % N + 1
+                a = (cc - 1) ÷ N + 1
+                for k in 1:n_bins
+                    val = row[k, cc]
+                    if val != 0.0
+                        push!(Is[k][a], e); push!(Js[k][a], c); push!(Vs[k][a], val)
+                        row[k, cc] = 0.0
+                    end
+                end
+                marker[cc] = false
+            end
+            empty!(touched)
+        end
+    end
+
+    I = [[reduce(vcat, (Ib[b][k][a] for b in 1:nb)) for a in 1:A] for k in 1:n_bins]
+    J = [[reduce(vcat, (Jb[b][k][a] for b in 1:nb)) for a in 1:A] for k in 1:n_bins]
+    V = [[reduce(vcat, (Vb[b][k][a] for b in 1:nb)) for a in 1:A] for k in 1:n_bins]
+    return I, J, V
+end
+
+# One spectral bin: normalise every direction bin's triplets by the emitter's total
+# deposit over ALL direction bins (= its kept ray count), so the angular matrices sum
+# to a row-stochastic F. sparse() sums duplicate triplets, which merges the chunks.
+function _assemble_directional(I::Vector{Vector{Int}}, J::Vector{Vector{Int}}, V::Vector{Vector{Float64}}, N::Int)
+    rowsum = zeros(N)
+    @inbounds for a in eachindex(V), i in eachindex(V[a])
+        rowsum[I[a][i]] += V[a][i]
+    end
+    G = Vector{SparseMatrixCSC{Float64,Int}}(undef, length(V))
+    for a in eachindex(V)
+        G[a] = sparse(I[a], J[a], V[a] ./ rowsum[I[a]], N, N)
+    end
+    return G
+end
+
+# every spectral bin: G_bins[k][a], and F_bins[k] = Σₐ G_bins[k][a] (the invariant, by construction)
+function _assemble_all_directional(I, J, V, N::Int)
+    n_bins = length(V)
+    F_bins = Vector{SparseMatrixCSC{Float64,Int}}(undef, n_bins)
+    G_bins = Vector{Vector{SparseMatrixCSC{Float64,Int}}}(undef, n_bins)
+    Threads.@threads for k in 1:n_bins
+        G_bins[k] = _assemble_directional(I[k], J[k], V[k], N)
+        F_bins[k] = reduce(+, G_bins[k])
+    end
+    return F_bins, G_bins
+end
+
+# grey: G_raw[a]; spectral: G_raw[k][a]. A new deposition invalidates any smoothed G.
+function _set_G_raw!(rtm::RayTracingDomain2D, G_bins::Vector{Vector{SparseMatrixCSC{Float64,Int}}})
+    rtm.G_raw = rtm.spectral_mode != :grey ? G_bins : G_bins[1]
+    rtm.G_smooth = nothing
+    return rtm.G_raw
 end

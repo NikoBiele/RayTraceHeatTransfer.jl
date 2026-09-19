@@ -23,3 +23,7 @@ include(joinpath(@__DIR__, "writeResults", "writeTemperaturesHeatSources.jl"))
 include(joinpath(@__DIR__, "spectral", "SpectralModels.jl"))
 include(joinpath(@__DIR__, "spectral", "spectralHooks.jl"))
 include(joinpath(@__DIR__, "spectral", "adaptiveSpectralBins.jl"))
+# directional (angular) models
+include(joinpath(@__DIR__, "directional", "DirectionalModels.jl"))
+include(joinpath(@__DIR__, "equilibrium", "equilibriumGreyDirectional2D.jl"))
+include(joinpath(@__DIR__, "equilibrium", "equilibriumSpectralDirectional2D.jl"))

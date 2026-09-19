@@ -205,7 +205,7 @@ function equilibriumGrey2D!(mesh::RayTracingDomain2D, F::AbstractMatrix; spectra
     # Step 11: Compute energy conservation error
     verbose && println("Computing (relative) energy conservation error...")
     mesh.energy_error = sum(j - r - Abs) / (sum(j) > 1000*eps(Float64) ? sum(j) : one(Float64))
-    
+    mesh.J = copy(j)    
     verbose && println("=== Variable Extinction Steady State Solution Complete ===")
     
     if verbose

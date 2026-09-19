@@ -35,12 +35,14 @@ end
 # ---------------------------------------------------------------- tracing
 
 """
-    traceSurfaces3D(domain, rays_tot; seed, verbose)
+    traceSurfaces3D(domain, rays_tot; seeds, verbose)
 
 First-hit Monte Carlo trace over a transparent 3D surface enclosure,
 producing a sparse wavelength-independent `F_raw`. No reflections are
 traced: emissivity enters downstream in the GERT solve. Rays that escape
 the enclosure are reported by `row_normalize!` as the row-sum deficit.
+`seeds` takes one seed per thread, or a single integer `s`, which selects the
+`s`-th block of `nthreads` seeds, so runs with different integers are independent.
 """
 function traceSurfaces3D(domain::RayTracingDomain3D_surfaces{G,P}, rays_tot::Integer,
                         trace_nudge::G; 
@@ -56,7 +58,9 @@ function traceSurfaces3D(domain::RayTracingDomain3D_surfaces{G,P}, rays_tot::Int
     if seeds === nothing
         seeds = 1:nthreads
     elseif seeds isa Integer
-        seeds = seeds:(seeds + nthreads - 1)
+        # the seeds-th block of nthreads seeds, so different integers never share a thread stream
+        seeds >= 1 || error("an integer seed must be ≥ 1, got $seeds")
+        seeds = ((seeds - 1) * nthreads + 1):(seeds * nthreads)
     end
     length(seeds) == nthreads ||
         error("got $(length(seeds)) seeds for $nthreads threads; supply one per thread, a single starting seed, or none")

@@ -7,6 +7,7 @@ function addSubVolume!(superVolume::PolyVolume2D{G}, subVolume::PolyVolume2D{G})
     # inherit volume state variables - direct assignment/copy
     inheritVolumeProperty!(superVolume, subVolume, :kappa_g)
     inheritVolumeProperty!(superVolume, subVolume, :sigma_s_g)
+    inheritVolumeProperty!(superVolume, subVolume, :phase)
     inheritVolumeProperty!(superVolume, subVolume, :j_g)
     inheritVolumeProperty!(superVolume, subVolume, :g_a_g)
     inheritVolumeProperty!(superVolume, subVolume, :e_g)

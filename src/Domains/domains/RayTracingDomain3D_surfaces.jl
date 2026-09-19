@@ -26,7 +26,7 @@ function RayTracingDomain3D_surfaces(points::Matrix{G}, faces::Matrix{P}, Ndims:
         points, faces_oriented, Ndims, superFaces,
         spzeros(G, 0, 0), spzeros(G, 0, 0),
         nothing, nothing, nothing, false,
-        spectral_mode, n_bins, nothing, nothing, uniform_epsilon, true)
+        spectral_mode, n_bins, nothing, nothing, nothing, uniform_epsilon, true)
 end
 
 function buildSurfaceMesh(points::AbstractMatrix, faces::AbstractMatrix, Ndims::Integer,

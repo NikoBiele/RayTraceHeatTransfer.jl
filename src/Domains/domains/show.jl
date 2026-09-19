@@ -53,7 +53,7 @@ function _fmt_range(lo, hi)
 end
 
 _fmt_err(::Nothing) = "not solved"
-_fmt_err(e::Real)   = string(round(e; sigdigits = 3))
+_fmt_err(e::Real)   = string(round(e; sigdigits = 3), " (relative conservation error)")
 _fmt_err(e::AbstractVector) = isempty(e) ? "not solved" :
     string(round(maximum(abs, e); sigdigits = 3), " (max abs relative conservation error over ", length(e), " bins)")
 _fmt_err(::Any) = "—"
@@ -134,10 +134,13 @@ function Base.show(io::IO, ::MIME"text/plain", d::RayTracingDomain2D)
     end
 
     println(io, "  spectral   ", _spectral_line(d))
+    dm = getfield(d, :directional_model)
+    dm === nothing || println(io, "  direction  ", describe(dm))
 
     # workflow stage
     if stage === :meshed
-        println(io, "  exchange   not computed — call domain(N_rays; method = :exchange)")
+        println(io, "  exchange   not computed — call domain(N_rays; method = ",
+                    dm === nothing ? ":exchange)" : ":pathlength)")
     else
         println(io, "  exchange   F_raw     ", _mdesc(d.F_raw))
         ps = getfield(d, :path_store)
@@ -148,6 +151,14 @@ function Base.show(io::IO, ::MIME"text/plain", d::RayTracingDomain2D)
             println(io, "             F_smooth  not computed — call smooth!(domain)")
         else
             println(io, "             F_smooth  ", _mdesc(d.F_smooth))
+        end
+        if dm !== nothing
+            Gr = getfield(d, :G_raw)
+            Gs = getfield(d, :G_smooth)
+            println(io, "             G_raw     ", Gr === nothing ?
+                        "not computed — trace with method = :pathlength" : _mdesc(Gr))
+            println(io, "             G_smooth  ", Gs === nothing ?
+                        "not computed — call smooth!(domain)" : _mdesc(Gs))
         end
     end
 

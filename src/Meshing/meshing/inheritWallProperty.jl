@@ -1,7 +1,11 @@
 # Helper function to inherit wall properties
 function inheritWallProperty!(superFace::PolyVolume2D{G}, subFace::PolyVolume2D{G}, 
                                property::Symbol, from::Int, to::Int) where {G}
-    if property == :q_in_w || property == :q_w
+    if property == :reflection
+        # descriptors are immutable: assign directly (a per-bin vector is copied)
+        super_val = getfield(superFace, property)[from]
+        getfield(subFace, property)[to] = super_val isa Vector ? copy(super_val) : super_val
+    elseif property == :q_in_w || property == :q_w
         
         super_wall_array = getfield(superFace, property)
         sub_wall_array = getfield(subFace, property)

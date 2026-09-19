@@ -86,6 +86,22 @@ using Test
         include("test_lbl_slab.jl")
     end
 
+    @testset "Directional models" begin
+        include("test_directional_models.jl")
+    end
+
+    @testset "Directional solvers" begin
+        include("test_directional_solvers.jl")
+    end
+
+    @testset "Global solution field" begin
+        include("test_solution_field.jl")
+    end
+
+    @testset "Anisotropic slab validation" begin
+        include("test_anisotropic_slab.jl")
+    end
+
     println("\n" * "="^80)
     println("TEST SUITE COMPLETE")
     println("="^80)

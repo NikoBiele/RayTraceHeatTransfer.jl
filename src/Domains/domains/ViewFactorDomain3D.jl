@@ -87,7 +87,7 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
     F_raw = Matrix{G}(undef, number_of_elements, number_of_elements)
     F_smooth = Matrix{G}(undef, number_of_elements, number_of_elements)
     return ViewFactorDomain3D{G, P}(points, faces_oriented, Ndims, superFaces, F_raw, F_smooth, 
-                                spectral_mode, n_bins, nothing, nothing, uniform_epsilon, true)
+                                spectral_mode, n_bins, nothing, nothing, nothing, uniform_epsilon, true)
 end
     
 function (vfd::ViewFactorDomain3D)(; parallel::Bool=true, verbose::Bool=true)

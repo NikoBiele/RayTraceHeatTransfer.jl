@@ -82,11 +82,15 @@ function PolyVolume2D{G}(p::SVector{4,Point2{G}}, b::SVector{4,Bool},
         T_w = [zero(G) for _ in 1:4]
     end
     
+    # directional descriptors: the defaults reproduce the diffuse/isotropic solvers
+    reflection = Union{AbstractWallReflection, Vector{<:AbstractWallReflection}}[DiffuseReflection() for _ in 1:4]
+    phase = IsotropicScattering()
+    
     # Call the default constructor with all fields
     return PolyVolume2D{G}(
         vertices, solidWalls, midPoint, wallMidPoints, inwardNormals,
         volume, area, subVolumes,
-        epsilon, kappa_g, sigma_s_g,
+        epsilon, reflection, kappa_g, sigma_s_g, phase,
         j_g, g_a_g, e_g, r_g, g_g, i_g, q_in_g, q_g, T_in_g, T_g,
         j_w, g_a_w, e_w, r_w, g_w, i_w, q_in_w, q_w, T_in_w, T_w
     )
@@ -173,11 +177,15 @@ function PolyVolume2D{G}(p::SVector{3, Point2{G}}, b::SVector{3,Bool},
         T_w = [zero(G) for _ in 1:3]
     end
     
+    # directional descriptors: the defaults reproduce the diffuse/isotropic solvers
+    reflection = Union{AbstractWallReflection, Vector{<:AbstractWallReflection}}[DiffuseReflection() for _ in 1:3]
+    phase = IsotropicScattering()
+    
     # Call the default constructor with all fields
     return PolyVolume2D{G}(
         vertices, solidWalls, midPoint, wallMidPoints, inwardNormals,
         volume, area, subVolumes,
-        epsilon, kappa_g, sigma_s_g,
+        epsilon, reflection, kappa_g, sigma_s_g, phase,
         j_g, g_a_g, e_g, r_g, g_g, i_g, q_in_g, q_g, T_in_g, T_g,
         j_w, g_a_w, e_w, r_w, g_w, i_w, q_in_w, q_w, T_in_w, T_w
     )

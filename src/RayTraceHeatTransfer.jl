@@ -66,5 +66,13 @@ export PolyVolume2D,
        ConstantWeights,
        PiecewiseBands,
        adaptiveSpectralBins,
-       exchangeFactors!
+       exchangeFactors!,
+       AbstractDirectionalModel,
+       AngularBins,
+       IsotropicScattering,
+       HenyeyGreenstein,
+       TabulatedScattering,
+       DiffuseReflection,
+       SpecularReflection,
+       TabulatedReflection
 end

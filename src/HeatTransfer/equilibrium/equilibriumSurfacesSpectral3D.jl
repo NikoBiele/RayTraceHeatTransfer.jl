@@ -190,6 +190,7 @@ function equilibriumSurfacesSpectral3D_woodbury!(domain::SurfaceDomain3D{G,P}, F
  
     writeTemperaturesHeatSources!(domain, temperatures)
  
+    domain.J = [sol_j[(i - 1) * N + 1 : i * N] for i in 1:K]
     verbose && println("=== 3D Spectral Solution Complete (WOODBURY) ===")
 
     verbose && println(domain)
@@ -264,6 +265,7 @@ function equilibriumSurfacesSpectral3D_direct!(domain::SurfaceDomain3D{G,P}, F::
 
     # Compute energy conservation error for each spectral bin
     # relative: power unaccounted for in the bin over the bin's total power
+    domain.J = [sol_j[(i - 1) * N_surfs + 1 : i * N_surfs] for i in 1:K]
     domain.energy_error = G.([let j = sol_j[(i - 1) * N_surfs + 1 : i * N_surfs]
                                         sum((I - F') * j) / (sum(j) > 1000*eps(G) ? sum(j) : one(G))
                                     end for i in 1:K])

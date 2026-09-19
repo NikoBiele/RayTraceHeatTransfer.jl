@@ -18,10 +18,17 @@ smoothed repeatedly under different settings.
   minimum-norm correction. The default `nothing` picks whichever performs best
   for the problem at hand, based on the structure of `F_raw`. Rounds stop early
   once the iterate is feasible.
-- `k_ap`: cap on alternating projection iterations. Reaching it warns and
-  leaves `converged` false.
 - `renorm`: scale the weight vector by its smallest entry before projecting.
 - `verbose`: print per-bin progress and per-iteration defect bounds.
+- `k_ap`: cap on alternating projection iterations. Reaching it warns and
+  leaves `converged` false. Default 1000; 20 000 for a domain with a
+  `directional_model`.
+
+With a `directional_model` set, the angular exchange factors `G_raw` are smoothed
+instead (per-bin emission shares, reversed-bin reciprocity, zero pattern kept),
+independently for every pair of opposite direction bins; `G_smooth` is written and
+`F_smooth` is their sum over direction bins. Only alternating projections are used
+there, so `k_dykstra` is ignored and reported as 0.
 
 # Returns
 A named tuple of diagnostics, each field a vector with one entry per spectral
@@ -51,11 +58,17 @@ maximum(stats.delta_max) # worst-case distance to the feasible manifold across b
 
 """
 function smooth!(rtm::Union{RayTracingDomain2D,SurfaceDomain3D};
-                                 k_ap::Int=1_000,
+                                 k_ap::Union{Nothing,Int}=nothing,
                                  k_dykstra::Int=1,
                                  verbose::Bool=true,
                                  renorm::Bool=true,
                                  keep_F_raw::Bool=true)
+
+    # directional domain: smooth the angular exchange factors, F_smooth = Σₐ G_smooth[a]
+    if rtm isa RayTracingDomain2D && rtm.directional_model !== nothing
+        return smooth_G!(rtm; k_ap = something(k_ap, 20_000), verbose = verbose, keep_F_raw = keep_F_raw)
+    end
+    k_ap = something(k_ap, 1_000)
 
     # Smooth exchange factors based on spectral mode
     if rtm.spectral_mode == :spectral_variable && typeof(rtm) <: RayTracingDomain2D

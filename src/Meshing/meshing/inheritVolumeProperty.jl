@@ -1,6 +1,10 @@
 # Helper function to inherit volume properties
 function inheritVolumeProperty!(superFace::PolyVolume2D{G}, subFace::PolyVolume2D{G}, property::Symbol) where {G}
-    if property == :q_in_g || property == :q_g
+    if property == :phase
+        # descriptors are immutable: assign directly (a per-bin vector is copied)
+        super_val = getfield(superFace, property)
+        setfield!(subFace, property, super_val isa Vector ? copy(super_val) : super_val)
+    elseif property == :q_in_g || property == :q_g
         super_val = getfield(superFace, property)
         sub_val = getfield(subFace, property)
 

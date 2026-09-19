@@ -4,6 +4,7 @@ function inheritSurfaceProperties!(superFace::PolyVolume2D{G}, subFace::PolyVolu
     
     # wall state variables - direct inheritance
     inheritWallProperty!(superFace, subFace, :epsilon, from, to)
+    inheritWallProperty!(superFace, subFace, :reflection, from, to)
     inheritWallProperty!(superFace, subFace, :j_w, from, to)
     inheritWallProperty!(superFace, subFace, :g_a_w, from, to)
     inheritWallProperty!(superFace, subFace, :e_w, from, to)

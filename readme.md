@@ -8,6 +8,7 @@ A Julia package for radiative heat transfer using Monte Carlo ray tracing and th
 - **3D surface enclosures** — transparent media with semi-analytical view factors or ray tracing
 - **Grey and spectral** — wavelength-independent or band-resolved radiation with automatic solver selection
 - **Adaptive spectral binning** — bins chosen automatically from κ(λ) samples to a user-set tolerance
+- **Directional scattering and reflection** — Henyey–Greenstein or tabulated phase functions, specular or tabulated wall reflection, on angular bins with a user-set resolution (2D)
 - **Exchange factor smoothing** — reciprocity and energy conservation enforcement to machine-precision
 - **Four-step workflow** — mesh → ray trace / view factors → smooth → solve
 - **Plotting extensions** — GLMakie and Plots backends for mesh and field visualisation
@@ -47,7 +48,7 @@ in 3D because the view factor formula is ill-conditioned for polygons that
 share an edge and must be evaluated on a slightly perturbed geometry. On a
 triangulated sphere, where every pair of adjacent faces has a nonzero view
 factor, the raw reciprocity defect becomes significant; smoothing brings it to 10⁻¹⁵
-(see Example 5). Both matrices remain available on the domain, so `F_raw` can
+(see Example 7). Both matrices remain available on the domain, so `F_raw` can
 be inspected or exported, but `F_smooth` is what should be passed to the solver.
 
 Smoothing is cheap relative to the tracing step, so `F_raw` can be traced once
@@ -55,7 +56,26 @@ and smoothed repeatedly with different settings. Spectral problems trace once
 with `mesh(n; method = :pathlength)`, which builds `F_raw` for every bin from
 the recorded paths; with `chunk_rays = n` the paths are kept and
 `exchangeFactors!(mesh)` rebuilds `F_raw` for new coefficients or bins without
-retracing (Example 3).
+retracing (Example 3). With a `directional_model` set, the same trace also
+resolves the exchange factors by ray direction (`G_raw`, `G_smooth`), and the
+solver redistributes scattered and reflected power over the direction bins
+according to each element's `phase` and `reflection` (Example 4). Every solve
+stores its solution on the domain as `J`.
+
+On a 2D domain the spectral model and the directional model are independent
+settings and combine freely; `solveEquilibrium!` selects the solver from what is
+set:
+
+|                        | no `directional_model`          | `directional_model` set          |
+|------------------------|---------------------------------|----------------------------------|
+| grey                   | grey solver (Example 1)         | grey directional (Example 4)     |
+| `spectral_model` set   | spectral solver (Examples 2, 3) | spectral directional             |
+
+In the combined case the faces are built with their spectral bins as in
+Example 3 and carry `phase` and `reflection` as in Example 4, optionally one
+descriptor per spectral bin; one pathlength trace resolves the exchange factors
+by bin and by direction, and the solution is `J[k][i, b]`. That solver is
+currently limited in size (see the notes under Example 4).
 
 ---
 
@@ -99,14 +119,19 @@ fig = Figure(size = (700, 700))
 ax  = Axis(fig[1, 1], aspect = DataAspect(), xlabel = "x (m)", ylabel = "y (m)",
            title = "Mesh with element numbering (11 × 11)")
 
-# Show volume indices along the vertical centerline
-center_col = div(Ndim + 1, 2)
-centerline_vols = [center_col + (row - 1) * Ndim for row in 1:Ndim]
-bottom_wall_indices = [1; collect(3:Ndim+1)]
+# Volumes are numbered row by row from the bottom, left to right within a row,
+# so the volume in column c of row r has index c + (r − 1)·Ndim.
+center_col = div(Ndim + 1, 2)                                          # the middle column (6 of 11)
+centerline_vols = [center_col + (row - 1) * Ndim for row in 1:Ndim]    # that column's volume in every row
 
-plotMesh(ax, mesh)
-plotMesh(ax, mesh; volumeNumbers = centerline_vols)
-plotMesh(ax, mesh; wallNumbers = bottom_wall_indices)
+# Walls are numbered in the same cell order, and within a cell in the order bottom, right, top, left.
+# The bottom-left corner cell owns two solid walls: its bottom edge is wall 1, its left edge wall 2.
+# The remaining cells of the bottom row contribute their bottom edges as walls 3, 4, …, Ndim + 1.
+bottom_wall_indices = [1; collect(3:Ndim+1)]                           # every element of the bottom (hot) wall
+
+plotMesh(ax, mesh)                                                     # the mesh itself
+plotMesh(ax, mesh; volumeNumbers = centerline_vols)                    # label the centreline volumes (g…)
+plotMesh(ax, mesh; wallNumbers = bottom_wall_indices)                  # label the bottom wall elements (w…)
 
 fig
 ```
@@ -120,7 +145,7 @@ Volume elements are labelled **g*i*** and wall surfaces **w*i***. The indices sh
 ```julia
 record_ids = [10, 20, 30]  # optional ray recording for plotting (element numbers to record emission from)
 rec = RayRecorder(record_ids)  # create the ray recorder (also works in parallel)
-mesh(10^6; method = :exchange, rec = rec)  # Monte Carlo ray tracing (optional ray recorder keyword)
+mesh(10^7; method = :exchange, rec = rec)  # Monte Carlo ray tracing (optional ray recorder keyword)
 origins, endpoints = collect_rays(rec)  # collect the results, can be used for plotting (one line per ray)
 ```
 
@@ -160,16 +185,17 @@ xlabel!(p1, "Position / m")
 ylabel!(p1, "Position / m")
 title!(p1, "Temperature distribution")
 
-# Extract centerline temperatures
-all_temps  = [ff.T_g for ff in mesh.fine_mesh[1]]
-Tg_matrix  = reshape(all_temps, Ndim, Ndim)
-centerline = Tg_matrix[div(Ndim + 1, 2), :]
+# Extract the centreline temperatures. The cells are stored row by row from the bottom (left to
+# right within a row), so reshaping into an Ndim × Ndim matrix gives Tg_matrix[column, row].
+all_temps  = [cell.T_g for cell in mesh.fine_mesh[1]]     # T_g: gas temperature of every cell of the (single) coarse face
+Tg_matrix  = reshape(all_temps, Ndim, Ndim)               # first index: column (x), second index: row (y)
+centerline = Tg_matrix[div(Ndim + 1, 2), :]               # the middle column, from the hot wall upwards
 
-# Dimensionless source function
-S_computed = (centerline ./ 1000.0) .^ 4
-tau_centers = range(1 / (2Ndim), 1 - 1 / (2Ndim), length = Ndim)
+# Dimensionless source function S = (T / T_hot)⁴ at the optical depth of every cell centre
+S_computed  = (centerline ./ 1000.0) .^ 4                 # T_hot = 1000 K
+tau_centers = range(1 / (2Ndim), 1 - 1 / (2Ndim), length = Ndim)   # τ = κ·y at the cell centres (κ = 1 m⁻¹, height 1 m)
 
-# --- Crosbie & Schrenker (1984) analytical reference ---
+# --- Crosbie & Schrenker (1984) analytical reference: optical depth from the hot wall, and S there ---
 tau_ref = [0.0, 0.00611, 0.02037, 0.04251, 0.07216, 0.10884, 0.15194,
            0.20076, 0.25449, 0.31225, 0.37309, 0.43602, 0.50000, 0.56398,
            0.62691, 0.68775, 0.74551, 0.79924, 0.84806, 0.89116, 0.92784,
@@ -365,16 +391,20 @@ Ray tracing is performed independently for each spectral bin, computing separate
 ```julia
 using Plots
 
-gas_temps = Float64[]
-altitudes = Float64[]
+gas_temps = Float64[]                                   # temperatures from the ground upwards [K]
+altitudes = Float64[]                                   # matching altitudes [m]
 
-push!(gas_temps, mesh.fine_mesh[1][1].T_w[1])   # surface temperature
+# The ground is the bottom wall (wall 1) of the lowest cell of the lowest layer.
+# Indexing: fine_mesh[layer][cell]; T_w[wall] is that wall's temperature from the solver.
+push!(gas_temps, mesh.fine_mesh[1][1].T_w[1])
 push!(altitudes, 0.0)
 
-for j in 1:N_layers
-    for k in 1:2
-        push!(gas_temps, mesh.fine_mesh[j][k].T_g) # gas temperatures
-        push!(altitudes, mesh.fine_mesh[j][k].midPoint[2] * L)
+# Every layer was meshed into 2 cells stacked vertically (divisions (1, 2)): visit them from the bottom up.
+for j in 1:N_layers                                     # atmospheric layers only; the solar layer on top is skipped
+    for k in 1:2                                        # lower cell, then upper cell
+        cell = mesh.fine_mesh[j][k]
+        push!(gas_temps, cell.T_g)                      # T_g: gas temperature from the solver
+        push!(altitudes, cell.midPoint[2] * L)          # cell-centre height: normalised y times the atmosphere height L
     end
 end
 
@@ -428,20 +458,34 @@ using RayTraceHeatTransfer
 using GeometryBasics, StaticArrays, Random
 include(joinpath(pkgdir(RayTraceHeatTransfer), "examples", "lbl_slab_reference.jl"))
 
-T1, T2 = 1000.0, 500.0
-NX = 32                                       # slab cells
+T1, T2 = 1000.0, 500.0                        # hot and cold plate temperatures [K]
+NX = 32                                       # number of cells across the slab
 
+# wavelength grid: 200 001 points, logarithmically spaced from 10 nm to 1 cm
 λ = 10 .^ range(log10(1e-8), log10(1e-2), length = 200_001)
-lines = let rng = MersenneTwister(1)
-    centres = 10 .^ (log10(1.5e-6) .+ (log10(30e-6) - log10(1.5e-6)) .* rand(rng, 400))
-    peaks   = 10 .^ (log10(0.1) .+ 5.0 .* rand(rng, 400))
-    widths  = 1e-4 .+ 2e-4 .* rand(rng, 400)
-    collect(zip(centres, widths, peaks))
-end
-κ = 0.1 .* [1e-3 + sum(p / (1 + (log10(x / c) / hw)^2) for (c, hw, p) in lines) for x in λ]
 
-T_lbl, q_lbl, _ = lbl_slab_equilibrium(λ, κ, 1.0, T1, T2; Nx = NX)
-ψ_lbl = q_lbl / (LBL_σ * (T1^4 - T2^4))       # net flux, normalised
+# 400 synthetic absorption lines with random centre, width and strength (fixed seed: reproducible)
+lines = let rng = MersenneTwister(1)
+    centres = 10 .^ (log10(1.5e-6) .+ (log10(30e-6) - log10(1.5e-6)) .* rand(rng, 400))   # 1.5–30 μm, uniform in log λ
+    peaks   = 10 .^ (log10(0.1) .+ 5.0 .* rand(rng, 400))                                  # peak strengths over five decades
+    widths  = 1e-4 .+ 2e-4 .* rand(rng, 400)                                               # half-widths, in decades of λ
+    collect(zip(centres, widths, peaks))                                                   # one (centre, half-width, peak) per line
+end
+
+# Absorption coefficient [1/m] at wavelength x: a weak continuum plus the sum of all lines.
+# Each line is a Lorentzian in log₁₀ λ: peak / (1 + (distance from the centre / half-width)²).
+function absorption(x)
+    line_sum = 0.0
+    for (centre, half_width, peak) in lines
+        distance = log10(x / centre)                       # distance from the line centre, in decades of λ
+        line_sum += peak / (1 + (distance / half_width)^2)
+    end
+    return 0.1 * (1e-3 + line_sum)                         # continuum 1e-3, overall scale 0.1
+end
+κ = [absorption(x) for x in λ]
+
+T_lbl, q_lbl, _ = lbl_slab_equilibrium(λ, κ, 1.0, T1, T2; Nx = NX)   # line-by-line reference, slab thickness 1 m
+ψ_lbl = q_lbl / (LBL_σ * (T1^4 - T2^4))       # net flux, normalised by the black-plate exchange
 ```
 
 ### Step 2: Adaptive bins
@@ -457,22 +501,22 @@ lengths from one cell to a few slab thicknesses; the bin count is an output.
 ### Step 3: Slab as a wide cavity
 
 The 2D solver has no plane-parallel mode, so the slab is a cavity 100_000× wider
-than tall with adiabatic, nearly non-reflecting sides; the centre column is the
+than tall with cold, nearly non-reflecting sides; the centre column is the
 1D solution.
 
 ```julia
-W, NX_H = 100_000.0, 5
-verts = SVector(Point2(0.0, 0.0), Point2(W, 0.0), Point2(W, 1.0), Point2(0.0, 1.0))
-face  = PolyVolume2D{Float64}(verts, SVector(true, true, true, true), K, 1.0, 0.0)
-face.kappa_g   = copy(model.κ_ref)
-face.sigma_s_g = zeros(K)
-face.epsilon   = [fill(1.0, K), fill(1.0, K), fill(1.0, K), fill(1.0, K)]
-face.T_in_w    = [T1, 0.0, T2, 0.0]          # bottom T1, top T2, sides adiabatic
-face.q_in_w    = zeros(4)
-face.T_in_g    = -1.0
-face.q_in_g    = 0.0
+W, NX_H = 100_000.0, 5                        # cavity width [m] and number of columns of cells
+verts = SVector(Point2(0.0, 0.0), Point2(W, 0.0), Point2(W, 1.0), Point2(0.0, 1.0))   # corners, counter-clockwise
+face  = PolyVolume2D{Float64}(verts, SVector(true, true, true, true), K, 1.0, 0.0)    # four solid walls, K spectral bins
+face.kappa_g   = copy(model.κ_ref)            # absorption coefficient of every bin [1/m]
+face.sigma_s_g = zeros(K)                     # no scattering
+face.epsilon   = [fill(1.0, K), fill(1.0, K), fill(1.0, K), fill(1.0, K)]   # black in every bin; wall order: bottom, right, top, left
+face.T_in_w    = [T1, 0.0, T2, 0.0]           # wall temperatures [K]: bottom T1, top T2, sides at 0 K
+face.q_in_w    = zeros(4)                     # wall sources, not used when the temperature is prescribed
+face.T_in_g    = -1.0                         # negative: the gas temperature is unknown ...
+face.q_in_g    = 0.0                          # ... and its net source is zero, i.e. radiative equilibrium
 
-mesh = RayTracingDomain2D([face], [(NX_H, NX)])
+mesh = RayTracingDomain2D([face], [(NX_H, NX)])   # 5 columns × 32 rows of cells
 mesh.spectral_model = model
 ```
 
@@ -483,11 +527,19 @@ mesh(10^7; method = :pathlength, chunk_rays=10^7) # one chunk: paths kept, re-bi
 smooth!(mesh; k_dykstra=200, k_ap=10^4) # smoothing: 200 dykstra rounds, ≤ 10⁴ alternating-projections
 solveEquilibrium!(mesh, mesh.F_smooth; max_iters = 20_000, convergence_tol = 1e-12)
 
-ic  = (NX_H + 1) ÷ 2
-col = sort([f for f in mesh.fine_mesh[1] if abs(f.midPoint[1] - (ic - 0.5) * W / NX_H) < 1e-9],
-           by = f -> f.midPoint[2])
-T_pkg = [f.T_g for f in col]
-ψ_pkg = (col[1].q_w[1] / col[1].area[1]) / (LBL_σ * (T1^4 - T2^4))
+# The side walls disturb the columns next to them; the centre column of the wide
+# cavity is the 1D slab solution.
+i_centre = (NX_H + 1) ÷ 2                                   # index of the centre column (3 of 5)
+x_centre = (i_centre - 0.5) * W / NX_H                      # x-coordinate of its cell centres
+centre_cells = [cell for cell in mesh.fine_mesh[1]          # all cells of the first (and only) coarse face ...
+                if abs(cell.midPoint[1] - x_centre) < 1e-9 * W]   # ... whose centre lies in that column
+sort!(centre_cells, by = cell -> cell.midPoint[2])          # order them from the hot plate (y = 0) upwards
+
+T_pkg = [cell.T_g for cell in centre_cells]                 # T_g: gas temperature written by the solver
+
+bottom = centre_cells[1]                                    # the cell touching the hot plate
+# wall 1 of a cell is its bottom edge; q_w is that wall's net radiative power [W], area its length [m]
+ψ_pkg = (bottom.q_w[1] / bottom.area[1]) / (LBL_σ * (T1^4 - T2^4))   # net flux, normalised
 ```
 
 ### Step 5: Compare
@@ -495,10 +547,12 @@ T_pkg = [f.T_g for f in col]
 ```julia
 using Plots
 
-# bin index of every wavelength sample, from the piecewise model
-piece = clamp.(searchsortedlast.(Ref(model.edges), λ), 1, length(model.piece_bin))
-bin   = model.piece_bin[piece]
-sel   = 1e-6 .<= λ .<= 1e-4
+# The model cuts the wavelength axis into pieces at `model.edges`; piece p belongs to bin `model.piece_bin[p]`.
+# For every wavelength sample: find the piece it falls in, then look up that piece's bin.
+n_spectral = length(model.piece_bin)
+piece = clamp.(searchsortedlast.(Ref(model.edges), λ), 1, n_spectral)  # index of the last edge ≤ λ, kept within 1:n_spectral
+bin   = model.piece_bin[piece]                                         # bin index of every wavelength sample
+sel   = 1e-6 .<= λ .<= 1e-4                                            # plot 1–100 μm only, where the lines are
 
 p1 = Plots.plot(λ[sel] .* 1e6, κ[sel]; line_z = bin[sel], color = :turbo, linewidth = 1,
     xscale = :log10, yscale = :log10, xlabel = "Wavelength / μm", ylabel = "κ / m⁻¹",
@@ -516,15 +570,267 @@ display(p)
 
 ![Line spectrum vs line-by-line reference](fig/lbl_slab.png)
 
-Tightening the tolerances or increasing the ray count improves accuracy.
+Tightening the tolerance, against the line-by-line reference (ψ_LBL = 0.49718):
+
+| tol  | bins | pieces | bound   | max ΔT, 10⁷ rays | max ΔT, 10⁸ rays | ψ − ψ_LBL, 10⁸ rays |
+|------|-----:|-------:|--------:|-----------------:|-----------------:|--------------------:|
+| 1e-2 |   20 |   1881 | 3.7e-3  |           0.40 K |           0.42 K |             +1.7e-4 |
+| 1e-3 |   31 |   3449 | 9.3e-4  |           0.47 K |           0.16 K |             −7.2e-6 |
+| 1e-4 |  128 |  17165 | 9.9e-5  |           0.48 K |           0.11 K |             +3.5e-5 |
+
+Two limits are visible. At 10⁷ rays every row sits on the Monte Carlo floor of
+about 0.45 K, so a tighter tolerance buys nothing; at 10⁸ rays that floor drops
+to about 0.14 K, the 20-bin row is left at the 0.4 K its tolerance allows, and
+31 bins already reach the floor. Tighten `tol` until the error stops improving,
+then add rays.
+
+All rows of a column come from the same recorded paths. The number of bins is
+fixed when the faces are built, so each tolerance gets a new mesh, which takes
+over the paths instead of tracing again:
+
+```julia
+model2 = adaptiveSpectralBins(λ, κ; tol = 1e-3, L_range = (1 / NX, 3.0), T_range = (T2, T1))
+K2 = length(model2.κ_ref)                       # 31 bins
+
+# the number of spectral bins is fixed when a face is built, so the tighter model needs a new face ...
+face2 = PolyVolume2D{Float64}(verts, SVector(true, true, true, true), K2, 1.0, 0.0)
+face2.kappa_g   = copy(model2.κ_ref)            # one absorption coefficient per bin
+face2.sigma_s_g = zeros(K2)                     # no scattering
+face2.epsilon   = [fill(1.0, K2), fill(1.0, K2), fill(1.0, K2), fill(1.0, K2)]
+face2.T_in_w    = [T1, 0.0, T2, 0.0]            # same boundary conditions as before
+face2.q_in_w    = zeros(4)
+face2.T_in_g    = -1.0
+face2.q_in_g    = 0.0
+
+# ... and a new mesh with the same subdivision, hence the same element numbering
+mesh2 = RayTracingDomain2D([face2], [(NX_H, NX)])
+mesh2.spectral_model = model2
+mesh2.path_store = mesh.path_store              # take over the recorded paths: they are geometry only
+exchangeFactors!(mesh2)                         # F_raw for the 31 bins, without tracing again
+```
+
+Re-binning geometric rays takes much less time than repeating the trace itself.
 
 ---
 
-## Example 4 — Circular Enclosure from Triangular Elements
+## Example 4 — Anisotropic Scattering vs a Discrete-Ordinates Reference
+
+A grey slab between two black plates at 1000 K and 500 K, optical thickness 1,
+scattering albedo 0.8, with Henyey–Greenstein scattering. Forward scattering
+carries radiation through the slab instead of returning it: at g = 0.8 the net
+flux is 37 % higher than for isotropic scattering and the gas next to the hot
+plate is 26 K colder. The default solvers cannot see this — they redistribute
+scattered power isotropically. With a `directional_model` the exchange factors
+are resolved by ray direction from the same pathlength trace, and each element
+redistributes what it scatters or reflects over the direction bins according to
+its `phase` and `reflection`.
+
+The result is checked against an independent deterministic solution of the same
+slab: 1D discrete ordinates on double-Gauss quadrature, the azimuthally averaged
+Henyey–Greenstein kernel from its Legendre series, a cell-constant source with
+exact attenuation along every ordinate, and radiative equilibrium solved as one
+linear system. It reproduces Heaslet & Warming (1965) at g = 0 and the grey
+line-by-line reference of Example 3. The reference lives in
+`examples/anisotropic_slab_reference.jl` and is exercised by the test suite.
+
+The phase function is that of [Henyey & Greenstein (1941)](https://doi.org/10.1086/144246);
+the grey benchmark values are those of
+[Heaslet & Warming (1965)](https://doi.org/10.1016/0017-9310(65)90083-9).
+
+### Step 1: Reference solutions
+
+```julia
+using RayTraceHeatTransfer
+using GeometryBasics, StaticArrays
+include(joinpath(pkgdir(RayTraceHeatTransfer), "examples", "anisotropic_slab_reference.jl"))
+
+T1, T2 = 1000.0, 500.0                        # hot and cold plate temperatures [K]
+κ, σ_s = 0.2, 0.8                             # absorption and scattering coefficients [1/m]: extinction 1, albedo 0.8
+NX = 32                                       # number of cells across the slab
+gs = (0.0, 0.5, 0.8)                          # asymmetry factors: isotropic, moderate, strongly forward
+
+ψ(q) = q / (ASLAB_σ * (T1^4 - T2^4))          # net flux normalised by the black-plate exchange σ(T1⁴ − T2⁴)
+
+T_ref = Dict{Float64,Vector{Float64}}()       # reference temperature profile for every g
+ψ_ref = Dict{Float64,Float64}()               # reference normalised flux for every g
+for g in gs
+    T, q = anisotropic_slab_equilibrium(κ, σ_s, g, 1.0, T1, T2; Nx = NX)   # slab of thickness 1 m
+    T_ref[g] = T
+    ψ_ref[g] = ψ(q)
+end
+```
+
+### Step 2: Slab as a narrow cavity with mirror sides
+
+Specular adiabatic side walls make a cavity of any width equivalent to the
+infinite slab by symmetry, so a narrow one suffices. Their emissivity cannot be
+zero for a radiative-equilibrium surface; 0.01 leaves 1 % of their interaction
+diffuse. Descriptors are inherited by the fine mesh, so they are set on the face
+before meshing, like `epsilon` and `kappa_g`.
+
+```julia
+W, NX_H = 2.0, 4
+verts = SVector(Point2(0.0, 0.0), Point2(W, 0.0), Point2(W, 1.0), Point2(0.0, 1.0))
+face  = PolyVolume2D{Float64}(verts, SVector(true, true, true, true), 1, κ, σ_s)
+face.epsilon    = [1.0, 0.01, 1.0, 0.01]
+face.T_in_w     = [T1, -1.0, T2, -1.0]        # bottom T1, top T2, sides adiabatic
+face.q_in_w     = zeros(4)
+face.T_in_g     = -1.0
+face.q_in_g     = 0.0
+face.phase      = HenyeyGreenstein(0.8)
+face.reflection = [DiffuseReflection(), SpecularReflection(1.0), DiffuseReflection(), SpecularReflection(1.0)]
+
+mesh = RayTracingDomain2D([face], [(NX_H, NX)])
+mesh.directional_model = AngularBins(16, 4)   # 16 azimuthal × 4 out-of-plane direction bins
+```
+
+### Step 3: Trace once, smooth, solve
+
+The angular exchange factors and their smoothing depend on the geometry and the
+extinction only — not on the phase function — so one trace and one smoothing
+serve every g.
+
+```julia
+mesh(4 * 10^7; method = :pathlength, chunk_rays = 4 * 10^7)   # paths kept (≈ 4 GB), re-binnable
+smooth!(mesh)                                                 # G_smooth, and F_smooth as its sum over bins
+
+# The cavity emulates a 1D slab, so its four columns of cells are four copies of
+# the same temperature profile. `slab_result` averages them into one temperature
+# per row, and reads the net heat flux off the hot plate.
+function slab_result(mesh)
+    T_sum   = zeros(NX)                          # summed gas temperature of each row of cells
+    n_cells = zeros(Int, NX)                     # number of cells in each row (one per column)
+    for cell in mesh.fine_mesh[1]                # all cells of the first (and only) coarse face
+        y   = cell.midPoint[2]                   # height of the cell centre, 0 < y < 1
+        row = clamp(floor(Int, y * NX) + 1, 1, NX)   # row index, 1 at the hot plate, NX at the cold plate
+        T_sum[row]   += cell.T_g                 # T_g: gas temperature written by the solver
+        n_cells[row] += 1
+    end
+    T_profile = T_sum ./ n_cells                 # column-averaged temperature of every row
+
+    q_hot = 0.0                                  # net radiative power leaving the hot plate [W per m depth]
+    width = 0.0                                  # length of the hot plate [m]
+    # surface_mapping lists every solid wall element as (coarse face, cell, wall of that cell)
+    for ((i_face, i_cell, i_wall), _) in mesh.surface_mapping
+        cell = mesh.fine_mesh[i_face][i_cell]
+        p1 = cell.vertices[i_wall]                                   # wall i_wall runs from this vertex ...
+        p2 = cell.vertices[mod1(i_wall + 1, length(cell.vertices))]  # ... to the next one, cyclically
+        if p1[2] < 1e-9 && p2[2] < 1e-9          # both ends at y = 0: this element belongs to the hot plate
+            q_hot += cell.q_w[i_wall]            # q_w: net radiative power of the wall element [W]
+            width += cell.area[i_wall]           # area: its length, per unit depth in 2D
+        end
+    end
+    return T_profile, ψ(q_hot / width)           # temperature profile and normalised net flux
+end
+
+# Solve the same domain for another asymmetry factor. The phase function enters only
+# the solve, so the exchange factors and their smoothing are reused as they are.
+function solve_for(mesh, g)
+    for cell in mesh.fine_mesh[1]                # after meshing, the descriptors live on the fine cells
+        cell.phase = g == 0 ? IsotropicScattering() : HenyeyGreenstein(g)
+    end
+    solveEquilibrium!(mesh, mesh.F_smooth; verbose = false)
+    return slab_result(mesh)
+end
+
+T_pkg = Dict{Float64,Vector{Float64}}()       # package temperature profile for every g
+ψ_pkg = Dict{Float64,Float64}()               # package normalised flux for every g
+for g in gs
+    T_pkg[g], ψ_pkg[g] = solve_for(mesh, g)
+end
+```
+
+The angular solution is kept on the domain: `mesh.J[i, b]` is the power leaving
+element `i` in direction bin `b`, and its sum over `b` is the radiosity written
+to the faces.
+
+### Step 4: Angular convergence
+
+The number of direction bins is the convergence parameter. The kept paths are
+re-binned without tracing again:
+
+```julia
+bins = ((8, 2), (16, 4), (32, 8))             # (azimuthal, out-of-plane) bin counts: 16, 64 and 256 directions
+flux_error = Dict(g => Float64[] for g in gs) # relative flux error for every g, one entry per resolution
+
+for (n_azimuth, n_polar) in bins
+    mesh.directional_model = AngularBins(n_azimuth, n_polar)   # change the angular resolution ...
+    exchangeFactors!(mesh; verbose = false)                    # ... and re-bin the kept ray paths, no new trace
+    smooth!(mesh; k_ap = 50_000, verbose = false)              # finer bins need more smoothing iterations
+    for g in gs
+        _, ψ_now = solve_for(mesh, g)                          # only the flux is needed here
+        push!(flux_error[g], abs(ψ_now - ψ_ref[g]) / ψ_ref[g])
+    end
+end
+```
+
+### Step 5: Compare
+
+```julia
+using Plots
+
+colours = Dict(0.0 => :black, 0.5 => :blue, 0.8 => :red)      # one colour per asymmetry factor
+
+# left panel: temperature profiles, reference as lines and package as markers
+x_cells = ((1:NX) .- 0.5) ./ NX                                # cell-centre positions x / L
+p1 = Plots.plot(; xlabel = "x / L", ylabel = "Temperature / K", title = "Slab temperature profile")
+for g in gs
+    Plots.plot!(p1, x_cells, T_ref[g]; color = colours[g], linewidth = 2, label = "reference, g = $g")
+    Plots.scatter!(p1, x_cells, T_pkg[g]; color = colours[g], markersize = 3, label = "16×4 bins, g = $g")
+end
+
+# right panel: flux error against the number of direction bins, on logarithmic axes
+n_directions = [n_azimuth * n_polar for (n_azimuth, n_polar) in bins]
+p2 = Plots.plot(; xscale = :log10, yscale = :log10, xlabel = "direction bins", ylabel = "|Δψ| / ψ",
+                  title = "Flux error vs angular resolution", legend = :bottomleft)
+for g in gs
+    Plots.plot!(p2, n_directions, flux_error[g]; color = colours[g], marker = :circle, label = "g = $g")
+end
+
+p = Plots.plot(p1, p2; layout = (1, 2), size = (1000, 400), dpi = 500,
+    left_margin = 5Plots.mm, bottom_margin = 8Plots.mm)
+display(p)
+```
+
+![Anisotropic slab vs discrete-ordinates reference](fig/anisotropic_slab.png)
+
+Relative flux error against the reference, from one trace of 4 × 10⁷ rays
+(reference ψ = 0.5535, 0.6639, 0.7576 for g = 0, 0.5, 0.8):
+
+| bins | g = 0   | g = 0.5 | g = 0.8 | max ΔT at g = 0.8 |
+|------|--------:|--------:|--------:|------------------:|
+| 8×2  | −0.89 % | −2.67 % | −3.15 % |            1.87 K |
+| 16×4 | −0.33 % | −0.96 % | −1.30 % |            1.53 K |
+| 32×8 | −0.15 % | −0.36 % | −0.52 % |            0.78 K |
+
+The error falls by about 2.5× per refinement and keeps its sign: binned kernels
+are slightly too diffuse. The g = 0 column is not zero because the mirror side
+walls are themselves an angular model — it is the error of emulating the slab,
+and it converges with the rest. The spatial discretisation is common to both
+solutions and does not appear here.
+
+Notes on directional domains:
+
+- `phase` and `reflection` accept one descriptor, or a vector with one per
+  spectral bin; `TabulatedScattering` and `TabulatedReflection` take a table at
+  the domain's angular resolution, which is checked for conservation and
+  detailed balance.
+- Spectral domains with a `directional_model` use a dense solver limited to
+  6000 unknowns (elements × direction bins) per spectral bin.
+- Smoothing the angular exchange factors takes more alternating-projection
+  iterations as the bins are refined; raise `k_ap` for finer grids.
+- To combine `J` with the angular exchange factors, note that they carry the
+  emission shares: the power incident in bin `b` is
+  `G[b]' * (J[:, b] ./ S)` with `S = vec(sum(G[b], dims = 2))`. With `F` it is
+  simply `F' * J`.
+
+---
+
+## Example 5 — Circular Enclosure from Triangular Elements
 
 The meshing in RayTraceHeatTransfer.jl is not limited to rectangles: domains can be assembled from arbitrary triangular and quadrilateral elements, with any wall of any element declared either solid (radiatively active) or open (transparent to radiation, used to join elements). This example builds a circular enclosure of radius R = 1 m from 16 triangular wedges sharing a center vertex, fills it with an absorbing gas (κ = 1 m⁻¹, no scattering), and heats half the rim to 1000 K while the other half is held at 0 K. All surfaces are black (ε = 1).
 
-At the center of the circle, symmetry provides an analytical limit to validate against: the center element sees the hot and cold half-rims with equal view factors, so in radiative equilibrium its temperature satisfies T⁴ = (T_hot⁴ + T_cold⁴)/2, giving T ≈ 840.90 K. This is the same symmetry argument — and the same formula — as the polar-cap limit in the triangulated icosphere of Example 5; the two examples are 2D and 3D counterparts of one another.
+At the center of the circle, symmetry provides an analytical limit to validate against: the center element sees the hot and cold half-rims with equal view factors, so in radiative equilibrium its temperature satisfies T⁴ = (T_hot⁴ + T_cold⁴)/2, giving T ≈ 840.90 K. This is the same symmetry argument — and the same formula — as the polar-cap limit in the triangulated icosphere of Example 7; the two examples are 2D and 3D counterparts of one another.
 
 ### Step 1: Build the circle from triangular wedges
 
@@ -598,7 +904,7 @@ The package test suite additionally verifies the isothermal limit on this geomet
 
 ---
 
-## Example 5 — 3D Surface Enclosure
+## Example 6 — 3D Surface Enclosure
 
 This example solves radiative equilibrium in a unit cube with transparent (non-participating) media. Two opposing faces have prescribed temperatures (1000 K and 0 K); the four side walls are in radiative equilibrium (unknown temperature, zero net heat flux). All surfaces are black (ε = 1). View factors are computed semi-analytically using the formulation of Narayanaswamy (2015), which means no ray tracing is needed.
 
@@ -647,13 +953,6 @@ domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon) # me
 Faces 1 and 2 are the hot and cold walls at opposing ends of the cube. The four side faces have `T_in_w = -1.0` (unknown) and `q_in_w = 0.0` (radiative equilibrium), so their temperature distributions emerge from the solution.
 
 ### Step 3: Visualise the domain and identify elements
-
-```julia
-fig = Figure(size = (800, 700))
-ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
-plotMesh(ax, domain3D)
-fig
-```
 
 Each subface is one element: a row and column of the exchange factor matrix and
 one entry of the solution vectors. The mesh is drawn as a single surface built
@@ -717,22 +1016,11 @@ opposite case.
 
 ### Step 6: Solve and visualise
 
-```julia
-solveEquilibrium!(domain3D, domain3D.F_smooth)
-fig = Figure(size = (800, 700))
-ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
-plotField(ax, domain3D; field = :T)
-fig
-```
-
-![3D cube temperature field](fig/3d_cube_temperature.png)
-
-The temperature field shows a smooth gradient from the hot face (1000 K) to the cold face (0 K), with the side walls at intermediate temperatures determined by radiative equilibrium. The analytical view factors ensure exact geometric accuracy without statistical noise.
-
 Passing `inspect = true` to `plotField` gives the same hover on the solved
 field, now with every property populated:
 
 ```julia
+solveEquilibrium!(domain3D, domain3D.F_smooth)
 fig  = Figure(size = (1200, 700))
 ax   = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
 info = Label(fig[1, 2], ""; tellheight = false, tellwidth = true,
@@ -749,6 +1037,10 @@ This is the quickest check that a solution is what it should be: on a
 prescribed-temperature face, `T` equals `T_in` and `q` is whatever flux
 maintains it; on an equilibrium face, `T_in` reads `unknown` and `q` sits at the
 noise floor.
+
+![3D cube temperature field](fig/3d_cube_temperature.png)
+
+The temperature field shows a smooth gradient from the hot face (1000 K) to the cold face (0 K), with the side walls at intermediate temperatures determined by radiative equilibrium. The analytical view factors ensure exact geometric accuracy without statistical noise.
 
 ### Step 7: Cross-validation against Monte Carlo ray tracing
 
@@ -783,9 +1075,9 @@ are not convex, where surfaces shadow one another. See Example 7.
 
 ---
 
-## Example 6 — Triangulated Icosphere
+## Example 7 — Triangulated Icosphere
 
-This example extends Example 4 from axis-aligned quads to an arbitrary convex triangulated geometry: a unit sphere approximated by recursively subdividing a regular icosahedron. A small hot cap of triangles is placed at the north pole and a matching cold cap at the south pole; all remaining triangles are in radiative equilibrium.
+This example extends Example 6 from axis-aligned quads to an arbitrary convex triangulated geometry: a unit sphere approximated by recursively subdividing a regular icosahedron. A small hot cap of triangles is placed at the north pole and a matching cold cap at the south pole; all remaining triangles are in radiative equilibrium.
 
 This example demonstrates three features of the package: arbitrary triangulated geometry (view factors are computed via Narayanaswamy (2015) for any closed convex polyhedron built from planar triangles), the separate mesh / view factor / smooth / solve steps that let the user inspect the mesh before committing to the expensive view factor computation, and — as the subdivision level rises — the clearest demonstration of what the smoothing step is for.
 
@@ -798,33 +1090,29 @@ using RayTraceHeatTransfer
 using GLMakie
 using LinearAlgebra
 
-include(joinpath(pkgdir(RayTraceHeatTransfer), "examples", "icosphere_mesh.jl")) # include icosphere mesh
+include(joinpath(pkgdir(RayTraceHeatTransfer), "examples", "icosphere_mesh.jl"))   # defines icosphere_mesh
 
-subdivision_level = 2       # → 320 triangles
-points, faces = icosphere_mesh(subdivision_level)
-n_tri = size(faces, 1)
+subdivision_level = 2                               # 0 → 20 triangles, 1 → 80, 2 → 320, 3 → 1280
+points, faces = icosphere_mesh(subdivision_level)   # points: one row (x, y, z) per vertex; faces: three vertex indices per triangle
+n_tri = size(faces, 1)                              # number of triangles
 
-# Mark the n_cap triangles nearest each pole as hot / cold caps
+# Hot cap at the north pole and cold cap at the south pole:
+# the n_cap triangles whose centroids lie highest and lowest in z
 n_cap = 6
-centroids   = [sum(points[faces[i, :], :], dims = 1)[:] ./ 3 for i in 1:n_tri]
-z_centroids = [c[3] for c in centroids]
-hot_ids  = partialsortperm(z_centroids, 1:n_cap, rev = true)
-cold_ids = partialsortperm(z_centroids, 1:n_cap)
+centroids   = [vec(sum(points[faces[i, :], :], dims = 1)) ./ 3 for i in 1:n_tri]   # centroid of triangle i: mean of its three vertices
+z_centroids = [c[3] for c in centroids]                                             # height of every centroid
+hot_ids  = partialsortperm(z_centroids, 1:n_cap, rev = true)                        # indices of the n_cap highest triangles
+cold_ids = partialsortperm(z_centroids, 1:n_cap)                                    # indices of the n_cap lowest triangles
 
-epsilon = ones(n_tri)
-q_in_w  = zeros(n_tri)
-T_in_w  = fill(-1.0, n_tri)
-T_in_w[hot_ids]  .= 1000.0
-T_in_w[cold_ids] .=    0.0
+# boundary conditions, one entry per triangle
+epsilon = ones(n_tri)                               # black surfaces
+q_in_w  = zeros(n_tri)                              # zero net source wherever the temperature is unknown
+T_in_w  = fill(-1.0, n_tri)                         # negative: temperature unknown, i.e. radiative equilibrium
+T_in_w[hot_ids]  .= 1000.0                          # hot cap [K]
+T_in_w[cold_ids] .=    0.0                          # cold cap [K]
 
-Ndim = 1
-domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-
-fig = Figure(size = (800, 700))
-ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
-plotMesh(ax, domain3D)
-fig
-
+Ndim = 1                                            # subdivisions per triangle edge; 1 keeps every triangle as one element
+domain3D = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)   # geometry and boundary conditions, no view factors yet
 ```
 
 With `Ndim = 1` each triangle is a single element, so element `k` is triangle
@@ -832,11 +1120,11 @@ With `Ndim = 1` each triangle is a single element, so element `k` is triangle
 landed where intended:
 
 ```julia
-fig = Figure(size = (800, 700))
+fig  = Figure(size = (1200, 700))
 ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
 info = Label(fig[1, 2], ""; tellheight = false, tellwidth = true,
              halign = :left, justification = :left,
-             fontsize = 14, font = "DejaVu Sans Mono") # with info as in Example 4
+             fontsize = 14, font = "DejaVu Sans Mono") # with info as in Example 6
 colsize!(fig.layout, 2, Relative(0.5))
 plotMesh(ax, domain3D; inspect = true, label = info)
 DataInspector(fig)
@@ -872,10 +1160,14 @@ smooth!(domain3D)
 ```julia
 solveEquilibrium!(domain3D, domain3D.F_smooth)
 
-fig = Figure(size = (800, 700))
+fig  = Figure(size = (1200, 700))
 ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
-plotField(ax, domain3D; field = :T)
-fig
+info = Label(fig[1, 2], ""; tellheight = false, tellwidth = true,
+             halign = :left, justification = :left,
+             fontsize = 14, font = "DejaVu Sans Mono") # with info as in Example 6
+colsize!(fig.layout, 2, Relative(0.5))
+plotMesh(ax, domain3D; field = :T, inspect = true, label = info)
+DataInspector(fig)
 ```
 
 The resulting temperature field shows a bright hot cap at the north pole, a dark cold cap at the south, and a nearly isothermal bulk throughout most of the sphere — as expected when a small hot source and a small cold sink are embedded in a highly concave enclosure.
@@ -893,44 +1185,48 @@ For `T_hot = 1000 K` and `T_cold = 0 K`, this gives `T_limit ≈ 840.896 K`.
 Because `icosphere_mesh` is parameterised by subdivision level, the full pipeline can be run at multiple resolutions to check the computed equator temperature against this limit:
 
 ```julia
-T_hot   = 1000.0
-T_cold  =    0.0
-T_limit = ((T_hot^4 + T_cold^4) / 2)^(1/4)
+T_hot   = 1000.0                                    # hot-cap temperature [K]
+T_cold  =    0.0                                    # cold-cap temperature [K]
+T_limit = ((T_hot^4 + T_cold^4) / 2)^(1/4)          # analytical temperature of every equilibrium triangle, ≈ 840.896 K
 
-levels    = 0:3
-n_cap     = 6
-Ndim      = 1
+levels = 0:3                                        # subdivision levels: 20, 80, 320 and 1280 triangles
+n_cap  = 6                                          # triangles per cap
+Ndim   = 1                                          # one element per triangle
 
 for level in levels
     points, faces = icosphere_mesh(level)
     n_tri = size(faces, 1)
-    n_cap_effective = min(n_cap, n_tri ÷ 4)
+    n_cap_effective = min(n_cap, n_tri ÷ 4)         # never more than a quarter of the triangles per cap (matters at level 0)
 
-    centroids   = [sum(points[faces[i, :], :], dims = 1)[:] ./ 3 for i in 1:n_tri]
+    # caps: the triangles with the highest and the lowest centroids, as in Step 1
+    centroids   = [vec(sum(points[faces[i, :], :], dims = 1)) ./ 3 for i in 1:n_tri]
     z_centroids = [c[3] for c in centroids]
     hot_ids  = partialsortperm(z_centroids, 1:n_cap_effective, rev = true)
     cold_ids = partialsortperm(z_centroids, 1:n_cap_effective)
 
+    # boundary conditions: black surfaces, prescribed caps, everything else in radiative equilibrium
     epsilon = ones(n_tri)
     q_in_w  = zeros(n_tri)
     T_in_w  = fill(-1.0, n_tri)
     T_in_w[hot_ids]  .= T_hot
     T_in_w[cold_ids] .= T_cold
 
-    domain = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)
-    domain(; parallel=true, verbose=false)
-    stats = smooth!(domain, verbose=false)
-    δ_raw = stats.delta_raw[1]
-    δ_smooth = stats.delta_smooth[1]
-    solveEquilibrium!(domain, domain.F_smooth; verbose=false)
+    # the four workflow steps
+    domain = ViewFactorDomain3D(points, faces, Ndim, q_in_w, T_in_w, epsilon)   # mesh
+    domain(; parallel = true, verbose = false)                                  # view factors for every pair of triangles
+    stats = smooth!(domain, verbose = false)                                    # enforce reciprocity; returns diagnostics
+    δ_raw    = stats.delta_raw[1]                   # reciprocity defect of F_raw (entry 1: a grey domain has a single "bin")
+    δ_smooth = stats.delta_smooth[1]                # certified bound on the defect of F_smooth
+    solveEquilibrium!(domain, domain.F_smooth; verbose = false)                 # solve
 
-    equilibrium_ids = setdiff(1:n_tri, hot_ids, cold_ids)
-    equator_id = equilibrium_ids[argmin(abs.(z_centroids[equilibrium_ids]))]
-    T_eq = domain.facesMesh[equator_id].subFaces[1].T_w
-    error = abs(T_limit - T_eq)
+    # temperature of the equilibrium triangle closest to the equator, against the analytical limit
+    equilibrium_ids = setdiff(1:n_tri, hot_ids, cold_ids)                       # all triangles outside the two caps
+    equator_id = equilibrium_ids[argmin(abs.(z_centroids[equilibrium_ids]))]    # the one whose centroid has the smallest |z|
+    T_equator  = domain.facesMesh[equator_id].subFaces[1].T_w                   # its single element (Ndim = 1) and that element's temperature
+    T_error    = abs(T_limit - T_equator)
 
     println("Level $level: $n_tri triangles → δ_R(F_raw) = $(round(δ_raw, sigdigits=3)), "*
-            "δ_R(F_smooth) = $(round(δ_smooth, sigdigits=3)), error = $(round(error, sigdigits = 3)) K")
+            "δ_R(F_smooth) = $(round(δ_smooth, sigdigits=3)), error = $(round(T_error, sigdigits = 3)) K")
 end
 ```
 
@@ -956,7 +1252,7 @@ $$
 where $w_i$ is the element weight (surface area in 3D). It is a sum over pairs,
 not a percentage, so it grows with element count too.
 
-At level 0 the 6+6 caps cover over half the sphere, leaving only 8 equilibrium
+At level 0 the 5+5 caps cover over half the sphere, leaving only 10 equilibrium
 triangles, so the symmetry argument doesn't hold cleanly. From level 1 onward
 the equator temperature matches the analytical limit to within 10⁻¹¹ K.
 
@@ -975,7 +1271,7 @@ Narayanaswamy, A. (2015). "An analytic expression for radiation view factor betw
 
 ---
 
-## Example 7 — Mixed Triangular and Quadrilateral Faces
+## Example 8 — Mixed Triangular and Quadrilateral Faces
 
 Examples 4 and 5 are single-topology: the cube is all quadrilaterals, the
 icosphere all triangles. A 3D domain can mix the two.
@@ -1023,8 +1319,7 @@ fig
 
 ![Mixed-topology shed mesh](fig/shed_mesh.png)
 
-Vertex order follows the right-hand rule for outward normals, as in Example 4,
-and the repeated vertex may sit at any position in the row.
+Repeated vertices may sit at any position in the row.
 
 The two topologies give different subcell counts at the same `Ndim`: a
 quadrilateral is divided into `Ndim²` cells, a triangle into `Ndim(Ndim+1)/2`.
@@ -1037,12 +1332,12 @@ Because block lengths differ, an element's superface can no longer be worked
 out arithmetically from its index. Hovering reports it directly: the floor is
 elements 1–49, and the first gable starts at 148.
 
-From here the domain proceeds exactly as in Examples 4 and 5 — view factors,
+From here the domain proceeds exactly as in Examples 6 and 7 — view factors,
 smoothing, then solve.
 
 ---
 
-## Example 8 — Non-Convex Enclosure: an L-Shaped Duct
+## Example 9 — Non-Convex Enclosure: an L-Shaped Duct
 
 The reentrant corner of an L-shaped duct shadows one arm from the other. View
 factors have no occlusion test, so this geometry requires ray tracing.
@@ -1084,43 +1379,35 @@ domainL(10^8)     # total rays, divided across the 1694 elements
 smooth!(domainL)
 solveEquilibrium!(domainL, domainL.F_smooth)
 
-fig = Figure(size = (800, 700))
+# Zoom into the duct and inspect the reentrant corner from within:
+fig  = Figure(size = (1200, 700))
 ax  = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
-plotField(ax, domainL; field = :T)
-fig
+info = Label(fig[1, 2], ""; tellheight = false, tellwidth = true,
+             halign = :left, justification = :left,
+             fontsize = 14, font = "DejaVu Sans Mono") # with info as in Example 6
+colsize!(fig.layout, 2, Relative(0.5))
+plotMesh(ax, domainL; field = :T, inspect = true, label = info)
+DataInspector(fig)
 ```
 
 ![L-duct temperature field](fig/3d_lduct_temperature.png)
 
-Zoom into the duct and inspect the reentrant corner from within:
-
-```julia
-fig  = Figure(size = (1200, 700))
-ax   = LScene(fig[1, 1], scenekw = (camera = cam3d!, show_axis = true))
-info = Label(fig[1, 2], ""; tellheight = false, tellwidth = true,
-             halign = :left, justification = :left,
-             fontsize = 14, font = "DejaVu Sans Mono")
-colsize!(fig.layout, 2, Relative(0.5))
-
-plotField(ax, domainL; field = :T, inspect = true, label = info)
-DataInspector(fig)
-fig
-```
-
 Rays are traced to first intersection only; reflections are handled by the
 solver, so `F_raw` is geometry alone. Smoothing starts from a reciprocity
-defect of order 10⁻² rather than Example 4's 10⁻¹³ — Monte Carlo breaks
+defect of order 10⁻² rather than Example 6's 10⁻¹³ — Monte Carlo breaks
 reciprocity at the noise level, not at roundoff — and reaches 10⁻¹⁵ either way.
 
 The trace uses all threads by default, so results are reproducible per machine
-but vary with thread count. Pass `nthreads` and `seeds` to pin them.
+but vary with thread count. Pass `nthreads` and `seeds` to pin them; `seeds`
+takes one seed per thread, or a single integer — runs with different integers
+are statistically independent.
 
 A ray either reaches a facet or it does not, so occlusion appears as exact
 structural zeros. The analytical method returns a substantial value for the
 same pair, having no notion of what lies between two polygons. Analytical
 view factors are exact and converge for free but cannot see around
 corners; ray tracing pays for every digit and has no geometric restriction.
-Example 4 shows the two agreeing on a cube, which is what licenses trusting the
+Example 6 shows the two agreeing on a cube, which is what licenses trusting the
 tracer here.
 
 Rays are traced against a bounding volume hierarchy built with the binned

@@ -128,6 +128,7 @@ function equilibriumSpectral2D_direct!(rtm::RayTracingDomain2D, F_matrices::Abst
     rtm.energy_error = G.([let j = sol_j[(i - 1) * N + 1 : i * N]
                                sum((I - F_matrices') * j) / (sum(j) > 1000*eps(G) ? sum(j) : one(G))
                            end for i in 1:K])
+    rtm.J = [sol_j[(i - 1) * N + 1 : i * N] for i in 1:K]
 
     if verbose
         show(stdout, MIME"text/plain"(), rtm)
@@ -517,6 +518,7 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
     rtm.energy_error = G.([let j = sol_j[(i - 1) * N + 1 : i * N]
                                sum((I - F_matrices[i]') * j) / (sum(j) > 1000*eps(G) ? sum(j) : one(G))
                            end for i in 1:K])
+    rtm.J = [sol_j[(i - 1) * N + 1 : i * N] for i in 1:K]
 
     if verbose
         show(stdout, MIME"text/plain"(), rtm)
