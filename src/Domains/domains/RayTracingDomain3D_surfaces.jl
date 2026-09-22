@@ -90,14 +90,14 @@ end
 
 function (dom::RayTracingDomain3D_surfaces{G,P})(rays_tot::Integer; nudge = nothing,
                             nthreads::S=Threads.nthreads(),
-                            seeds::Union{Vector{K},K,UnitRange{K}}=1:Threads.nthreads(),
-                            rngs::Union{Vector{<:Random.AbstractRNG},<:Random.AbstractRNG}=
-                                Random.Xoshiro.(1:Threads.nthreads()),
+                            seeds::Union{Vector{K},K,UnitRange{K},Nothing}=nothing,
+                            rngs::Union{Vector{<:Random.AbstractRNG},<:Random.AbstractRNG,Nothing}=nothing,
+                            sampler::Union{Symbol,Nothing}=nothing,
                             verbose::Bool = true) where {G,P<:Integer,K<:Integer,S<:Integer}
     trace_nudge = nudge === nothing ? G(10_000) * eps(G) : G(nudge)
     verbose && println("Ray tracing surface enclosure " *
                        "(geometry only, wavelength-independent)...")
     traceSurfaces3D(dom, rays_tot, trace_nudge; nthreads=nthreads,
-                    seeds=seeds, rngs=rngs, verbose=verbose)
+                    seeds=seeds, rngs=rngs, sampler=sampler, verbose=verbose)
     return nothing
 end

@@ -224,7 +224,7 @@ mutable struct RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}
     fine_face_cache::Vector{Vector{PolyVolume2D}}  # Pre-allocated fine faces
     
     # Pre-computed geometric data for faster access
-    coarse_wall_normals::Vector{Vector{Point2}}  # Outward normals per face
+    coarse_wall_normals::Vector{Vector{Point2}}  # Inward normals per face
     coarse_wall_midpoints::Vector{Vector{Point2}}  # Wall midpoints per face
     fine_wall_normals::Vector{Vector{Vector{Point2}}}  # Fine mesh normals
     fine_wall_midpoints::Vector{Vector{Vector{Point2}}}  # Fine mesh wall midpoints

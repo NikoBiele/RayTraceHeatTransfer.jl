@@ -102,6 +102,10 @@ using Test
         include("test_anisotropic_slab.jl")
     end
 
+    @testset "Sobol quasi random number sampling" begin
+        include("test_sobol_sampler.jl")
+    end
+
     println("\n" * "="^80)
     println("TEST SUITE COMPLETE")
     println("="^80)

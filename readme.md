@@ -1,15 +1,17 @@
 # RayTraceHeatTransfer.jl
 
-A Julia package for radiative heat transfer using Monte Carlo ray tracing and the Graph Equilibrium Radiative Transfer (GERT, see [Bielefeld, 2026](https://arxiv.org/abs/2512.22157)) methods. Solves grey and spectral radiative equilibrium in 2D participating media and 3D surface enclosures, with exchange factor smoothing for machine precision reciprocity and energy-conserving solutions.
+A Julia package for radiative heat transfer using quasi-Monte Carlo ray tracing and the Graph Equilibrium Radiative Transfer (GERT, see [Bielefeld, 2026](https://arxiv.org/abs/2512.22157)) methods. Solves grey and spectral radiative equilibrium in 2D participating media and 3D surface enclosures, with unconditional energy conservation and exchange factor smoothing for machine precision reciprocity.
 
 ## Features
 
 - **2D participating media** — absorbing, emitting, and scattering gases with enclosing surfaces
 - **3D surface enclosures** — transparent media with semi-analytical view factors or ray tracing
 - **Grey and spectral** — wavelength-independent or band-resolved radiation with automatic solver selection
+- **Quasi-Monte Carlo sampling** — Sobol sequences by default, with results independent of the thread count and reproducible from a single seed
 - **Adaptive spectral binning** — bins chosen automatically from κ(λ) samples to a user-set tolerance
 - **Directional scattering and reflection** — Henyey–Greenstein or tabulated phase functions, specular or tabulated wall reflection, on angular bins with a user-set resolution (2D)
-- **Exchange factor smoothing** — reciprocity and energy conservation enforcement to machine-precision
+- **Unconditional energy conservation** — the GERT solve balances energy to machine precision for any number of rays, with or without smoothing
+- **Exchange factor smoothing** — enforces reciprocity on the ray-traced factors to machine precision, which improves accuracy
 - **Four-step workflow** — mesh → ray trace / view factors → smooth → solve
 - **Plotting extensions** — GLMakie and Plots backends for mesh and field visualisation
 
@@ -32,7 +34,7 @@ Pkg.add("Plots")     # for plotField (2D)
 Every example below follows the same four steps:
 
 1. **Mesh** — build the geometry and set boundary conditions.
-2. **Exchange factors** — Monte Carlo ray tracing (2D participating media,
+2. **Exchange factors** — quasi-Monte Carlo ray tracing (2D participating media,
    3D surface enclosures) or analytical view factors (3D convex surface
    enclosures), producing exchange factor matrix `F_raw`.
 3. **Smooth** — `smooth!(domain)` projects the exchange factor matrix `F_raw`
@@ -43,7 +45,7 @@ Every example below follows the same four steps:
 
 Step 3 is separate because it is a distinct computation with its own cost and
 diagnostics, and because how much work it does varies enormously between
-problems. `F_raw` arrives violating reciprocity: in 2D from Monte Carlo noise,
+problems. `F_raw` arrives violating reciprocity: in 2D from sampling noise,
 in 3D because the view factor formula is ill-conditioned for polygons that
 share an edge and must be evaluated on a slightly perturbed geometry. On a
 triangulated sphere, where every pair of adjacent faces has a nonzero view
@@ -77,11 +79,41 @@ descriptor per spectral bin; one pathlength trace resolves the exchange factors
 by bin and by direction, and the solution is `J[k][i, b]`. That solver is
 currently limited in size (see the notes under Example 4).
 
+## Sampling and reproducibility
+
+The ray tracers draw emission positions and directions from Sobol sequences
+(quasi-Monte Carlo) by default. Every emitter owns one sequence, digitally
+shifted by a random mask derived from `seeds`, so the estimate is unbiased and
+the stratification of the sequence is kept. At the same ray count the exchange
+factors come out quieter than with pseudorandom sampling by 2–3× at 4096 rays
+per emitter, and the gain grows with the ray count, reaching 10× at 65 536 rays
+per emitter for the pathlength tracer: the same accuracy from up to a hundred
+times fewer rays.
+
+Two keywords control it, on the 2D domain functor and on
+`RayTracingDomain3D_surfaces`:
+
+- `sampler` — `:sobol`, the default wherever every ray consumes a fixed number
+  of random numbers (`:exchange`, `:pathlength`, the 3D surface tracer), or
+  `:random`, one pseudorandom stream per thread. The `:direct` tracer follows
+  random walks and always samples pseudorandomly.
+- `seeds` — with `:sobol`, a single integer selecting the realisation (default
+  1); runs with different integers are statistically independent. With
+  `:random`, one seed per thread, or a single integer selecting a block of
+  per-thread seeds.
+
+With the default sampler the result depends only on the geometry, the ray
+count and `seeds`: not on the number of threads, and for `:pathlength` not on
+`chunk_rays`. Rays per emitter that are powers of two make the best use of the
+sequence; other counts work and lose roughly 10–20 % of the gain. Passing
+`rngs`, or several seeds, together with the Sobol sampler is an error whose
+message names the fix.
+
 ---
 
 ## Example 1 — 2D Grey Participating Medium
 
-This example solves radiative equilibrium in a 1 × 1 m square enclosure filled with an absorbing gas (absorption coefficient: κ = 1 m⁻¹, no scattering: σₛ = 0 m⁻¹). The bottom wall is held at 1000 K and all other walls are at 0 K; all surfaces are black (ε = 1). The gas temperature field is found by solving the GERT system after computing exchange factors with Monte Carlo ray tracing.
+This example solves radiative equilibrium in a 1 × 1 m square enclosure filled with an absorbing gas (absorption coefficient: κ = 1 m⁻¹, no scattering: σₛ = 0 m⁻¹). The bottom wall is held at 1000 K and all other walls are at 0 K; all surfaces are black (ε = 1). The gas temperature field is found by solving the GERT system after computing exchange factors by ray tracing.
 
 ### Step 1: Define the geometry and mesh
 
@@ -89,23 +121,27 @@ This example solves radiative equilibrium in a 1 × 1 m square enclosure filled 
 using RayTraceHeatTransfer
 using GeometryBasics, StaticArrays
 
-vertices = SVector(
-    Point2(0.0, 0.0),
-    Point2(1.0, 0.0),
-    Point2(1.0, 1.0),
-    Point2(0.0, 1.0)
-)
-solidWalls = SVector(true, true, true, true) # all walls impenetrable by radiation
+function build_mesh(Ndim) # define a mesh builder function
+    vertices = SVector(
+        Point2(0.0, 0.0),
+        Point2(1.0, 0.0),
+        Point2(1.0, 1.0),
+        Point2(0.0, 1.0)
+    )
+    solidWalls = SVector(true, true, true, true) # all walls impenetrable by radiation
 
-face = PolyVolume2D{Float64}(vertices, solidWalls, 1, 1.0, 0.0)  # κ=1, σₛ=0, for the gas volume
+    face = PolyVolume2D{Float64}(vertices, solidWalls, 1, 1.0, 0.0)  # κ=1, σₛ=0, for the gas volume
 
-face.T_in_w  = [1000.0, 0.0, 0.0, 0.0]   # bottom hot, rest cold
-face.epsilon = [1.0, 1.0, 1.0, 1.0]       # black walls
-face.T_in_g  = -1.0                         # unknown (solve for this)
-face.q_in_g  = 0.0                          # radiative equilibrium
+    face.T_in_w  = [1000.0, 0.0, 0.0, 0.0]   # bottom hot, rest cold
+    face.epsilon = [1.0, 1.0, 1.0, 1.0]       # black walls
+    face.T_in_g  = -1.0                         # unknown (solve for this)
+    face.q_in_g  = 0.0                          # radiative equilibrium
 
+    mesh = RayTracingDomain2D([face], [(Ndim, Ndim)]) # mesh the domain
+    return mesh
+end
 Ndim = 11  # 11 × 11 elements
-mesh = RayTracingDomain2D([face], [(Ndim, Ndim)]) # mesh the domain
+mesh1 = build_mesh(Ndim) # build the 11 × 11 mesh
 ```
 
 ### Understanding the mesh numbering
@@ -129,9 +165,9 @@ centerline_vols = [center_col + (row - 1) * Ndim for row in 1:Ndim]    # that co
 # The remaining cells of the bottom row contribute their bottom edges as walls 3, 4, …, Ndim + 1.
 bottom_wall_indices = [1; collect(3:Ndim+1)]                           # every element of the bottom (hot) wall
 
-plotMesh(ax, mesh)                                                     # the mesh itself
-plotMesh(ax, mesh; volumeNumbers = centerline_vols)                    # label the centreline volumes (g…)
-plotMesh(ax, mesh; wallNumbers = bottom_wall_indices)                  # label the bottom wall elements (w…)
+plotMesh(ax, mesh1)                                                     # the mesh itself
+plotMesh(ax, mesh1; volumeNumbers = centerline_vols)                    # label the centreline volumes (g…)
+plotMesh(ax, mesh1; wallNumbers = bottom_wall_indices)                  # label the bottom wall elements (w…)
 
 fig
 ```
@@ -145,17 +181,23 @@ Volume elements are labelled **g*i*** and wall surfaces **w*i***. The indices sh
 ```julia
 record_ids = [10, 20, 30]  # optional ray recording for plotting (element numbers to record emission from)
 rec = RayRecorder(record_ids)  # create the ray recorder (also works in parallel)
-mesh(10^7; method = :exchange, rec = rec)  # Monte Carlo ray tracing (optional ray recorder keyword)
+mesh1(10^7; method = :exchange, rec = rec)  # ray tracing with the Sobol sampler (optional ray recorder keyword)
 origins, endpoints = collect_rays(rec)  # collect the results, can be used for plotting (one line per ray)
 ```
+
+`:exchange` samples an absorption depth for every ray, and it is the tracer the
+ray recorder belongs to. `:pathlength` records each ray's path through the
+medium instead and deposits along it, which makes it several times more
+accurate for participating media at the same ray count; it is the tracer used
+in Examples 3 and 4.
 
 ### Step 3: Smooth
 
 ```julia
-stats = smooth!(mesh)  # enforce reciprocity and energy conservation on F_raw
+stats = smooth!(mesh1)  # enforce reciprocity and energy conservation on F_raw
 ```
 
-`smooth!` produces `mesh.F_smooth` and returns convergence diagnostics, one entry
+`smooth!` produces `mesh1.F_smooth` and returns convergence diagnostics, one entry
 per spectral bin, so a run can be checked without reading the log:
 
 ```julia
@@ -169,7 +211,7 @@ The named tuple also carries iteration counts (`k_dykstra`, `k_ap`, `k_pcg_tot`,
 ### Step 4: Solve
 
 ```julia
-solveEquilibrium!(mesh, mesh.F_smooth)  # solve GERT system to obtain the steady state
+solveEquilibrium!(mesh1, mesh1.F_smooth)  # solve GERT system to obtain the steady state
 ```
 
 ### Step 5: Validate against Crosbie & Schrenker (1984)
@@ -180,14 +222,14 @@ The analytical solution for the dimensionless source function S(τ) = (T/T_hot)�
 using Plots
 
 # --- Left panel: solution temperature field via plotField ---
-p1 = plotField(mesh; field = :T, transparent_interfaces=true)
-xlabel!(p1, "Position / m")
-ylabel!(p1, "Position / m")
-title!(p1, "Temperature distribution")
+p1 = plotField(mesh1; field = :T, transparent_interfaces=true)
+Plots.xlabel!(p1, "Position / m")
+Plots.ylabel!(p1, "Position / m")
+Plots.title!(p1, "Temperature distribution")
 
 # Extract the centreline temperatures. The cells are stored row by row from the bottom (left to
 # right within a row), so reshaping into an Ndim × Ndim matrix gives Tg_matrix[column, row].
-all_temps  = [cell.T_g for cell in mesh.fine_mesh[1]]     # T_g: gas temperature of every cell of the (single) coarse face
+all_temps  = [cell.T_g for cell in mesh1.fine_mesh[1]]     # T_g: gas temperature of every cell of the (single) coarse face
 Tg_matrix  = reshape(all_temps, Ndim, Ndim)               # first index: column (x), second index: row (y)
 centerline = Tg_matrix[div(Ndim + 1, 2), :]               # the middle column, from the hot wall upwards
 
@@ -230,7 +272,69 @@ display(p)
 
 ![2D grey validation](fig/validation_2d_grey.png)
 
-The top panel shows the 2D temperature field; the bottom panel compares the computed centerline source function (blue dots) with the analytical reference (black line). Agreement is excellent for 10⁷ rays on an 11 × 11 mesh.
+The top panel shows the 2D temperature field; the bottom panel compares the computed centerline source function (blue dots) with the analytical reference (black line).
+
+To put a number on the agreement, the reference has to be evaluated where the solution lives. It is tabulated at 25 unevenly spaced optical depths, while the solution is known at the 11 cell centres. [ConvolutionInterpolations.jl](https://github.com/NikoBiele/ConvolutionInterpolations.jl) interpolates the table to the cell centres with a high-order kernel (`:b13` accepts nonuniform grids), after which the two can be compared point by point:
+
+```julia
+using ConvolutionInterpolations                                             # ] add ConvolutionInterpolations
+
+S_ref_itp   = convolution_interpolation((tau_ref,), S_ref; kernel = :b13)   # the reference as a function of optical depth
+S_ref_cells = [S_ref_itp(tau) for tau in tau_centers]                       # the reference at the 11 cell centres
+
+deviation = S_computed .- S_ref_cells                                       # solution minus reference, cell by cell
+rms_dev   = sqrt(sum(abs2, deviation) / Ndim)                               # root-mean-square deviation along the centreline
+max_dev   = maximum(abs.(deviation))                                        # largest deviation along the centreline
+
+println("Deviation from Crosbie & Schrenker: rms = ", round(rms_dev; sigdigits = 2),
+        ", max = ", round(max_dev; sigdigits = 2))                          # both in units of S, which runs from 0.09 to 0.63
+```
+
+For 10⁷ rays on the 11 × 11 mesh this prints an rms deviation of 2.4 × 10⁻⁴ and a maximum of 4.5 × 10⁻⁴, on a source function that runs from 0.09 to 0.63. The reference is tabulated to four decimals, so deviations below about 10⁻⁴ cannot be resolved by this comparison.
+
+### Step 6: Energy conservation, and why it is not the same as accuracy
+
+After the solve, displaying the domain prints a summary whose last line is the relative energy conservation error: everything that leaves the elements, minus everything that is absorbed or reflected somewhere, relative to the total.
+
+```
+RayTracingDomain2D
+  geometry   1 coarse face → 121 volumes, 44 surfaces
+  boundary   44 prescribed T, 121 prescribed source
+  spectral   grey
+  exchange   F_raw     165×165 sparse
+             F_smooth  165×165 dense
+  energy     6.34e-17 (relative conservation error)
+```
+
+The value is also available as `mesh.energy_error`. It sits at machine precision, and it does so for any number of rays: the rows of the exchange factor matrix sum to one, so the power that leaves the elements and the power that arrives at them are equal by construction, however well or badly the factors were sampled. Repeating the example with a thousand times fewer rays shows it, and shows at the same time that conservation says nothing about accuracy:
+
+```julia
+# rms deviation of the centreline source function from the interpolated reference (as in Step 5)
+function centreline_rms(m)
+    all_temps  = [cell.T_g for cell in m.fine_mesh[1]]                  # gas temperature of every cell
+    centerline = reshape(all_temps, Ndim, Ndim)[div(Ndim + 1, 2), :]    # the middle column, from the hot wall upwards
+    S          = (centerline ./ 1000.0) .^ 4                            # dimensionless source function
+    tau        = range(1 / (2Ndim), 1 - 1 / (2Ndim), length = Ndim)     # optical depth of the cell centres
+    return sqrt(sum(abs2, S .- [S_ref_itp(t) for t in tau]) / Ndim)     # rms deviation from the reference
+end
+
+few = build_mesh(Ndim)                                   # the same domain again
+few(10^4; method = :exchange)                            # 10⁴ rays instead of 10⁷: about 60 per element
+smooth!(few)                                             # reciprocity on the noisy factors
+solveEquilibrium!(few, few.F_smooth)                     # solve with the smoothed factors
+few.energy_error, centreline_rms(few)                    # conservation error and accuracy
+
+solveEquilibrium!(few, few.F_raw)                        # solve again, now with the raw factors
+few.energy_error, centreline_rms(few)                    # conservation error and accuracy
+```
+
+| rays | factors | energy conservation error | rms deviation from reference |
+|---|---|---|---|
+| 10⁷ | smoothed | 6.3 × 10⁻¹⁷ | 2.4 × 10⁻⁴ |
+| 10⁴ | smoothed | 7.9 × 10⁻¹⁷ | 3.1 × 10⁻² |
+| 10⁴ | raw | 7.5 × 10⁻¹⁶ | 8.1 × 10⁻² |
+
+Energy conservation is guaranteed by the formulation, so every GERT solution has it, the noisy ones included. How accurate a solution is, is a separate question: that depends on the number of rays, and it benefits from smoothing, which enforces reciprocity and here reduces the deviation by a factor of 2.6. A solution that conserves energy is therefore not automatically an accurate one, but an accurate GERT solution never has to be paid for with an energy imbalance.
 
 ### References
 
@@ -578,7 +682,7 @@ Tightening the tolerance, against the line-by-line reference (ψ_LBL = 0.49718):
 | 1e-3 |   31 |   3449 | 9.3e-4  |           0.47 K |           0.16 K |             −7.2e-6 |
 | 1e-4 |  128 |  17165 | 9.9e-5  |           0.48 K |           0.11 K |             +3.5e-5 |
 
-Two limits are visible. At 10⁷ rays every row sits on the Monte Carlo floor of
+Two limits are visible. At 10⁷ rays every row sits on the sampling floor of
 about 0.45 K, so a tighter tolerance buys nothing; at 10⁸ rays that floor drops
 to about 0.14 K, the 20-bin row is left at the 0.4 K its tolerance allows, and
 31 bins already reach the floor. Tighten `tol` until the error stops improving,
@@ -871,7 +975,7 @@ Each wedge is subdivided 11 × 11, exactly as the square in Example 1 — the fi
 ### Step 2: Ray trace, smooth and solve
 
 ```julia
-mesh(10^7; method = :exchange)      # Monte Carlo ray tracing
+mesh(10^7; method = :exchange)      # ray tracing
 smooth!(mesh) # smooth the ray tracing result to enforce energy conservation and reciprocity
 solveEquilibrium!(mesh, mesh.F_smooth)    # solve GERT system
 ```
@@ -888,17 +992,21 @@ Plots.plot!(p1, guidefontsize=12, tickfontsize=10,
             title = "Half-hot circular enclosure")
 display(p1)
 
-# Center-limit validation: gas elements adjacent to the center vertex
-T_limit = ((T_hot^4 + 0.0^4) / 2)^(1/4)              # ≈ 840.90 K
+# Center-limit validation: gas elements adjacent to the center vertex.
+# The GERT system is linear in emissive power, so swapping the hot and cold half-rims maps
+# every centre cell onto its antipode with T⁴ + T⁴_antipode = T_hot⁴ + T_cold⁴ exactly, on any
+# mesh. The symmetry therefore fixes the mean of T⁴ over the centre cells:
+T_limit = ((T_hot^4 + 0.0^4) / 2)^(1/4)              # ≈ 840.896 K
 T_g_mid = [fine[1].T_g for fine in mesh.fine_mesh]   # first fine element of each wedge
-println("analytical center limit : ", round(T_limit, digits = 2), " K")
-println("computed center mean    : ", round(mean(T_g_mid), digits = 2), " K")
-println("difference              : ", round(abs(T_limit - mean(T_g_mid)), digits = 2), " K")
+T_mean4 = (mean(T_g_mid .^ 4))^(1/4)                 # T⁴-mean of the centre cells
+println("analytical center limit : ", round(T_limit, digits = 4), " K")
+println("computed T⁴-mean         : ", round(T_mean4, digits = 4), " K")
+println("difference              : ", round(abs(T_limit - T_mean4), sigdigits = 2), " K")
 ```
 
 ![Half-hot circle](fig/circle_halfhot.png)
 
-The temperature field shows the smooth gradient from the hot to the cold hemisphere, and the computed center temperature agrees with the analytical limit to 0.02 K at 10⁷ rays (840.88 K computed vs 840.90 K analytical) — at the Monte Carlo noise floor of the exchange factors. Unlike the deterministic view factors of Examples 4 and 5, the 2D exchange factors here are ray-traced, so the comparison carries a statistical component; agreement at the noise floor is the expected result.
+The temperature field shows the smooth gradient from the hot to the cold hemisphere, and the computed centre temperature agrees with the analytical limit to 5 × 10⁻³ K at 10⁷ rays (840.9018 K computed vs 840.8964 K analytical). The symmetry argument holds on any mesh, so this deviation is sampling noise alone; a hundredfold increase to 10⁹ rays brings it to 3 × 10⁻⁴ K (840.8967 K). Unlike the deterministic view factors of Examples 6 and 7, the 2D exchange factors here are ray-traced, so the comparison carries a statistical component; another `seeds` value gives a deviation of similar size.
 
 The package test suite additionally verifies the isothermal limit on this geometry: with the entire rim at a single temperature, the solved gas field reproduces that temperature everywhere to within 10⁻³ K — a strong global check that the curved, open-spoke meshing introduces no artifacts.
 
@@ -1042,7 +1150,7 @@ noise floor.
 
 The temperature field shows a smooth gradient from the hot face (1000 K) to the cold face (0 K), with the side walls at intermediate temperatures determined by radiative equilibrium. The analytical view factors ensure exact geometric accuracy without statistical noise.
 
-### Step 7: Cross-validation against Monte Carlo ray tracing
+### Step 7: Cross-validation against ray tracing
 
 The same enclosure can be solved by tracing rays instead of evaluating view
 factors analytically. Both produce an exchange factor matrix, so everything
@@ -1061,10 +1169,10 @@ free = findall(sf -> sf.T_in_w < 0, [sf for f in domainMC.facesMesh for sf in f.
 println("rms |T_MC - T_VF| = ", sqrt(sum(abs2, T_MC[free] - T_VF[free]) / length(free)))
 ```
 
-The two agree to a relative rms of about 3 × 10⁻⁴ on the side walls at this ray
-count, and the error falls as 1/√N — a hundredfold increase in rays buys one
-decade of accuracy. That is the essential trade: view factors are machine precision
-and cost nothing to converge, while ray tracing pays for every digit.
+TThe two agree to an rms of 0.09 K on the side walls at this ray count, about
+1 × 10⁻⁴ of their temperature, and the deviation keeps falling with the number
+of rays. That is the essential trade: view factors are machine precision and
+cost nothing to converge, while ray tracing pays for every digit.
 
 Ray tracing earns its cost where view factors cannot go at all: enclosures that
 are not convex, where surfaces shadow one another. See Example 7.
@@ -1394,13 +1502,13 @@ DataInspector(fig)
 
 Rays are traced to first intersection only; reflections are handled by the
 solver, so `F_raw` is geometry alone. Smoothing starts from a reciprocity
-defect of order 10⁻² rather than Example 6's 10⁻¹³ — Monte Carlo breaks
+defect of order 10⁻² rather than Example 6's 10⁻¹³ — sampling breaks
 reciprocity at the noise level, not at roundoff — and reaches 10⁻¹⁵ either way.
 
-The trace uses all threads by default, so results are reproducible per machine
-but vary with thread count. Pass `nthreads` and `seeds` to pin them; `seeds`
-takes one seed per thread, or a single integer — runs with different integers
-are statistically independent.
+The trace uses all threads by default, and the result does not depend on how
+many: it is fixed by the geometry, the ray count and `seeds`, a single integer
+selecting the realisation. Runs with different integers are statistically
+independent (see *Sampling and reproducibility*).
 
 A ray either reaches a facet or it does not, so occlusion appears as exact
 structural zeros. The analytical method returns a substantial value for the

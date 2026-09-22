@@ -101,6 +101,10 @@ function equilibriumSurfacesSpectral3D_woodbury!(domain::SurfaceDomain3D{G,P}, F
     rhs_k_buf  = [zeros(G, N) for _ in 1:nchunks]
  
     verbose && println("\nStarting spectral steady-state iteration (Woodbury)...")
+    prev_error = G(Inf)               # convergence error of the previous sweep (floor detection)
+    went_up    = falses(10)           # for each of the last 10 sweeps: did the convergence error increase?
+    max_dT     = G(Inf)               # largest temperature change of the latest sweep [K]
+    convergence_error = one(G)
     for iter = 1:max_iters
  
         # ---- Woodbury solve of the bordered LS normal equations -----------
@@ -134,32 +138,46 @@ function equilibriumSurfacesSpectral3D_woodbury!(domain::SurfaceDomain3D{G,P}, F
         # ---- emission / temperature update (same order as 2D Woodbury) ----
         emissive = updateSpectralEmission!(domain, iter, F, sol_j,
                                            emitFrac, temperatures, emissive)
+        T_in_sweep = copy(temperatures)                 # temperatures fed into this update, for the reported change
         temperatures = updateTemperaturesSpectral!(domain, emissive,
                                            getBinsEmissionFractions(domain, temperatures))
+        max_dT = maximum(abs.(temperatures .- T_in_sweep))   # largest temperature change of this sweep [K]
         emitFrac = getWeightedEmissionFractions(domain, temperatures)
  
         # ---- convergence check (same criterion as _full!) ------------------
         convergence_error = norm(sol_j - previous_sol_j) / norm(sol_j)
         previous_sol_j .= sol_j
         if iter % 20 == 0
-            verbose && println("Iteration $iter: convergence error = $convergence_error")
+            verbose && println("Iteration $iter: convergence error = $convergence_error, largest temperature change = $max_dT K")
         end
- 
-        if iter > 1 && convergence_error < convergence_tol
-            verbose && println("Converged after $iter iterations")
-            # Compute energy conservation error for each spectral bin
-            # relative: power unaccounted for in the bin over the bin's total power
-            domain.energy_error = G.([let j = sol_j[(i - 1) * N + 1 : i * N]
-                                        sum((I - F') * j) / (sum(j) > 1000*eps(G) ? sum(j) : one(G))
-                                    end for i in 1:K])
-            verbose && println("Energy conservation errors by band: $(domain.energy_error)")
+
+        # Floor detection
+        went_up[mod1(iter, 10)] = convergence_error > prev_error
+        prev_error = convergence_error
+        at_floor = convergence_error < 4 * eps(G) || (convergence_error < 1e-10 && count(went_up) >= 4)
+
+        if iter > 1 && (convergence_error < convergence_tol || at_floor)
+            if convergence_error < convergence_tol
+                verbose && println("Converged after $iter iterations: convergence error = $convergence_error, ",
+                        "largest temperature change = $max_dT K")
+            else
+                verbose && println("Converged to rounding level after $iter iterations: convergence error = $convergence_error, ",
+                        "largest temperature change = $max_dT K (the requested tolerance $convergence_tol is below what the arithmetic resolves)")
+            end
             break
         end
- 
+
         if iter == max_iters
-            @warn "Warning: Maximum iterations reached. Final error = $convergence_error"
+            @warn "Warning: Maximum iterations reached. Final error = $convergence_error, largest temperature change = $max_dT K"
         end
     end
+
+    # Energy conservation error for each spectral bin, whichever way the loop ended
+    # (relative: power unaccounted for in the bin over the bin's total power)
+    domain.energy_error = G.([let j = sol_j[(i - 1) * N + 1 : i * N]
+                                sum((I - F') * j) / (sum(j) > 1000*eps(G) ? sum(j) : one(G))
+                            end for i in 1:K])
+    verbose && println("Energy conservation errors by band: $(domain.energy_error)")
  
     # ---- Write results to mesh (verbatim from _full!) ------------------------
     verbose && println("\nWriting spectral results to mesh...")

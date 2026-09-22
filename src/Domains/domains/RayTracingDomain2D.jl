@@ -116,7 +116,7 @@ function RayTracingDomain2D(faces::Vector{PolyVolume2D{G}}, Ndiv::Vector{Tuple{P
                             verbose::Bool=true, surfaces_only::Bool=false) where {G, P<:Integer}
     # First create the standard RayTracingMesh
     verbose && println("Building intermediate mesh...")
-    standardMesh = IntermediateMesh2D(faces, Ndiv)
+    standardMesh = IntermediateMesh2D(deepcopy(faces), Ndiv)
     
     # Then convert to optimized version with spectral support
     verbose && println("Optimizing mesh...")

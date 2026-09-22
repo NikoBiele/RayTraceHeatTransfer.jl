@@ -11,6 +11,7 @@ using StatsBase
 using SparseArrays
 using Krylov
 using ConvolutionInterpolations
+using Sobol: Sobol, SobolSeq
 
 # constants
 const xVecGlobal2D = SVector(1.0, 0.0)

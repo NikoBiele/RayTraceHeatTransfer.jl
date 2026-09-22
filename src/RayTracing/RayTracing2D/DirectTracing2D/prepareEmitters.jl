@@ -1,5 +1,5 @@
 function prepareEmitters(rtm::RayTracingDomain2D, nudge::G, spectral_bin::Int=1) where {G}
-    emitters = Emitter2D[]
+    emitters = Emitter2D{G}[]
     total_energy = zero(G)
 
     # Get system matrices
@@ -31,7 +31,7 @@ function prepareEmitters(rtm::RayTracingDomain2D, nudge::G, spectral_bin::Int=1)
             if face.T_in_w[wall_index] > -0.1
                 weighted_epsilon = sum([face.epsilon[wall_index][i] * emitFrac[surface_index, i] for i in 1:rtm.n_spectral_bins])
                 emissive[surface_index] = emitFrac[surface_index, spectral_bin]*weighted_epsilon*face.area[wall_index]*STEFAN_BOLTZMANN*face.T_in_w[wall_index]^4
-                if isfinite(emissive[surface_index])
+                if isfinite(emissive[surface_index]) && emissive[surface_index] > 0
                     push!(emitters, Emitter2D(:surface, coarse_index, fine_index, wall_index, emissive[surface_index]))
                     total_energy += emissive[surface_index]
                 end
@@ -43,31 +43,34 @@ function prepareEmitters(rtm::RayTracingDomain2D, nudge::G, spectral_bin::Int=1)
                 volume_count = num_surfaces + volume_index
                 weighted_kappa = sum([face.kappa_g[i] * emitFrac[volume_count, i] for i in 1:rtm.n_spectral_bins])
                 emissive[volume_count] = emitFrac[volume_count, spectral_bin]*4*STEFAN_BOLTZMANN*weighted_kappa*face.volume*face.T_in_g^4
-                if isfinite(emissive[volume_count])
+                if isfinite(emissive[volume_count]) && emissive[volume_count] > 0
                     push!(emitters, Emitter2D(:volume, coarse_index, fine_index, 0, emissive[volume_count]))
                     total_energy += emissive[volume_count]
                 end
             end
         end
     elseif rtm.spectral_mode == :grey # works!
-        # get emissive powers directly
+        # get emissive powers directly; only elements with a known temperature emit
         emissive = zeros(G, total_elements)
         for ((coarse_index, fine_index, wall_index), surface_index) in rtm.surface_mapping
             face = rtm.fine_mesh[coarse_index][fine_index]
-            emissive[surface_index] = face.epsilon[wall_index]*face.area[wall_index]*STEFAN_BOLTZMANN*face.T_in_w[wall_index]^4
-            if isfinite(emissive[surface_index])
-                push!(emitters, Emitter2D(:surface, coarse_index, fine_index, wall_index, emissive[surface_index]))
-                total_energy += emissive[surface_index]
+            if face.T_in_w[wall_index] > -0.1
+                emissive[surface_index] = face.epsilon[wall_index]*face.area[wall_index]*STEFAN_BOLTZMANN*face.T_in_w[wall_index]^4
+                if isfinite(emissive[surface_index]) && emissive[surface_index] > 0
+                    push!(emitters, Emitter2D(:surface, coarse_index, fine_index, wall_index, emissive[surface_index]))
+                    total_energy += emissive[surface_index]
+                end
             end
         end
-        num_surfaces = length(rtm.surface_mapping)
         for ((coarse_index, fine_index), volume_index) in rtm.volume_mapping
             face = rtm.fine_mesh[coarse_index][fine_index]
-            volume_count = num_surfaces + volume_index
-            emissive[volume_count] = 4*STEFAN_BOLTZMANN*face.kappa_g*face.volume*face.T_in_g^4
-            if isfinite(emissive[volume_count])
-                push!(emitters, Emitter2D(:volume, coarse_index, fine_index, 0, emissive[volume_count]))
-                total_energy += emissive[volume_count]
+            if face.T_in_g > -0.1
+                volume_count = num_surfaces + volume_index
+                emissive[volume_count] = 4*STEFAN_BOLTZMANN*face.kappa_g*face.volume*face.T_in_g^4
+                if isfinite(emissive[volume_count]) && emissive[volume_count] > 0
+                    push!(emitters, Emitter2D(:volume, coarse_index, fine_index, 0, emissive[volume_count]))
+                    total_energy += emissive[volume_count]
+                end
             end
         end
     end
@@ -76,14 +79,6 @@ function prepareEmitters(rtm::RayTracingDomain2D, nudge::G, spectral_bin::Int=1)
         error("No energy detected in mesh")
     end
 
-    # Normalize emitter energies
-    for emitter in emitters
-        if total_energy > 0.0 && isfinite(emitter.energy)
-            emitter.energy /= total_energy
-        else
-            emitter.energy = 0.0
-        end
-    end
-        
+    # energies are left unnormalised: the caller picks emitters from their cumulative sum
     return emitters, total_energy
 end

@@ -29,6 +29,9 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::S, nudge:
         return
     end
 
+    # cumulative emitter energies, built once: an emitter is then picked with one random number and a binary search
+    cdf = cumsum([e.energy for e in emitters])
+
     # Initialize counters for this spectral bin
     absorbed_count = [zeros(Int, length(coarse_face.subVolumes)) for coarse_face in rtm.coarse_mesh]
     gas_emitted_count = [zeros(Int, length(coarse_face.subVolumes)) for coarse_face in rtm.coarse_mesh]
@@ -50,8 +53,8 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::S, nudge:
         start_idx = end_idx + 1
     end
     
-    # Progress tracking
-    progress = Progress(rays_tot; dt = 1, desc = "  Bin $spectral_bin ray tracing: ")
+    # Progress tracking (only when verbose; assigned once so the threaded loop sees a concrete type)
+    progress = verbose ? Progress(rays_tot; dt = 1, desc = "  Bin $spectral_bin ray tracing: ") : nothing
     completed_work = Threads.Atomic{Int}(0)
     
     # Thread-safe locks for writing to counters
@@ -61,6 +64,7 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::S, nudge:
         ray_range = thread_assignments[tid]
         local_rng = rngs[tid] # Use thread ID as seed
         Random.seed!(rngs[tid], seeds[tid])
+        path = Tuple{Int,Int,Int,Symbol}[]      # interactions of the current ray, reused for every ray
         
         # Local counters for this thread
         local_absorbed_count = [zeros(Int, length(coarse_face.subVolumes)) for coarse_face in rtm.coarse_mesh]
@@ -71,7 +75,9 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::S, nudge:
         local_wall_absorbed_count = [[zeros(Int, length(face.solidWalls)) for face in coarse_face.subVolumes] for coarse_face in rtm.coarse_mesh]
 
         for ray in ray_range
-            emitter = sample(local_rng, emitters, Weights([e.energy for e in emitters]))
+            # pick an emitter in proportion to its energy
+            u = rand(local_rng, G) * cdf[end]
+            emitter = emitters[min(searchsortedfirst(cdf, u), length(emitters))]
             
             if emitter.type == :surface
                 fine_face = rtm.coarse_mesh[emitter.coarse_index].subVolumes[emitter.fine_index]
@@ -92,14 +98,14 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::S, nudge:
             end
             
             # Use spectral ray tracing interface
-            result = traceSingleRay(rtm, origin, direction, nudge, emitter.coarse_index, spectral_bin, 100_000, local_rng)
+            result = traceSingleRay!(path, rtm, origin, direction, nudge, emitter.coarse_index, spectral_bin, 100_000, local_rng)
             
             if result !== nothing
-                absorption_type, abs_coarse_index, abs_fine_index, abs_wall_index, path = result
+                abs_coarse_index, abs_fine_index, abs_wall_index = result
                 
-                if absorption_type == :surface
+                if abs_wall_index != 0                  # absorbed by a wall
                     local_wall_absorbed_count[abs_coarse_index][abs_fine_index][abs_wall_index] += 1
-                elseif absorption_type == :gas
+                else                                    # absorbed by the gas of that cell
                     local_absorbed_count[abs_coarse_index][abs_fine_index] += 1
                 end
                 
@@ -122,10 +128,10 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::S, nudge:
                 end
             end
             
-            # Update progress
-            Threads.atomic_add!(completed_work, 1)
-            if tid == 1 && (ray - ray_range.start + 1) % 100 == 0
-                update!(progress, completed_work[])
+            # Update progress in batches: one atomic update per 1000 rays instead of one per ray
+            if verbose && (ray - first(ray_range) + 1) % 1000 == 0
+                Threads.atomic_add!(completed_work, 1000)
+                tid == 1 && update!(progress, completed_work[])
             end
         end
         
@@ -147,7 +153,7 @@ function directRayTracingSingleBin!(rtm::RayTracingDomain2D, rays_tot::S, nudge:
         end
     end
     
-    finish!(progress)
+    verbose && finish!(progress)
     
     updateSpectralResults!(rtm, absorbed_count, gas_emitted_count, wall_emitted_count, 
                     reflected_count, scattered_count, wall_absorbed_count, 

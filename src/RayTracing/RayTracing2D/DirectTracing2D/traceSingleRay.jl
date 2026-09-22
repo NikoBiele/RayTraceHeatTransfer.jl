@@ -1,8 +1,8 @@
-function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
-                        direction::Point2{G}, nudge::G,
-                        current_coarse_index::P, spectral_bin::P, max_iters::P,
-                        rng::AbstractRNG) where {G, P<:Integer}
-    path = []
+function traceSingleRay!(path::Vector{Tuple{Int,Int,Int,Symbol}}, hmesh::RayTracingDomain2D,
+                         origin::Point2{G}, direction::Point2{G}, nudge::G,
+                         current_coarse_index::P, spectral_bin::P, max_iters::P,
+                         rng::AbstractRNG) where {G, P<:Integer}
+    empty!(path)
     iteration_count = 0
     
     while iteration_count < max_iters
@@ -16,7 +16,7 @@ function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
         # Pass spectral bin to trace_ray
         ray_result = traceRay(hmesh, origin, direction, nudge, current_coarse_index, spectral_bin, rng)
 
-        if ray_result === nothing
+        if ray_result === 0          # traceRay returns 0 for a ray that escaped or exceeded its iterations
             return nothing
         end
         
@@ -26,7 +26,7 @@ function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
             fine_face = hmesh.fine_mesh[next_coarse_index][next_fine_index]
             epsilon = fine_face.epsilon[next_wall_index]
             
-            if rand() < epsilon[spectral_bin]
+            if rand(rng, G) < epsilon[spectral_bin]
                 # Check if this wall element is in radiative equilibrium for this spectral bin
                 wall_temp = fine_face.T_in_w[next_wall_index]
                 if wall_temp < 0.0
@@ -34,17 +34,17 @@ function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
                     p_omit, direction = emitSurfaceRay2D(fine_face, next_wall_index, nudge, rng)
                     # nudge the point a tiny bit towards the midpoint, to ensure we are inside cell
                     origin = end_point + (fine_face.midPoint - end_point) * nudge
-                    push!(path, (next_coarse_index, next_fine_index, next_wall_index, :reemission))
+                    push!(path, (Int(next_coarse_index), Int(next_fine_index), Int(next_wall_index), :reemission))
                 else
                     # True absorption
-                    return (:surface, next_coarse_index, next_fine_index, next_wall_index, path)
+                    return (Int(next_coarse_index), Int(next_fine_index), Int(next_wall_index))
                 end
             else
                 # Reflection
                 normal = fine_face.inwardNormals[next_wall_index]
                 direction = sampleReflectionDirection2D(normal, rng)
                 origin = end_point
-                push!(path, (next_coarse_index, next_fine_index, next_wall_index, :reflection))
+                push!(path, (Int(next_coarse_index), Int(next_fine_index), Int(next_wall_index), :reflection))
             end
             
         else  # Gas interaction
@@ -63,7 +63,7 @@ function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
                 # Scattering
                 direction = isotropicScatter2D(nudge, rng) # pass nudge to pass type G
                 origin = end_point
-                push!(path, (next_coarse_index, next_fine_index, -1, :scattering))
+                push!(path, (Int(next_coarse_index), Int(next_fine_index), -1, :scattering))
             else
                 # Check if this gas element is in radiative equilibrium for this spectral bin
                 gas_temp = fine_face.T_in_g
@@ -71,10 +71,10 @@ function traceSingleRay(hmesh::RayTracingDomain2D, origin::Point2{G},
                     # Reemission
                     direction = isotropicScatter2D(nudge, rng) # pass nudge to pass type G
                     origin = end_point
-                    push!(path, (next_coarse_index, next_fine_index, 0, :reemission))
+                    push!(path, (Int(next_coarse_index), Int(next_fine_index), 0, :reemission))
                 else
                     # True absorption
-                    return (:gas, next_coarse_index, next_fine_index, 0, path)
+                    return (Int(next_coarse_index), Int(next_fine_index), 0)
                 end
             end
         end

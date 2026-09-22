@@ -157,8 +157,13 @@ function equilibriumSpectralDirectional2D!(rtm::RayTracingDomain2D, F_matrices::
     end
 
     verbose && println("  Starting spectral-directional sweeps...")
+    prev_error = Inf                  # convergence error of the previous sweep (floor detection)
+    went_up    = falses(10)           # for each of the last 10 sweeps: did the convergence error increase?
+    max_dT     = Inf                  # largest temperature change of the latest sweep [K]
     for iter in 1:max_iters
+        T_in_sweep = copy(temperatures)                 # temperatures fed into this sweep, for the reported change
         emissive, emitFrac, temperatures = sweep!(emissive, emitFrac, temperatures, iter)
+        max_dT = maximum(abs.(temperatures .- T_in_sweep))   # largest temperature change of this sweep [K]
 
         num = 0.0; den = 0.0
         for k in 1:K
@@ -166,15 +171,29 @@ function equilibriumSpectralDirectional2D!(rtm::RayTracingDomain2D, F_matrices::
             previous[k] .= sol[k]
         end
         convergence_error = sqrt(num / den)
-        (verbose && iter % 20 == 0) && println("  Iteration $iter: convergence error = $convergence_error")
+        (verbose && iter % 20 == 0) && println("  Iteration $iter: convergence error = $convergence_error, largest temperature change = $max_dT K")
 
-        done = iter > 1 && convergence_error < convergence_tol
+        # Floor detection
+        went_up[mod1(iter, 10)] = convergence_error > prev_error
+        prev_error = convergence_error
+        at_floor = convergence_error < 4 * eps(Float64) || (convergence_error < 1e-10 && count(went_up) >= 4)
+
+        done_tol = iter > 1 && convergence_error < convergence_tol
+        done     = done_tol || (iter > 1 && at_floor)
         if done || iter == max_iters
-            done || @warn "Warning: Maximum iterations reached, final errors: convergence error = $convergence_error"
+            done || @warn "Warning: Maximum iterations reached, final errors: convergence error = $convergence_error, largest temperature change = $max_dT K"
             emissive, emitFrac, temperatures = sweep!(emissive, emitFrac, temperatures, max(iter, 2))
             emissive     = emission_from_solution()
             temperatures = updateTemperaturesSpectral!(rtm, emissive, getBinsEmissionFractions(rtm, temperatures))
-            done && verbose && println("  Converged after $iter iterations, convergence error = $convergence_error")
+            if done
+                if done_tol
+                    verbose && println("  Converged after $iter iterations: convergence error = $convergence_error, ",
+                            "largest temperature change = $max_dT K")
+                else
+                    verbose && println("  Converged to rounding level after $iter iterations: convergence error = $convergence_error, ",
+                            "largest temperature change = $max_dT K (the requested tolerance $convergence_tol is below what the arithmetic resolves)")
+                end
+            end
             break
         end
     end

@@ -1,23 +1,7 @@
-# Record geometric ray paths once (method = :pathlength). The emitters, emission
-# sampling and threading mirror computeExchangeFactorsBin; the only difference
-# is that rays are walked to the wall with traceRayPath! and their cell
-# sequences stored instead of one absorption tally per ray.
-#
-# With `chunk_rays < rays_total` the rays are recorded in chunks: each chunk is
-# deposited into every bin's exchange factors and then discarded, so memory is
-# bounded by the chunk size while the trace is still done once for all bins.
-# The recorded paths are not kept in that case (rtm.path_store = nothing), so
-# a later change of κ requires a new trace; when the whole trace fits in one
-# chunk (rays_total ≤ chunk_rays, default 10 M) the store is kept and
-# exchangeFactors! can be called again at no tracing cost.
-# A chunked trace visits every emitter once per chunk, so it consumes the
-# per-thread random streams in a different order than a single-chunk trace:
-# with the same seeds the two are independent realisations, equal only
-# statistically. Compare runs at the same chunk_rays.
-
 function pathRayTracing!(rtm::RayTracingDomain2D, rays_total::S, nudge::G, verbose::Bool,
                          seeds::Union{UnitRange{P},Vector{P}}, rngs::Vector{<:AbstractRNG},
-                         nthreads::K; chunk_rays::Integer = 10_000_000) where {S<:Integer, P<:Integer, K<:Integer, G}
+                         nthreads::K; chunk_rays::Integer = 10_000_000,
+                         sampler::Symbol = :random, sobol_seed::Integer = 1) where {S<:Integer, P<:Integer, K<:Integer, G}
     rtm.surfaces_only &&
         error("method = :pathlength requires a participating medium; use :exchange for surface-only domains")
     chunk_rays >= 1 || throw(ArgumentError("chunk_rays must be positive"))
@@ -60,9 +44,17 @@ function pathRayTracing!(rtm::RayTracingDomain2D, rays_total::S, nudge::G, verbo
     dirs  = [Point2{Float32}[] for _ in 1:nthreads]
     buffers = (cells, lens, nseg, emit, ends, dirs)
 
-    # seed once; chunks continue the same streams
-    for tid in 1:nthreads
-        Random.seed!(rngs[tid], seeds[tid])
+    # random numbers: one Sobol source per emitter (:sobol) or one stream per thread (:random);
+    # either way they are set up once, and chunks continue them
+    per_emitter = sampler == :sobol
+    if per_emitter
+        # :pathlength draws no absorption depth (false); one trace serves all bins (bin = 1)
+        ray_rngs = sobolEmitterRNGs2D(rtm, all_emitters, num_surfaces, false, sobol_seed, 1)
+    else
+        for tid in 1:nthreads
+            Random.seed!(rngs[tid], seeds[tid])
+        end
+        ray_rngs = rngs
     end
 
     if n_chunks == 1
@@ -76,8 +68,8 @@ function pathRayTracing!(rtm::RayTracingDomain2D, rays_total::S, nudge::G, verbo
 
     if n_chunks == 1
         store = _record_paths!(rtm, buffers, all_emitters, thread_assignments, surface_mapping, volume_mapping,
-                               num_surfaces, num_volumes, rays_per_emitter, rays_per_emitter, nudge, rngs, nthreads,
-                               verbose, verbose ? progress : nothing, completed)
+                               num_surfaces, num_volumes, rays_per_emitter, rays_per_emitter, nudge, ray_rngs,
+                               per_emitter, nthreads, verbose, verbose ? progress : nothing, completed)
         verbose && finish!(progress)
         empty!.(cells); empty!.(lens); empty!.(nseg); empty!.(emit); empty!.(ends); empty!.(dirs)
         GC.gc()
@@ -105,10 +97,10 @@ function pathRayTracing!(rtm::RayTracingDomain2D, rays_total::S, nudge::G, verbo
 
     for (ic, rays_this_chunk) in enumerate(chunk_sizes)
         store = _record_paths!(rtm, buffers, all_emitters, thread_assignments, surface_mapping, volume_mapping,
-                               num_surfaces, num_volumes, rays_this_chunk, rays_per_emitter, nudge, rngs, nthreads,
-                               verbose, verbose ? progress : nothing, completed)
+                               num_surfaces, num_volumes, rays_this_chunk, rays_per_emitter, nudge, ray_rngs,
+                               per_emitter, nthreads, verbose, verbose ? progress : nothing, completed)
         empty!.(cells); empty!.(lens); empty!.(nseg); empty!.(emit); empty!.(ends); empty!.(dirs)
-
+        
         recorded += n_rays(store); segments += n_segments(store)
 
         if dm === nothing
@@ -155,18 +147,14 @@ function pathRayTracing!(rtm::RayTracingDomain2D, rays_total::S, nudge::G, verbo
     return nothing
 end
 
-# Record `rays_this_chunk` rays from every emitter into the per-thread buffers
-# and return them as a RayPathStore. Buffers must be empty on entry; the rngs
-# are used as they are (no reseeding), so successive calls continue the streams.
 function _record_paths!(rtm::RayTracingDomain2D, buffers, all_emitters, thread_assignments,
                         surface_mapping, volume_mapping, num_surfaces::Int, num_volumes::Int,
-                        rays_this_chunk::Int, rays_per_emitter::Int, nudge, rngs, nthreads::Int,
-                        verbose::Bool, progress, completed)
+                        rays_this_chunk::Int, rays_per_emitter::Int, nudge, rngs, per_emitter::Bool,
+                        nthreads::Int, verbose::Bool, progress, completed)
     cells, lens, nseg, emit, ends, dirs = buffers
 
     @threads for tid in 1:nthreads
         cl, ll, nl, el, wl, dl = cells[tid], lens[tid], nseg[tid], emit[tid], ends[tid], dirs[tid]
-        local_rng = rngs[tid]
 
         for global_emitter_idx in thread_assignments[tid]
             emitter_key, global_idx = all_emitters[global_emitter_idx]
@@ -175,8 +163,10 @@ function _record_paths!(rtm::RayTracingDomain2D, buffers, all_emitters, thread_a
             fine_index::Int   = emitter_key[2]
             wall_index::Int   = is_surface ? emitter_key[3] : 0
             face = rtm.fine_mesh[coarse_index][fine_index]
+            local_rng = per_emitter ? rngs[global_emitter_idx] : rngs[tid]   # the emitter's Sobol source, or the thread's stream
 
             for _ in 1:rays_this_chunk
+                nextRay!(local_rng)                                          # next Sobol point (no-op for ordinary generators)
                 p_emit, dir_emit = is_surface ? emitSurfaceRay2D(face, wall_index, nudge, local_rng) :
                                                 emitVolumeRay2D(face, nudge, local_rng)
                 n_before = length(cl)
@@ -293,14 +283,6 @@ function _assemble_bin(I::Vector{Int}, J::Vector{Int}, V::Vector{Float64}, N::In
     return sparse(I, J, V, N, N)
 end
 
-# Deposit one store into every bin in a single pass over the segments. Rays
-# are stored in emitter order, so emitters are split into contiguous blocks,
-# one per thread, each with its own dense row buffer (n_bins × N) that is
-# flushed to per-bin triplet lists after each emitter. Along a ray the
-# transmission t_k = e^{-τ_k} is carried per bin and updated multiplicatively,
-# so each segment costs one exp per bin. Returns per-bin (I, J, V) with
-# UNNORMALISED row sums; duplicate (I, J) pairs across blocks/chunks are summed
-# by sparse() in _assemble_bin. βT is n_bins × n_volumes (bin-major).
 function _deposit_all_bins(store::RayPathStore, βT::Matrix{Float64}, ns::Int, N::Int)
     n_bins = size(βT, 1)
     seg_cell, seg_len, ray_start = store.seg_cell, store.seg_len, store.ray_start
@@ -372,10 +354,6 @@ function _deposit_all_bins(store::RayPathStore, βT::Matrix{Float64}, ns::Int, N
 end
 
 # ---- directional deposition ---------------------------------------------------
-# Same walk as _deposit_all_bins with one more index: every ray deposits into the
-# angular bin of its direction (fixed along the ray, since exchange factors are
-# first-interaction only), so the row buffer is n_bins × (N·A) with column
-# (a − 1)·N + c. Returns triplets I[k][a], J[k][a], V[k][a] with UNNORMALISED sums.
 function _deposit_all_bins_directional(store::RayPathStore, βT::Matrix{Float64}, ns::Int, N::Int,
                                        dm::AbstractDirectionalModel)
     n_bins = size(βT, 1)
@@ -452,9 +430,6 @@ function _deposit_all_bins_directional(store::RayPathStore, βT::Matrix{Float64}
     return I, J, V
 end
 
-# One spectral bin: normalise every direction bin's triplets by the emitter's total
-# deposit over ALL direction bins (= its kept ray count), so the angular matrices sum
-# to a row-stochastic F. sparse() sums duplicate triplets, which merges the chunks.
 function _assemble_directional(I::Vector{Vector{Int}}, J::Vector{Vector{Int}}, V::Vector{Vector{Float64}}, N::Int)
     rowsum = zeros(N)
     @inbounds for a in eachindex(V), i in eachindex(V[a])

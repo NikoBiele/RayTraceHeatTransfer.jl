@@ -2,10 +2,10 @@ function calculateInwardNormal(p1::Point2{G}, p2::Point2{G}, midpoint::Point2{G}
     edge = p2 - p1
     normal = normalize(Point2{G}(edge[2], -edge[1])) # normal
     
-    # Check if normal is pointing outward
+    # Flip the normal if it points away from the cell's midpoint (outward)
     wall_midpoint = (p1 + p2) / 2
-    if dot(normal, wall_midpoint - midpoint) < 0
-        normal = -normal  # Flip if pointing outward
+    if dot(normal, midpoint - wall_midpoint) < 0
+        normal = -normal
     end
     
     return normal
@@ -16,6 +16,7 @@ function calculateInwardNormal(p1::Point3{G}, p2::Point3{G}, p3::Point3{G}, midp
     edge2 = p3 - p1
     normal = normalize(cross(edge1, edge2))
     
+    # Flip the normal if it points away from the cell's midpoint (outward)
     face_midpoint = (p1 + p2 + p3) / 3
     if dot(normal, midpoint - face_midpoint) < 0
         normal = -normal

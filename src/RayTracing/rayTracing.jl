@@ -1,3 +1,6 @@
+# Sobol sampling (shared by the 2D and 3D tracers)
+include(joinpath(@__DIR__, "sobolSampler.jl"))
+
 # direct ray tracing 2D
 include(joinpath(@__DIR__, "RayTracing2D", "DirectTracing2D", "Emitter2D.jl"))
 include(joinpath(@__DIR__, "RayTracing2D", "DirectTracing2D", "directRayTracing.jl"))

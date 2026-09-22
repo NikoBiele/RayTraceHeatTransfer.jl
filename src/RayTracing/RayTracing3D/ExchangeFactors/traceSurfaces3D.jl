@@ -1,5 +1,3 @@
-# ---------------------------------------------------------------- sampling
-
 @inline function sampleTriangle(a::Point3{G}, b::Point3{G}, c::Point3{G}, rng) where {G}
     s = sqrt(rand(rng, G))
     u = rand(rng, G)
@@ -32,28 +30,34 @@ end
     return p_emit, dir_emit
 end
 
-# ---------------------------------------------------------------- tracing
-
-"""
-    traceSurfaces3D(domain, rays_tot; seeds, verbose)
-
-First-hit Monte Carlo trace over a transparent 3D surface enclosure,
-producing a sparse wavelength-independent `F_raw`. No reflections are
-traced: emissivity enters downstream in the GERT solve. Rays that escape
-the enclosure are reported by `row_normalize!` as the row-sum deficit.
-`seeds` takes one seed per thread, or a single integer `s`, which selects the
-`s`-th block of `nthreads` seeds, so runs with different integers are independent.
-"""
 function traceSurfaces3D(domain::RayTracingDomain3D_surfaces{G,P}, rays_tot::Integer,
                         trace_nudge::G; 
                         nthreads::S=Threads.nthreads(),
                         seeds::Union{Vector{K},K,UnitRange{K},Nothing}=nothing,
                         rngs::Union{Vector{<:Random.AbstractRNG},<:Random.AbstractRNG,Nothing}=nothing,
+                        sampler::Union{Symbol,Nothing}=nothing,
                         verbose::Bool = true) where {G,S<:Integer,K<:Integer,P<:Integer}
 
     if nthreads > Threads.nthreads()
         @warn "The number of input threads is higher than the available number of the session."
     end
+
+    # Sampler: every ray of this tracer consumes a fixed number of random numbers, so Sobol is the default
+    sampler === nothing || sampler in (:sobol, :random) ||
+        error("Unknown sampler: $sampler, must be :sobol or :random.")
+    use_sobol = sampler === nothing || sampler == :sobol
+    if use_sobol
+        rngs === nothing ||
+            error("`rngs` has no meaning with Sobol sampling (the default for the 3D surface tracer): the points " *
+                  "come from one Sobol sequence per element. Pass sampler = :random to use your own generators.")
+        seeds === nothing || seeds isa Integer ||
+            error("Sobol sampling (the default for the 3D surface tracer) takes a single integer seed, which selects " *
+                  "the realisation; the result does not depend on the number of threads. " *
+                  "Pass sampler = :random to use one seed per thread.")
+        seeds === nothing || seeds >= 1 || error("an integer seed must be ≥ 1, got $seeds")
+    end
+    sobol_seed = (use_sobol && seeds !== nothing) ? Int(seeds) : 1
+    use_sobol && (seeds = nothing)       # the per-thread seeds below are unused by the Sobol sampler
 
     if seeds === nothing
         seeds = 1:nthreads
@@ -108,19 +112,51 @@ function traceSurfaces3D(domain::RayTracingDomain3D_surfaces{G,P}, rays_tot::Int
     verbose && (progress  = Progress(num_emitters; dt = 1, desc = "  Tracing progress: "))
     completed = Threads.Atomic{Int}(0)
 
-    @threads for tid in 1:nthreads
+    # random numbers: one Sobol source per element (:sobol) or one stream per thread (:random).
+    # Draw order of a ray: [triangle selector, quads only,] s, u (position), r1, r2 (direction),
+    # so a triangular element draws 4 numbers and a quad 5.
+    if use_sobol
+        ray_rngs = [SobolEmitterRNG(f.nv == 3 ? 4 : 5, sobol_seed, 1, i) for (i, f) in enumerate(facets)]
+    else
+        for tid in 1:nthreads
+            Random.seed!(rngs[tid], seeds[tid])
+        end
+        ray_rngs = rngs
+    end
+
+    # the loop lives in its own function: `seeds` and `rngs` are reassigned above, and a threaded
+    # loop in this function would capture them boxed (untyped), slowing every ray
+    _traceSurfaces3DLoop!(Is, Js, Vs, facets, tris, bvh, nudge, ray_rngs, use_sobol, thread_assignments,
+                          rays_per_emitter, inv_rays, verbose, verbose ? progress : nothing, completed)
+    verbose && finish!(progress)
+
+    F_raw = sparse(reduce(vcat, Is), reduce(vcat, Js), reduce(vcat, Vs),
+                   num_emitters, num_emitters)
+    empty!.(Is); empty!.(Js); empty!.(Vs)
+    GC.gc()
+
+    domain.F_raw = row_normalize!(F_raw, rays_per_emitter, verbose)
+    return domain
+end
+
+# Threaded first-hit loop. `rngs` holds one generator per element (per_emitter = true, Sobol)
+# or one per thread (per_emitter = false, pseudorandom); they are used as they are.
+function _traceSurfaces3DLoop!(Is, Js, Vs, facets, tris, bvh, nudge, rngs, per_emitter::Bool,
+                               thread_assignments, rays_per_emitter::Int, inv_rays,
+                               verbose::Bool, progress, completed)
+    @threads for tid in 1:length(thread_assignments)
         Il, Jl, Vl = Is[tid], Js[tid], Vs[tid]
         row   = Dict{Int,Int}()          # absorber → count, reused per emitter
         stack = Int32[]                  # BVH traversal stack, reused per emitter
         sizehint!(stack, 64)
-        local_rng   = rngs[tid]
-        Random.seed!(rngs[tid], seeds[tid])
 
         for global_idx in thread_assignments[tid]
             f = facets[global_idx]
+            local_rng = per_emitter ? rngs[global_idx] : rngs[tid]   # the element's Sobol source, or the thread's stream
             empty!(row)
 
             for _ in 1:rays_per_emitter
+                nextRay!(local_rng)                     # next Sobol point (no-op for ordinary generators)
                 p_emit, dir_emit = emitSurfaceRay3D(f, nudge, local_rng)
                 a, _ = closestHit(bvh, tris, p_emit, dir_emit, stack)
                 a < 0 && continue                       # escaped the enclosure
@@ -135,15 +171,7 @@ function traceSurfaces3D(domain::RayTracingDomain3D_surfaces{G,P}, rays_tot::Int
             verbose && (tid == 1 && update!(progress, completed[]))
         end
     end
-    verbose && finish!(progress)
-
-    F_raw = sparse(reduce(vcat, Is), reduce(vcat, Js), reduce(vcat, Vs),
-                   num_emitters, num_emitters)
-    empty!.(Is); empty!.(Js); empty!.(Vs)
-    GC.gc()
-
-    domain.F_raw = row_normalize!(F_raw, rays_per_emitter, verbose)
-    return domain
+    return nothing
 end
 
 @inline function intersectTri(t::Tri3D{G}, o::Point3{G}, d::Point3{G}, tmax::G) where {G}

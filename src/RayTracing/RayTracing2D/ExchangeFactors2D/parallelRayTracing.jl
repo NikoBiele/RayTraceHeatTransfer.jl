@@ -2,7 +2,8 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::S,
                                         nudge::G, verbose::Bool,
                                         seeds::Union{UnitRange{P},Vector{P}}, rngs::Vector{<:AbstractRNG},
                                         nthreads::K;
-                                        rec=nothing) where {S<:Integer, P<:Integer, K<:Integer, G}
+                                        rec=nothing, sampler::Symbol=:random,
+                                        sobol_seed::Integer=1) where {S<:Integer, P<:Integer, K<:Integer, G}
 
     surface_mapping, volume_mapping, num_surfaces, num_volumes = createIndexMapping(rtm, rays_total)
     num_emitters = num_surfaces + num_volumes
@@ -25,7 +26,8 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::S,
             F_raw_bin = computeExchangeFactorsBin(
                 rtm, rays_per_emitter, nudge, bin,
                 surface_mapping, volume_mapping, num_surfaces,
-                num_volumes, num_emitters, verbose, rec, seeds, rngs, nthreads
+                num_volumes, num_emitters, verbose, rec, seeds, rngs, nthreads;
+                sampler, sobol_seed
             )
             F_raw_vector[bin] = F_raw_bin
         end
@@ -37,7 +39,8 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::S,
             F_raw_bin = computeExchangeFactorsBin(
                 rtm, rays_per_emitter, nudge, representative_bin,
                 surface_mapping, volume_mapping, num_surfaces,
-                num_volumes, num_emitters, verbose, rec, seeds, rngs, nthreads
+                num_volumes, num_emitters, verbose, rec, seeds, rngs, nthreads;
+                sampler, sobol_seed
             )
             for j in idx_group
                 F_raw_vector[j] = F_raw_bin
@@ -57,7 +60,8 @@ function parallelRayTracing(rtm::RayTracingDomain2D, rays_total::S,
         F_raw = computeExchangeFactorsBin(
             rtm, rays_per_emitter, nudge, 1,  # Use bin 1 (doesn't matter for uniform)
             surface_mapping, volume_mapping, num_surfaces,
-            num_volumes, num_emitters, verbose, rec, seeds, rngs, nthreads
+            num_volumes, num_emitters, verbose, rec, seeds, rngs, nthreads;
+            sampler, sobol_seed
         )
         
         if rtm.surfaces_only
@@ -73,7 +77,8 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::S,
                                  surface_mapping, volume_mapping, num_surfaces,
                                  num_volumes, num_emitters, verbose, rec,
                                  seeds::Union{UnitRange{K},Vector{K}}, rngs::Vector{<:AbstractRNG},
-                                 nthreads::P) where {S<:Integer, P<:Integer, K<:Integer, G}
+                                 nthreads::P; sampler::Symbol = :random,
+                                 sobol_seed::Integer = 1) where {S<:Integer, P<:Integer, K<:Integer, G}
 
     # Combined, globally-sorted emitter list
     all_emitters = Vector{Tuple{Any, Int}}()
@@ -107,47 +112,40 @@ function computeExchangeFactorsBin(rtm::RayTracingDomain2D, rays_per_emitter::S,
     verbose && (completed = Threads.Atomic{Int}(0))
     inv_rays  = 1.0 / rays_per_emitter
 
+    # random numbers: one Sobol source per emitter (:sobol) or one stream per thread (:random).
+    per_emitter = sampler == :sobol
+    ray_rngs = per_emitter ? sobolEmitterRNGs2D(rtm, all_emitters, num_surfaces, true, sobol_seed, spectral_bin) : rngs
+
     @threads for tid in 1:nthreads
         Il, Jl, Vl = Is[tid], Js[tid], Vs[tid]
-        local_rng   = rngs[tid]
-        Random.seed!(rngs[tid], seeds[tid])
+        per_emitter || Random.seed!(rngs[tid], seeds[tid])
         row = Dict{Int,Int}()                      # absorber → count, reused per emitter
 
         for global_emitter_idx in thread_assignments[tid]
             emitter_key, global_idx = all_emitters[global_emitter_idx]
+            local_rng = per_emitter ? ray_rngs[global_emitter_idx] : ray_rngs[tid]   # the emitter's Sobol source, or the thread's stream
             recording = rec !== nothing && global_idx in rec.ids && spectral_bin == rec.bin
             empty!(row)
 
-            if global_idx <= num_surfaces
-                coarse_index, fine_index, wall_index = emitter_key
-                face = rtm.fine_mesh[coarse_index][fine_index]
-                for _ in 1:rays_per_emitter
-                    p_emit, dir_emit = emitSurfaceRay2D(face, wall_index, nudge, local_rng)
-                    result = traceRay(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin, local_rng)
-                    result === 0 && continue
-                    a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result[1], result[2], result[3], result[4])
-                    a == -1 && continue
-                    if recording
-                        push!(rec.origins[tid],   p_emit)
-                        push!(rec.endpoints[tid], result[end])
-                    end
-                    row[a] = get(row, a, 0) + 1
+            is_surface = global_idx <= num_surfaces
+            coarse_index::Int = emitter_key[1]
+            fine_index::Int   = emitter_key[2]
+            wall_index::Int   = is_surface ? emitter_key[3] : 0
+            face = rtm.fine_mesh[coarse_index][fine_index]
+
+            for _ in 1:rays_per_emitter
+                nextRay!(local_rng)                        # next Sobol point (no-op for ordinary generators)
+                p_emit, dir_emit = is_surface ? emitSurfaceRay2D(face, wall_index, nudge, local_rng) :
+                                                emitVolumeRay2D(face, nudge, local_rng)
+                result = traceRay(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin, local_rng)
+                result === 0 && continue
+                a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces, result[1], result[2], result[3], result[4])
+                a == -1 && continue
+                if recording
+                    push!(rec.origins[tid],   p_emit)
+                    push!(rec.endpoints[tid], result[end])
                 end
-            else
-                coarse_index, fine_index = emitter_key
-                face = rtm.fine_mesh[coarse_index][fine_index]
-                for _ in 1:rays_per_emitter
-                    p_emit, dir_emit = emitVolumeRay2D(face, nudge, local_rng)
-                    result = traceRay(rtm, p_emit, dir_emit, nudge, coarse_index, spectral_bin, local_rng)
-                    result === 0 && continue
-                    a = getGlobalIndex2D(surface_mapping, volume_mapping, num_surfaces,  result[1], result[2], result[3], result[4])
-                    a == -1 && continue
-                    if recording
-                        push!(rec.origins[tid],   p_emit)
-                        push!(rec.endpoints[tid], result[end])
-                    end
-                    row[a] = get(row, a, 0) + 1
-                end
+                row[a] = get(row, a, 0) + 1
             end
 
             # Flush this emitter's row into the thread's COO buffers, already normalized to F

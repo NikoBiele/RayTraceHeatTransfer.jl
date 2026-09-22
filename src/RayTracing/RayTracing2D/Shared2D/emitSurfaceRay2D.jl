@@ -17,12 +17,10 @@ function emitSurfaceRay2D(face::PolyVolume2D{G}, wall_index::P, nudge::G,
     # unit vectors in local coordinate system
     xVecLocal = normalize(p2-p1)
     yVecLocal = Point2{G}(-xVecLocal[2], xVecLocal[1])
-    
-    # rotate according to rotation matrix
-    RotationMatrix = [dot(xVecGlobal2D, xVecLocal) dot(xVecGlobal2D, yVecLocal);
-                      dot(yVecGlobal2D, xVecLocal) dot(yVecGlobal2D, yVecLocal)]
-    i1_init = RotationMatrix*i1_loc # emission direction (global coordinate system)
-    i1 = Point2{G}(i1_init[1], i1_init[2])
+
+    # rotate to the global coordinate system. The global basis is the identity:
+    i1 = Point2{G}(xVecLocal[1]*i1_loc[1] + yVecLocal[1]*i1_loc[2],
+                   xVecLocal[2]*i1_loc[1] + yVecLocal[2]*i1_loc[2])
 
     return p, i1
 end
