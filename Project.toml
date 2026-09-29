@@ -1,6 +1,6 @@
 name = "RayTraceHeatTransfer"
 uuid = "7cf1493d-886e-405c-b582-53b49fa147b6"
-version = "0.19.0"
+version = "0.19.1"
 authors = ["Nikolaj Maack Bielefeld"]
 
 [deps]
@@ -24,18 +24,18 @@ RayTraceHeatTransferMakieExt = "Makie"
 RayTraceHeatTransferPlotsExt = "Plots"
 
 [compat]
-ConvolutionInterpolations = "0.23.0 - 0.23.0"
-GeometryBasics = "0.1.0 - 0.5.11"
-Krylov = "0.9.0 - 0.10.9"
-Makie = "0.15.1 - 0.24.13"
-Plots = "1.30 - 1.41.7"
-ProgressMeter = "1.0.0 - 1.11"
+ConvolutionInterpolations = "0.23 - 0.28"
+GeometryBasics = "0.1 - 0.5"
+Krylov = "0.9 - 0.10"
+Makie = "0.15 - 0.24"
+Plots = "1.30 - 1.41"
+ProgressMeter = "1.0 - 1.11"
 Random = "1.0 - 1.11"
-Sobol = "1.0.0 - 1.5.0"
-SparseArrays = "1.0.0 - 1.13.0"
-SpecialFunctions = "1.0.0 - 2.9.0"
-StaticArrays = "1.0 - 1.9.19"
-StatsBase = "0.25.1 - 0.34.13"
+Sobol = "1.0 - 1.5.0"
+SparseArrays = "1.0 - 1.14"
+SpecialFunctions = "1.0 - 2.9"
+StaticArrays = "1.0 - 1.9"
+StatsBase = "0.25 - 0.34"
 julia = "1.10"
 
 [extras]
