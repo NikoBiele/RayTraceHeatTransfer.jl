@@ -1678,7 +1678,7 @@ t_build = @elapsed big = RayTracingDomain2D([face], [(Nlarge, Nlarge)]; verbose 
 
 ### Step 2: A billion rays, then smoothing
 
-The counting tracer `:exchange` is used here: it is the tracer that benefits most from smoothing. Pseudorandom sampling shows the noise at its largest; Sobol sampling, the package default, gives a quieter trace.
+The counting tracer `:exchange` is used here: pseudorandom sampling leaves the most noise, so it shows the effect of smoothing most clearly.
 
 ```julia
 sampler  = :random                                                      # pseudorandom; :sobol is the default
@@ -1769,7 +1769,7 @@ The documentation of this package will gradually be rolled out in an online book
 
 ## References
 
-The core methodology is presented in [Bielefeld (2026)](https://arxiv.org/abs/2512.22157). The 3D view factor implementation follows [Narayanaswamy (2015)](https://doi.org/10.1016/j.ijheatmasstransfer.2015.07.131). This work was inspired in part by [Howell, Mengüç, Daun & Siegel (2020)](https://www.routledge.com/Thermal-Radiation-Heat-Transfer/Howell-Menguc-Daun-Siegel/p/book/9780367347079).
+The core methodology is presented in [Bielefeld (2026)](https://arxiv.org/abs/2512.22157). The 3D view factor implementation follows [Narayanaswamy (2015)](https://doi.org/10.1016/j.ijheatmasstransfer.2015.07.131). This work was inspired in part by [Howell, Mengüç, Daun & Siegel (2021)](https://www.routledge.com/Thermal-Radiation-Heat-Transfer/Howell-Menguc-Daun-Siegel/p/book/9780367347079).
 
 ## Authors
 
