@@ -1654,6 +1654,115 @@ On the 11 × 11 mesh (left), pseudorandom sampling converges as N^(−1/2), the 
 
 ---
 
+## Example 11 — Large Scale: a Million Elements
+
+> **Warning:** this example traces a billion rays through a million cells. It took about two minutes on the machine listed at the end of the example, and needs a lot of memory.
+
+The last example is a reward for reading this far. It is the diffusion benchmark of the GERT formulation paper (Bielefeld, arXiv:2512.22157, Fig. 1), taken to a million elements: a 1000 m × 1 m rectangle with κ = 100 m⁻¹, a hot wall along one long side and cold walls elsewhere. The long walls are 1 m apart, so across the gap the optical thickness is τ_L = 100, and far from the short ends the medium behaves as an infinite slab. The mesh has 1001 × 1001 cells, which makes 1,006,005 elements, so the exchange factor matrix has 10¹² entries. At this optical thickness a ray is absorbed close to where it starts, so the matrix is sparse and fits in memory. Deep inside an optically thick medium the diffusion approximation is accurate, which gives an analytical reference for the centreline.
+
+### Step 1: The mesh
+
+```julia
+using RayTraceHeatTransfer, GeometryBasics, StaticArrays
+
+Nlarge   = 1001                                                                     # cells in each direction
+vertices = SVector(Point2(0.0, 0.0), Point2(1000.0, 0.0), Point2(1000.0, 1.0), Point2(0.0, 1.0))   # 1000 m long, 1 m between the long walls
+face     = PolyVolume2D{Float64}(vertices, SVector(true, true, true, true), 1, 100.0, 0.0)   # κ = 100 m⁻¹, no scattering
+face.T_in_w  = [1000.0, 0.0, 0.0, 0.0]                                              # hot bottom wall, three cold walls
+face.epsilon = [1.0, 1.0, 1.0, 1.0]                                                 # black walls
+face.T_in_g  = -1.0                                                                 # gas temperature unknown
+face.q_in_g  = 0.0                                                                  # radiative equilibrium: no heat source in the gas
+
+t_build = @elapsed big = RayTracingDomain2D([face], [(Nlarge, Nlarge)]; verbose = false)   # 1001 × 1001 cells
+```
+
+### Step 2: A billion rays, then smoothing
+
+The counting tracer `:exchange` is used here: it is the tracer that benefits most from smoothing. Pseudorandom sampling shows the noise at its largest; Sobol sampling, the package default, gives a quieter trace.
+
+```julia
+sampler  = :random                                                      # pseudorandom; :sobol is the default
+emitters = length(big.surface_mapping) + length(big.volume_mapping)     # 4 × 1001 wall elements and 1001² cells
+rays     = emitters * 2^10                                              # 2¹⁰ rays per emitter, about 10⁹ in total
+
+t_trace  = @elapsed big(rays; method = :exchange, sampler = sampler)    # the exchange factors
+t_smooth = @elapsed stats = smooth!(big)                                # reciprocity and conservation
+stats                                                                   # which projection ran, and how many iterations
+```
+
+### Step 3: Solving with the raw and the smoothed factors
+
+The raw factors are solved only to have something to compare with. Each solve overwrites the previous solution, so the centreline is extracted after each.
+
+```julia
+# Centreline source function S = (T/T_hot)⁴ of a solved mesh, from the hot wall upwards
+function centreline_S(m, N)
+    T = reshape([cell.T_g for cell in m.fine_mesh[1]], N, N)    # temperatures as T[column, row], rows from the hot wall
+    return (T[div(N + 1, 2), :] ./ 1000.0) .^ 4                  # the middle column; T_hot = 1000 K
+end
+
+t_solve_raw = @elapsed solveEquilibrium!(big, big.F_raw)        # the raw factors, for comparison only
+S_raw       = centreline_S(big, Nlarge)                         # their centreline
+t_solve     = @elapsed solveEquilibrium!(big, big.F_smooth)     # the smoothed factors
+S_smooth    = centreline_S(big, Nlarge)                         # their centreline
+```
+
+### Step 4: The diffusion reference
+
+Between two parallel walls, the diffusion approximation gives an emissive power that falls linearly across the medium, with a jump at each wall (Howell, Mengüç, Daun & Siegel, 2021). Because the profile is linear, its average over a cell equals its value at the cell centre, so it compares directly with the solution. The smoother is given only reciprocity and energy conservation; it knows nothing of the diffusion solution.
+
+```julia
+# Emissive power in the diffusion approximation between two parallel grey walls:
+# z is the distance from wall 1, β the extinction coefficient, D the distance between the walls
+function diffusion_emissive_power(z, β, D, ε_w1, ε_w2, E_bw1, E_bw2)
+    q_z  = (E_bw1 - E_bw2) / (3β * D / 4 + 1 / ε_w1 + 1 / ε_w2 - 1)   # net radiative flux between the walls
+    E_b1 = E_bw1 + q_z * (1 / 2 - 1 / ε_w1)                          # emissive power just inside wall 1
+    return E_b1 - (3β * z / 4) * q_z                                  # falling linearly across the medium
+end
+
+σ_SB  = 5.670374419e-8                                                # Stefan–Boltzmann constant, W m⁻² K⁻⁴
+E_hot = σ_SB * 1000.0^4                                               # emissive power of the hot wall
+z     = ((1:Nlarge) .- 0.5) ./ Nlarge                                 # cell centres: distance from the hot wall, m
+S_ref = diffusion_emissive_power.(z, 100.0, 1.0, 1.0, 1.0, E_hot, 0.0) ./ E_hot   # the reference, as S
+
+rms_raw    = sqrt(sum(abs2, S_raw .- S_ref) / Nlarge)                 # rms deviation, raw factors
+rms_smooth = sqrt(sum(abs2, S_smooth .- S_ref) / Nlarge)              # rms deviation, smoothed factors
+println("rms deviation from diffusion: raw = ", round(rms_raw; sigdigits = 3),
+        ", smoothed = ", round(rms_smooth; sigdigits = 3),
+        ", reduction = ", round(100 * (1 - rms_smooth / rms_raw); digits = 1), " %")
+println("time: build ", round(t_build; digits = 1), " s, trace ", round(t_trace; digits = 1),
+        " s, smooth ", round(t_smooth; digits = 1), " s, solve ", round(t_solve; digits = 1),
+        " s (raw solve ", round(t_solve_raw; digits = 1), " s), on ", Threads.nthreads(), " threads")
+
+using Plots
+
+p = Plots.scatter(z, S_raw; markersize = 5.0, markerstrokewidth = 0.5,        # 1001 points merge into a band
+        color = :dodgerblue, label = "Raw factors", dpi=400)
+Plots.scatter!(p, z, S_smooth; markersize = 5.0, markerstrokewidth = 0.25,
+        color = :darkorange, label = "Smoothed factors")
+Plots.plot!(p, z, S_ref; color = :black, linewidth = 2.5, label = "Diffusion approximation")
+Plots.plot!(p; xlabel = "Optical depth τ/τ_L", ylabel = "Source function S = (T/T_hot)⁴",
+        title = "Centreline, 1001 × 1001 cells, τ_L = 100", legend = :topright, size = (700, 480))
+display(p)
+```
+
+![Large-scale grey diffusion benchmark](fig/large_scale_grey_diffusion.png)
+
+With about a thousand rays per element, the raw factors leave the centreline scattered around the diffusion line, with an rms deviation of 3.1 × 10⁻². Smoothing brings it onto the line across the whole gap, down to 7.7 × 10⁻⁴: 97.5 % of the deviation is removed by enforcing nothing but reciprocity and energy conservation. Because the matrix is sparse, the smoother uses alternating projection alone, which preserves the sparsity; the orthogonal projection would fill every one of its 10¹² entries.
+
+| Step | Time |
+|---|---|
+| Building the mesh | 6.4 s |
+| Tracing 1.03 × 10⁹ rays | 25.2 s |
+| Smoothing | 7.4 s |
+| Solving with the smoothed factors | 71.4 s |
+| **End to end** | **1.8 min** |
+| Solving with the raw factors (comparison only) | 61.1 s |
+
+The timings were measured on an Intel Core i7-14700KF (20 cores, 28 threads) with 64 GB of RAM, running Windows 11 and Julia 1.13 on 28 threads.
+
+---
+
 ## Documentation
 
 The documentation of this package will gradually be rolled out in an online book format [here](https://gert.net/).
