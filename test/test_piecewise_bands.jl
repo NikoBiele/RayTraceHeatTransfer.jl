@@ -50,7 +50,7 @@ end
         @test all(row .>= 0)
         bin_fraction_derivatives!(drow, m, T)
         @test abs(sum(drow)) < 1e-12 * maximum(abs.(drow))
-        h = 1e-3 * T
+        h = 1e-4 * T
         fill_bin_fractions!(rp, m, T + h)
         fill_bin_fractions!(rm, m, T - h)
         fd = (rp .- rm) ./ (2h)

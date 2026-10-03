@@ -19,7 +19,7 @@ using Random
 
 κ_sigmoid(λ) = 0.01 + (100.0 - 0.01) / (1 + (4e-6 / λ)^6)
 
-const AB_BANDS = [(2.7e-6, 0.05, 300.0), (4.3e-6, 0.03, 3000.0), (6.3e-6, 0.15, 40.0),
+AB_BANDS = [(2.7e-6, 0.05, 300.0), (4.3e-6, 0.03, 3000.0), (6.3e-6, 0.15, 40.0),
                   (15e-6, 0.20, 600.0), (1.9e-6, 0.03, 8.0)]
 function κ_bands(λ)
     s = 0.05
@@ -30,7 +30,7 @@ function κ_bands(λ)
     return s
 end
 
-const AB_LINES = let rng = MersenneTwister(1)
+AB_LINES = let rng = MersenneTwister(1)
     centres = 10 .^ (log10(1.5e-6) .+ (log10(30e-6) - log10(1.5e-6)) .* rand(rng, 400))
     peaks   = 10 .^ (log10(0.1) .+ 5.0 .* rand(rng, 400))
     widths  = 1e-4 .+ 2e-4 .* rand(rng, 400)
@@ -45,9 +45,9 @@ function κ_lines(λ)
     return s
 end
 
-const AB_λ = 10 .^ range(log10(0.5e-6), log10(50e-6), length = 200001)
-const AB_L = (0.01, 10.0)
-const AB_T = (600.0, 2000.0)
+AB_λ = 10 .^ range(log10(0.5e-6), log10(50e-6), length = 200001)
+AB_L = (0.01, 10.0)
+AB_T = (600.0, 2000.0)
 
 @testset "tolerance reached, bin counts in range" begin
     expected = Dict("sigmoid"  => (κ_sigmoid.(AB_λ), (20, 60), (60, 200)),

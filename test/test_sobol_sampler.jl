@@ -7,8 +7,8 @@ using RayTraceHeatTransfer
 using GeometryBasics, StaticArrays, SparseArrays
 using Random, StatsBase, LinearAlgebra
 
-const RT   = RayTraceHeatTransfer                       # shorthand for unexported internals
-const RAYS = 32 * 4096                                  # 4096 rays per emitter on the 4x4 cavity
+RT   = RayTraceHeatTransfer                       # shorthand for unexported internals
+RAYS = 32 * 4096                                  # 4096 rays per emitter on the 4x4 cavity
 
 # ------------------------------------------------------------------ domains ---
 
@@ -212,12 +212,12 @@ end
 
 end
 
-const CUBE_POINTS = [0.0 0.0 0.0; 0.0 0.0 1.0; 0.0 1.0 0.0; 0.0 1.0 1.0;
+CUBE_POINTS = [0.0 0.0 0.0; 0.0 0.0 1.0; 0.0 1.0 0.0; 0.0 1.0 1.0;
                      1.0 0.0 0.0; 1.0 0.0 1.0; 1.0 1.0 0.0; 1.0 1.0 1.0]      # unit cube corners
-const CUBE_FACES  = [1 2 4 3; 5 6 8 7; 1 5 7 3; 2 6 8 4; 3 4 8 7; 1 2 6 5]    # its six faces
-const CUBE_TIN    = [1000.0, 0.0, -1.0, -1.0, -1.0, -1.0]                     # boundary values, unused by the trace
-const CUBE_QIN    = [-1.0, -1.0, 0.0, 0.0, 0.0, 0.0]                          # boundary values, unused by the trace
-const NDIM        = 3                                                         # 3x3 elements per face: 54 elements
+CUBE_FACES  = [1 2 4 3; 5 6 8 7; 1 5 7 3; 2 6 8 4; 3 4 8 7; 1 2 6 5]    # its six faces
+CUBE_TIN    = [1000.0, 0.0, -1.0, -1.0, -1.0, -1.0]                     # boundary values, unused by the trace
+CUBE_QIN    = [-1.0, -1.0, 0.0, 0.0, 0.0, 0.0]                          # boundary values, unused by the trace
+NDIM        = 3                                                         # 3x3 elements per face: 54 elements
 
 # trace the cube with the given keywords; dense copy of F_raw
 function trace_cube(; rays_per_emitter = 4096, kwargs...)
@@ -238,7 +238,7 @@ function face_factors(F)
     return FF
 end
 
-const FF_EXACT = [I == J ? 0.0 : 0.2 for I in 1:6, J in 1:6]                  # cube: 1/5 to each other face
+FF_EXACT = [I == J ? 0.0 : 0.2 for I in 1:6, J in 1:6]                  # cube: 1/5 to each other face
 
 face_error(Fs) = sqrt(mean(mean(abs2, face_factors(F) .- FF_EXACT) for F in Fs))   # rms error of the 36 face factors
 

@@ -27,7 +27,7 @@ using ConvolutionInterpolations
 
 ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
 ANALYTICAL_TOLERANCE = 0.05 # 5% tolerance vs analytical solution (to avoid too much sampling)
-const SIGMA = 5.670374419e-8  # Stefan-Boltzmann constant, W/(m^2 K^4)
+SIGMA = RayTraceHeatTransfer.STEFAN_BOLTZMANN  # Stefan-Boltzmann constant, W/(m^2 K^4)
 
 #############################################################################
 ### TEST 1: ENERGY CONSERVATION WITH REFLECTING WALLS ######################

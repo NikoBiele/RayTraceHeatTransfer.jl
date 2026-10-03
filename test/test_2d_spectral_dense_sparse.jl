@@ -11,20 +11,20 @@ using GeometryBasics
 using SparseArrays
 using ConvolutionInterpolations
 
-const T_HOT_CS = 1000.0
+T_HOT_CS = 1000.0
 
 # ---- Crosbie & Schrenker (1984) tabulated reference --------------------------
-const TAU_REF_CS = [0.0, 0.00611, 0.02037, 0.04251, 0.07216, 0.10884, 0.15194,
+TAU_REF_CS = [0.0, 0.00611, 0.02037, 0.04251, 0.07216, 0.10884, 0.15194,
                     0.20076, 0.25449, 0.31225, 0.37309, 0.43602, 0.50000, 0.56398,
                     0.62691, 0.68775, 0.74551, 0.79924, 0.84806, 0.89116, 0.92784,
                     0.95749, 0.97963, 0.99390, 1.00000]
 
-const S_REF_CS = [0.6293, 0.6198, 0.6017, 0.5767, 0.5460, 0.5108, 0.4724,
+S_REF_CS = [0.6293, 0.6198, 0.6017, 0.5767, 0.5460, 0.5108, 0.4724,
                   0.4323, 0.3919, 0.3525, 0.3153, 0.2810, 0.2500, 0.2224,
                   0.1981, 0.1768, 0.1584, 0.1424, 0.1287, 0.1171, 0.1073,
                   0.0992, 0.0930, 0.0885, 0.0863]
 
-const S_INTERP_CS = convolution_interpolation((TAU_REF_CS,), S_REF_CS; kernel = :b7)
+S_INTERP_CS = convolution_interpolation((TAU_REF_CS,), S_REF_CS; kernel = :b7)
 
 centerline_taus_cs(N_side) = collect(range(1 / (2N_side), 1 - 1 / (2N_side), length = N_side))
 

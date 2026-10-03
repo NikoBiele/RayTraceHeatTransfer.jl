@@ -23,7 +23,7 @@ function _pl_face(κ, ε_wall, T_wall)
     return face
 end
 
-const PL_κ = [0.05, 3.0, 0.3, 10.0]
+PL_κ = [0.05, 3.0, 0.3, 10.0]
 
 @testset "store geometry" begin
     mesh = RayTracingDomain2D([_pl_face(PL_κ, 1.0, 1000.0)], [(4, 4)], verbose = false)

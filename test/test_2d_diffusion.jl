@@ -11,9 +11,9 @@ using GeometryBasics
 using SparseArrays
 using ConvolutionInterpolations
 
-const T_HOT_DIFF   = 1000.0
-const BETA_DIFF    = 25.0
-const ASPECT_DIFF  = 1000.0
+T_HOT_DIFF   = 1000.0
+BETA_DIFF    = 25.0
+ASPECT_DIFF  = 1000.0
 
 # ---- analytical diffusion reference -----------------------------------------
 function diffusion_S(z, beta, D, eps_w1, eps_w2, E_bw1, E_bw2)
