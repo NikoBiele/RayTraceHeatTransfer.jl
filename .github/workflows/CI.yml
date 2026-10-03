@@ -1,0 +1,51 @@
+name: CI
+on:
+  push:
+    branches:
+      - main
+    tags: ['*']
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  # Skip intermediate builds: always.
+  # Cancel intermediate builds: only if it is a pull request build.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ startsWith(github.ref, 'refs/pull/') }}
+jobs:
+  test:
+    name: Julia ${{ matrix.version }} - ${{ matrix.os }} - ${{ matrix.arch }} - ${{ github.event_name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    # Julia prereleases can break for reasons outside this package: report, but don't fail the run
+    continue-on-error: ${{ matrix.version == 'pre' }}
+    permissions: # needed to allow julia-actions/cache to proactively delete old caches that it has created
+      actions: write
+      contents: read
+    env:
+      # Two threads, so the tests that compare threaded and single-threaded results are meaningful
+      JULIA_NUM_THREADS: 2
+    strategy:
+      fail-fast: false
+      matrix:
+        version:
+          - 'lts'   # current long-term support release (1.10), also the lowest version allowed by [compat]
+          - '1'     # latest stable release
+          - 'pre'   # upcoming release candidate
+        os:
+          - ubuntu-latest
+        arch:
+          - x64
+        include:
+          # Also test the latest stable release on Windows
+          - version: '1'
+            os: windows-latest
+            arch: x64
+    steps:
+      - uses: actions/checkout@v5
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.version }}
+          arch: ${{ matrix.arch }}
+      - uses: julia-actions/cache@v2
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
