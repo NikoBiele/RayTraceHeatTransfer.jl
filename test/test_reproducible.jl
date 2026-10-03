@@ -137,19 +137,4 @@ end
     @test c2.F_raw == b2.F_raw
 end
 
-@testset "the domain constructor leaves its input faces untouched" begin
-    verts = SVector(Point2(0.0, 0.0), Point2(1.0, 0.0), Point2(1.0, 1.0), Point2(0.0, 1.0))
-    face = PolyVolume2D{Float64}(verts, SVector(true, true, true, true), 1, 1.0, 0.0)
-    face.T_in_w  = [1000.0, 0.0, 0.0, 0.0]              # boundary values
-    face.epsilon = [1.0, 1.0, 1.0, 1.0]                 # black walls
-    face.T_in_g  = -1.0                                 # gas temperature unknown
-    face.q_in_g  = 0.0                                  # radiative equilibrium
-    a = RayTracingDomain2D([face], [(3, 3)], verbose = false)
-    @test isempty(face.subVolumes)                      # the input was not meshed
-    @test a.coarse_mesh[1] !== face                     # the domain owns a copy
-    b = RayTracingDomain2D([face], [(4, 4)], verbose = false)   # the same face, reused
-    @test length(a.fine_mesh[1]) == 9                   # the first domain is unaffected
-    @test length(b.fine_mesh[1]) == 16                  # the second one meshed correctly
-end
-
 println("✓ Reproducibility tests complete")

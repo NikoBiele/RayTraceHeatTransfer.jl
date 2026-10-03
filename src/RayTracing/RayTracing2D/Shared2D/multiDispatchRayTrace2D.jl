@@ -6,6 +6,12 @@ function (rtm::RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; me
                                 sampler::Union{Symbol,Nothing}=nothing) where
                                 {VPF,VVPF,MT,VT,DIII,DII,P<:Integer,GRID,S<:Integer,K<:Integer}
     
+    # A domain built with acceleration = false is geometry-only and has no spatial
+    # acceleration structures, which every 2D tracer needs
+    rtm.coarse_grid_opt === nothing &&
+        error("this domain was built with acceleration = false and cannot be ray traced; " *
+              "build it with acceleration = true (the default) to trace it")
+
     if nthreads > Threads.nthreads()
         @warn "The number of input threads is higher than the available number of the session."
     end

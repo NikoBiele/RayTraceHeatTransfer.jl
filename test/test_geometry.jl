@@ -1,5 +1,5 @@
 println("\n" * "-"^60)
-println("Testing 3D surface ray tracing")
+println("Testing Geometry in 2D/3D")
 println("-"^60)
 
 using RayTraceHeatTransfer
@@ -7,6 +7,8 @@ using Test
 using LinearAlgebra
 using SparseArrays
 using StatsBase
+using StaticArrays
+using GeometryBasics
 
 # ---- geometry ----------------------------------------------------------------
 
@@ -204,6 +206,39 @@ end
     # sanity: faces 7 and 9 are both in the straight x-arm and mutually visible,
     # so a dead tracer returning an all-zero F would not pass the block above
     @test count(!iszero, d.F_raw[r[7], r[9]]) > 0
+end
+
+#############################################################################
+### TEST 7: 2D DOMAIN CONSTRUCTION ##########################################
+#############################################################################
+
+@testset "the domain constructor leaves its input faces untouched" begin
+    verts = SVector(Point2(0.0, 0.0), Point2(1.0, 0.0), Point2(1.0, 1.0), Point2(0.0, 1.0))
+    face = PolyVolume2D{Float64}(verts, SVector(true, true, true, true), 1, 1.0, 0.0)
+    face.T_in_w  = [1000.0, 0.0, 0.0, 0.0]              # boundary values
+    face.epsilon = [1.0, 1.0, 1.0, 1.0]                 # black walls
+    face.T_in_g  = -1.0                                 # gas temperature unknown
+    face.q_in_g  = 0.0                                  # radiative equilibrium
+    a = RayTracingDomain2D([face], [(3, 3)], verbose = false)
+    @test isempty(face.subVolumes)                      # the input was not meshed
+    @test a.coarse_mesh[1] !== face                     # the domain owns a copy
+    b = RayTracingDomain2D([face], [(4, 4)], verbose = false)   # the same face, reused
+    @test length(a.fine_mesh[1]) == 9                   # the first domain is unaffected
+    @test length(b.fine_mesh[1]) == 16                  # the second one meshed correctly
+end
+
+@testset "a geometry-only domain is built but cannot be traced" begin
+    verts = SVector(Point2(0.0, 0.0), Point2(1.0, 0.0), Point2(1.0, 1.0), Point2(0.0, 1.0))
+    face = PolyVolume2D{Float64}(verts, SVector(true, true, true, true), 1, 1.0, 0.0)
+    face.T_in_w  = [1000.0, 0.0, 0.0, 0.0]              # boundary values
+    face.epsilon = [1.0, 1.0, 1.0, 1.0]                 # black walls
+    face.T_in_g  = -1.0                                 # gas temperature unknown
+    face.q_in_g  = 0.0                                  # radiative equilibrium
+    geo = RayTracingDomain2D([face], [(4, 4)], verbose = false, acceleration = false)
+    @test geo.coarse_grid_opt === nothing               # no acceleration structures were built
+    @test length(geo.fine_mesh[1]) == 16                # but the geometry is complete
+    @test sum(geo.volumes) ≈ 1.0                        # the cells tile the unit square
+    @test_throws ErrorException geo(1000, verbose = false)  # tracing it is refused clearly
 end
 
 println("✓ Geometry tests complete")

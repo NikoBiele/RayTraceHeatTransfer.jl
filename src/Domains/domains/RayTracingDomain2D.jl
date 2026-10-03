@@ -111,10 +111,16 @@ function RayTracingDomain2D(rtm::IntermediateMesh2D, verbose::Bool)
     return rtm_optim
 end
 
-# Updated constructor that builds from scratch (for new meshes) - now with spectral support  
+# Updated constructor that builds from scratch (for new meshes) - now with spectral support.
+# With acceleration = false the spatial acceleration structures for ray tracing are not built,
+# which gives a geometry-only domain (cells, walls, areas, mappings) that cannot be traced, for
+# example a fine mesh used by a coupled solver alongside a coarser, traced radiation domain
 function RayTracingDomain2D(faces::Vector{PolyVolume2D{G}}, Ndiv::Vector{Tuple{P,P}};
-                            verbose::Bool=true, surfaces_only::Bool=false) where {G, P<:Integer}
-    # First create the standard RayTracingMesh
+                            verbose::Bool=true, surfaces_only::Bool=false,
+                            acceleration::Bool=true) where {G, P<:Integer}
+    # First create the standard RayTracingMesh. The domain works on its own copy of the faces:
+    # meshing attaches the fine cells to the coarse faces, and the caller's faces are left as
+    # they were, so they can be reused (for example to build the same domain a second time)
     verbose && println("Building intermediate mesh...")
     standardMesh = IntermediateMesh2D(deepcopy(faces), Ndiv)
     
@@ -124,9 +130,11 @@ function RayTracingDomain2D(faces::Vector{PolyVolume2D{G}}, Ndiv::Vector{Tuple{P
 
     optimMesh.surfaces_only = surfaces_only
 
-    # Build spatial acceleration
-    verbose && println("Building spatial acceleration structures...")
-    buildSpatialAcceleration!(optimMesh)
+    # Build spatial acceleration, unless a geometry-only domain was requested
+    if acceleration
+        verbose && println("Building spatial acceleration structures...")
+        buildSpatialAcceleration!(optimMesh)
+    end
 
     return optimMesh
 end
