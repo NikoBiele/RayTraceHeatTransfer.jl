@@ -15,7 +15,10 @@ function meshTriangle(face::PolyVolume2D{G}, Ndim::P) where {G, P<:Integer}
     norm1 = norm(face.vertices[1] - face.vertices[2])
     norm2 = norm(face.vertices[2] - face.vertices[3])
     norm3 = norm(face.vertices[3] - face.vertices[1])
-    max_norm, max_index = findmax([norm1, norm2, norm3])
+    norms = [norm1, norm2, norm3]
+    max_norm = maximum(norms)
+    # longest edge; edges equal up to rounding count as a tie, which goes to the first, so congruent triangles mesh alike
+    max_index = findfirst(n -> n >= max_norm * (1 - 1e-12), norms)
     
     # mirror the opposite point
     if max_index == 1
@@ -111,7 +114,10 @@ function meshTriangle(face::Vector{Vector{G}}, Ndim::P) where {G,P<:Integer}
     norm1 = norm(face[1][1:2] - face[2][1:2])
     norm2 = norm(face[2][1:2] - face[3][1:2])
     norm3 = norm(face[3][1:2] - face[1][1:2])
-    max_norm, max_index = findmax([norm1, norm2, norm3])
+    norms = [norm1, norm2, norm3]
+    max_norm = maximum(norms)
+    # longest edge; edges equal up to rounding count as a tie, which goes to the first, so congruent triangles mesh alike
+    max_index = findfirst(n -> n >= max_norm * (1 - 1e-12), norms)
     
     # mirror the opposite point
     if max_index == 1

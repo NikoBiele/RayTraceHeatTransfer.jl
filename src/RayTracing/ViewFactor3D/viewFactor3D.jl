@@ -151,7 +151,10 @@ function viewFactor3D(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G}
 
             # determine parameterized coordinates for each edge, and minimum
             #  distance between edge rays (edges extended infinitely into space)
-            dMin, sOrigin, sHat, lHat, lOrigin, skew = edgePairParameters3D(r_i, r_j, r_p, r_q, almostZero)
+            # edges with sin²(angle) below this are evaluated with the parallel formula (Eq. 23): below about
+            # 1e-3 degrees the skew formula loses precision faster than the parallel formula gains it
+            parallelTol = 1e-10
+            dMin, sOrigin, sHat, lHat, lOrigin, skew = edgePairParameters3D(r_i, r_j, r_p, r_q, parallelTol)
 
             if skew # if these edges are NOT parallel...
                 # locate each vertex in the parameterized coordinate system
@@ -161,8 +164,9 @@ function viewFactor3D(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G}
                 l_q = dot((r_q - lOrigin), lHat)
 
                 skewPairs[i,p] = 1
-                cosAlpha = dot(sHat, lHat) > 0.999 ? 0.999 : dot(sHat, lHat) < -0.999 ? -0.999 : dot(sHat, lHat)
-                alpha = acos(cosAlpha)
+                # the true angle between the edges, accurate also for small angles (no clamping)
+                alpha = atan(norm(cross(vec(sHat), vec(lHat))), dot(sHat, lHat))
+                cosAlpha = cos(alpha)
                 sinAlpha = sin(alpha)
 
                 # Eq.(22a) from paper - calculate final terms that yield the 

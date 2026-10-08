@@ -3,3 +3,24 @@ _old/
 _docs/
 _.github/
 /test_scripts
+papers/*/figures/*.pdf
+papers/*/figures/*.png
+
+# LaTeX build products in the paper folders
+papers/*/manuscript/*.aux
+papers/*/manuscript/*.bbl
+papers/*/manuscript/*.blg
+papers/*/manuscript/*.log
+papers/*/manuscript/*.out
+papers/*/manuscript/*.fls
+papers/*/manuscript/*.fdb_latexmk
+papers/*/manuscript/*.synctex.gz
+papers/*/manuscript/*.pdf
+papers/*/manuscript/*.spl
+
+# temporary excludes
+papers/exchange-factor-formulation/figures
+papers/exchange-factor-formulation/manuscript
+papers/exchange-factor-formulation/README.md
+papers/projection-smoothing
+papers/README.md
