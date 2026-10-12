@@ -419,7 +419,7 @@ function equilibriumSpectral2D_woodbury!(rtm::RayTracingDomain2D,
                 elseif J_newton isa NewtonKrylovOp
                     δ_req, stats = Krylov.gmres(J_newton, f_newton[req];
                                                 rtol = 1e-12, atol = 0.0)
-                    stats.solved || @warn "Newton GMRES not fully converged" stats.niter
+                    stats.solved || @warn "Spectral Newton GMRES not fully converged" stats.niter
                     δ[req] .= δ_req
                 end
                 # (I − J)⁻¹ f is the correction to e_prev; `emissive` already holds

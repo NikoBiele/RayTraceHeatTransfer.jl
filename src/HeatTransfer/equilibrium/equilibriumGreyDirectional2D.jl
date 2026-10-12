@@ -196,8 +196,10 @@ function equilibriumGreyDirectional2D!(rtm::RayTracingDomain2D, F::AbstractMatri
     h   = vec(h0 .* op.S)
     wkr = GmresWorkspace(op, h; memory = 50)
     gmres!(wkr, op, h; restart = true, rtol = 1e-12, atol = 0.0)
-    wkr.stats.solved || @warn "directional GMRES did not reach rtol = 1e-12" wkr.stats.niter
-    verbose && println("  GMRES iterations: $(wkr.stats.niter)")
+    wkr.stats.solved || @warn "Directional GMRES did not reach rtol = 1e-12" wkr.stats.niter
+    verbose && println("Directional GMRES iterations: ", wkr.stats.niter)     # total inner iterations, summed over all restarts
+    verbose && println("Directional GMRES converged:  ", wkr.stats.solved)    # true if the tolerance was reached before the iteration limit
+    verbose && println("Directional GMRES status:     ", wkr.stats.status)    # Krylov.jl's text description of how the run ended
 
     J = reshape(copy(wkr.x), N, A)
     _incident!(op, J)

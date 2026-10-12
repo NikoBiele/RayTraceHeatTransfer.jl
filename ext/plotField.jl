@@ -104,6 +104,5 @@ function RayTraceHeatTransfer.plotField(domain::RayTracingDomain2D; field::Symbo
         Plots.title!(p,"Distribution of $field")
     end
 
-    display(p)
     return p
 end

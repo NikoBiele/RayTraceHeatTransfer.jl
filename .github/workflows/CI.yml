@@ -22,8 +22,8 @@ jobs:
       actions: write
       contents: read
     env:
-      # Two threads, so the tests that compare threaded and single-threaded results are meaningful
-      JULIA_NUM_THREADS: 2
+      # >1 thread, so the tests that compare threaded and single-threaded results are meaningful
+      JULIA_NUM_THREADS: auto
     strategy:
       fail-fast: false
       matrix:

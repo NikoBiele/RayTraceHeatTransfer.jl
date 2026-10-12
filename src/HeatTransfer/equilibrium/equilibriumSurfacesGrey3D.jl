@@ -131,6 +131,10 @@ function equilibriumSurfacesGrey3D!(domain::D, F::AbstractMatrix;
         wkr = GmresWorkspace(op, h; memory = 50)  # GMRES(50): hard cap on the Krylov subspace
         gmres!(wkr, op, h; restart = true, rtol = 1e-12)
         j = wkr.x          # solution; wkr.stats for residual history / iters
+        wkr.stats.solved || @warn "Grey GMRES did not reach rtol = 1e-12" wkr.stats.niter
+        verbose && println("Grey GMRES iterations: ", wkr.stats.niter)     # total inner iterations, summed over all restarts
+        verbose && println("Grey GMRES converged:  ", wkr.stats.solved)    # true if the tolerance was reached before the iteration limit
+        verbose && println("Grey GMRES status:     ", wkr.stats.status)    # Krylov.jl's text description of how the run ended
     else
         M = ws.matrix1
         M .= I - Diagonal(coeff) * F'
