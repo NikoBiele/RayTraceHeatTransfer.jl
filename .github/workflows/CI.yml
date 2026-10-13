@@ -35,11 +35,7 @@ jobs:
           - ubuntu-latest
         arch:
           - x64
-        include:
-          # Also test the latest stable release on Windows
-          - version: '1'
-            os: windows-latest
-            arch: x64
+        # Windows is tested locally (much faster)
     steps:
       - uses: actions/checkout@v5
       - uses: julia-actions/setup-julia@v2
