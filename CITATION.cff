@@ -1,0 +1,29 @@
+cff-version: 1.2.0
+message: "If you use RayTraceHeatTransfer.jl in your work, please cite it as below."
+type: software
+title: "RayTraceHeatTransfer.jl: radiative heat transfer with exchange factors in participating media and enclosures"
+authors:
+  - given-names: Nikolaj Maack
+    family-names: Bielefeld
+    orcid: "https://orcid.org/0009-0005-4385-6444"
+abstract: >-
+  Graph Equilibrium Radiative Transfer (GERT) in Julia: exchange factors from Monte Carlo ray
+  tracing (2D participating media, 3D enclosures) or analytical view factors (convex 3D
+  enclosures), smoothed to exact reciprocity and solved as one sparse linear system with a
+  non-negative, energy-conserving solution. Grey, spectral and directional.
+license: MIT
+version: 0.21.1
+date-released: 2026-10-13
+url: "https://gert.net"
+repository-code: "https://github.com/NikoBiele/RayTraceHeatTransfer.jl"
+keywords:
+  - heat transfer
+  - julialang
+  - Monte Carlo
+  - radiative heat transfer
+  - ray tracing
+  - spectral
+  - thermal radiation
+  - view factors
+  - directional
+  - participating media
