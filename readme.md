@@ -38,11 +38,12 @@ Every problem follows the same four steps:
 2. **Exchange factors** — quasi-Monte Carlo ray tracing (2D participating media,
    3D surface enclosures) or analytical view factors (3D convex surface
    enclosures), producing exchange factor matrix `F_raw`.
-3. **Smooth** — `smooth!(domain)` projects the exchange factor matrix `F_raw`
-   onto the nearest matrix satisfying reciprocity and energy conservation,
-   producing `F_smooth` and returning convergence diagnostics.
-4. **Solve** — `solveEquilibrium!(domain, domain.F_smooth)` yields the
-   steady state.
+3. **Smooth** — for ray-traced exchange factors, `smooth!(domain)` projects
+   `F_raw` onto the nearest matrix satisfying reciprocity and energy
+   conservation, producing `F_smooth` and returning convergence diagnostics.
+   Analytical view factors are already reciprocal to round-off and skip this step.
+4. **Solve** — `solveEquilibrium!(domain, domain.F_smooth)`, or
+   `domain.F_raw` for analytical view factors, yields the steady state.
 
 ---
 
@@ -96,7 +97,12 @@ Worked examples, rendered with their code, figures and output, are on [gert.net]
 
 The fundamental method is presented in:
 
-- Bielefeld, N. M. (2026). A Radiation Exchange Factor Formulation with Proven Non-Negativity and Unconditional Energy Conservation. *arXiv preprint*, [arXiv:2512.22157](https://arxiv.org/abs/2512.22157).
+- Bielefeld, N. M. (2026). A Sparsity-Preserving Radiation Exchange Factor Formulation with Proven Non-Negativity, Non-Singularity and Energy Conservation *arXiv preprint*, [arXiv:2512.22157](https://arxiv.org/abs/2512.22157).
+
+For reciprocal exchange factors, it reproduces the zone method of Hottel, in the explicit matrix form of Noble:
+
+- Hottel, H. C. & Sarofim, A. F. (1967). *Radiative Transfer*. McGraw-Hill, New York.
+- Noble, J. J. (1975). The zone method: explicit matrix relations for total exchange areas. *International Journal of Heat and Mass Transfer*, 18(2), 261–269. [doi:10.1016/0017-9310(75)90158-1](https://doi.org/10.1016/0017-9310(75)90158-1)
 
 It builds on the exchange factor method of:
 
