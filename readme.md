@@ -56,7 +56,8 @@ using GeometryBasics, StaticArrays
 
 vertices   = SVector(Point2(0.0, 0.0), Point2(1.0, 0.0), Point2(1.0, 1.0), Point2(0.0, 1.0))   # a 1 m square
 solidWalls = SVector(true, true, true, true)                       # all four walls are solid
-face = PolyVolume2D{Float64}(vertices, solidWalls, 1, 1.0, 0.0)   # one spectral bin, κ = 1 m⁻¹, σₛ = 0
+kappa, sigma_s = 1.0, 0.0                                          # κ = 1 m⁻¹, σₛ = 0
+face = PolyVolume2D{Float64}(vertices, solidWalls, 1, kappa, sigma_s) # one spectral bin
 face.T_in_w  = [1000.0, 0.0, 0.0, 0.0]                             # bottom wall hot, the others cold [K]
 face.epsilon = [1.0, 1.0, 1.0, 1.0]                                # black walls
 face.T_in_g  = -1.0                                                # gas temperature unknown ...
@@ -81,12 +82,13 @@ Worked examples, rendered with their code, figures and output, are on [gert.net]
 - [Example 3 — Line Spectrum vs Line-by-Line Reference](https://gert.net/examples/example-03.html)
 - [Example 4 — Anisotropic Scattering vs a Discrete-Ordinates Reference](https://gert.net/examples/example-04.html)
 - [Example 5 — Circular Enclosure from Triangular Elements](https://gert.net/examples/example-05.html)
-- [Example 6 — 3D Surface Enclosure](https://gert.net/examples/example-06.html)
-- [Example 7 — Triangulated Icosphere](https://gert.net/examples/example-07.html)
-- [Example 8 — Mixed Triangular and Quadrilateral Faces](https://gert.net/examples/example-08.html)
-- [Example 9 — Non-Convex Enclosure: an L-Shaped Duct](https://gert.net/examples/example-09.html)
-- [Example 10 — Convergence in Rays and Mesh](https://gert.net/examples/example-10.html)
-- [Example 11 — Large Scale: a Million Elements](https://gert.net/examples/example-11.html)
+- [Example 6 — Five-Pointed Star with a Volumetric Heat Source](https://gert.net/examples/example-06.html)
+- [Example 7 — 3D Surface Enclosure](https://gert.net/examples/example-07.html)
+- [Example 8 — Triangulated Icosphere](https://gert.net/examples/example-08.html)
+- [Example 9 — Mixed Triangular and Quadrilateral Faces](https://gert.net/examples/example-09.html)
+- [Example 10 — Non-Convex Enclosure: an L-Shaped Duct](https://gert.net/examples/example-10.html)
+- [Example 11 — Convergence in Rays and Mesh](https://gert.net/examples/example-11.html)
+- [Example 12 — Large Scale: a Million Elements](https://gert.net/examples/example-12.html)
 
 ---
 
