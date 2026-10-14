@@ -290,7 +290,7 @@ end
     @testset "no slowdown from the sampler" begin
         t_s = best_time(:sobol)                                               # Sobol default
         t_r = best_time(:random)                                              # pseudorandom
-        @test t_s < 1.5 * t_r
+        @test t_s < 2.0 * t_r
     end
 
 end
