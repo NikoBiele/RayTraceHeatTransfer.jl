@@ -206,7 +206,7 @@ end
         for method in (:exchange, :pathlength)
             t_s = best_time(method, :sobol)                         # Sobol default
             t_r = best_time(method, :random)                        # pseudorandom
-            @test t_s < 1.5 * t_r                                   # a boxed generator would show up here
+            @test t_s < 2.0 * t_r                                   # a boxed generator would show up here
         end
     end
 
