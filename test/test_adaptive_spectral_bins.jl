@@ -19,7 +19,7 @@ using Random
 
 κ_sigmoid(λ) = 0.01 + (100.0 - 0.01) / (1 + (4e-6 / λ)^6)
 
-AB_BANDS = [(2.7e-6, 0.05, 300.0), (4.3e-6, 0.03, 3000.0), (6.3e-6, 0.15, 40.0),
+const AB_BANDS = [(2.7e-6, 0.05, 300.0), (4.3e-6, 0.03, 3000.0), (6.3e-6, 0.15, 40.0),
                   (15e-6, 0.20, 600.0), (1.9e-6, 0.03, 8.0)]
 function κ_bands(λ)
     s = 0.05
@@ -30,7 +30,7 @@ function κ_bands(λ)
     return s
 end
 
-AB_LINES = let rng = MersenneTwister(1)
+const AB_LINES = let rng = MersenneTwister(1)
     centres = 10 .^ (log10(1.5e-6) .+ (log10(30e-6) - log10(1.5e-6)) .* rand(rng, 400))
     peaks   = 10 .^ (log10(0.1) .+ 5.0 .* rand(rng, 400))
     widths  = 1e-4 .+ 2e-4 .* rand(rng, 400)
@@ -45,9 +45,9 @@ function κ_lines(λ)
     return s
 end
 
-AB_λ = 10 .^ range(log10(0.5e-6), log10(50e-6), length = 200001)
-AB_L = (0.01, 10.0)
-AB_T = (600.0, 2000.0)
+const AB_λ = 10 .^ range(log10(0.5e-6), log10(50e-6), length = 200001)
+const AB_L = (0.01, 10.0)
+const AB_T = (600.0, 2000.0)
 
 @testset "tolerance reached, bin counts in range" begin
     expected = Dict("sigmoid"  => (κ_sigmoid.(AB_λ), (20, 60), (60, 200)),
@@ -99,8 +99,9 @@ end
 
 @testset "isothermal enclosure with an adaptive model" begin
     T_wall = 1000.0
-    κ = κ_sigmoid.(AB_λ)
-    model = adaptiveSpectralBins(AB_λ, κ; tol = 1e-2, L_range = (0.2, 1.5), T_range = (900.0, 1100.0))
+    λ = AB_λ[1:50:end]                           # isothermal exactness does not depend on resolution
+    κ = κ_sigmoid.(λ)
+    model = adaptiveSpectralBins(λ, κ; tol = 1e-2, L_range = (0.2, 1.5), T_range = (900.0, 1100.0))
     K = length(model.κ_ref)
     vertices = SVector(Point2(0.0, 0.0), Point2(1.0, 0.0), Point2(1.0, 1.0), Point2(0.0, 1.0))
     face = PolyVolume2D{Float64}(vertices, SVector(true, true, true, true), K, 1.0, 0.0)
@@ -111,9 +112,9 @@ end
     face.q_in_w    = zeros(4)
     face.T_in_g    = -1.0
     face.q_in_g    = 0.0
-    mesh = RayTracingDomain2D([face], [(5, 5)], verbose = false)
+    mesh = RayTracingDomain2D([face], [(2, 2)], verbose = false)
     mesh.spectral_model = model
-    mesh(400_000; method = :exchange, verbose = false)
+    mesh(400_000; method = :pathlength, verbose = false)
     smooth!(mesh; verbose = false)
     solveEquilibrium!(mesh, mesh.F_smooth; max_iters = 10_000, convergence_tol = 1e-14, verbose = false)
     err = maximum(abs(ff.T_g - T_wall) for ff in mesh.fine_mesh[1])

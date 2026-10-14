@@ -32,8 +32,8 @@ using GeometryBasics
 using SparseArrays
 using ConvolutionInterpolations
 
-GREY3D_TEMP_TOL = 1e-6   # K; deterministic F, solver-precision comparison
-GREY3D_J_RTOL   = 1e-9
+const GREY3D_TEMP_TOL = 1e-6   # K; deterministic F, solver-precision comparison
+const GREY3D_J_RTOL   = 1e-9
 
 @testset "3D Shared Grey vs Spectral (mixed epsilon)" begin
     # ---- unit cube, standard connectivity from the existing 3D tests ---------

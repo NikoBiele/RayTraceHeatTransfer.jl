@@ -34,8 +34,8 @@ using Test
 using RayTraceHeatTransfer
 using GeometryBasics, StaticArrays
 
-REFINE_T_TOL  = 1e-9   # K
-REFINE_J_RTOL = 1e-8
+const REFINE_T_TOL  = 1e-9   # K
+const REFINE_J_RTOL = 1e-8
 
 "Refine band edges by inserting the geometric midpoint of every bin."
 function refine_edges(edges::Vector{Float64})

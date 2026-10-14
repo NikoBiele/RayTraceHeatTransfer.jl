@@ -11,20 +11,20 @@ using GeometryBasics
 using SparseArrays
 using ConvolutionInterpolations
 
-T_HOT_CS = 1000.0
+const T_HOT_CS_spectral_dense_sparse = 1000.0
 
 # ---- Crosbie & Schrenker (1984) tabulated reference --------------------------
-TAU_REF_CS = [0.0, 0.00611, 0.02037, 0.04251, 0.07216, 0.10884, 0.15194,
+const TAU_REF_CS_spectral_dense_sparse = [0.0, 0.00611, 0.02037, 0.04251, 0.07216, 0.10884, 0.15194,
                     0.20076, 0.25449, 0.31225, 0.37309, 0.43602, 0.50000, 0.56398,
                     0.62691, 0.68775, 0.74551, 0.79924, 0.84806, 0.89116, 0.92784,
                     0.95749, 0.97963, 0.99390, 1.00000]
 
-S_REF_CS = [0.6293, 0.6198, 0.6017, 0.5767, 0.5460, 0.5108, 0.4724,
+const S_REF_CS_spectral_dense_sparse = [0.6293, 0.6198, 0.6017, 0.5767, 0.5460, 0.5108, 0.4724,
                   0.4323, 0.3919, 0.3525, 0.3153, 0.2810, 0.2500, 0.2224,
                   0.1981, 0.1768, 0.1584, 0.1424, 0.1287, 0.1171, 0.1073,
                   0.0992, 0.0930, 0.0885, 0.0863]
 
-S_INTERP_CS = convolution_interpolation((TAU_REF_CS,), S_REF_CS; kernel = :b7)
+const S_INTERP_CS_spectral_dense_sparse = convolution_interpolation((TAU_REF_CS_spectral_dense_sparse,), S_REF_CS_spectral_dense_sparse; kernel = :b7)
 
 centerline_taus_cs(N_side) = collect(range(1 / (2N_side), 1 - 1 / (2N_side), length = N_side))
 
@@ -38,7 +38,7 @@ function build_cs_spectral(N_side::Int, n_bins::Int)
     # ~1% monotonic kappa perturbation: triggers :spectral_variable (Woodbury)
     face.kappa_g = [1.0 * (1.0 + 0.01 * (k - 1) / (n_bins - 1)) for k in 1:n_bins]
     face.sigma_s_g = zeros(n_bins)
-    face.T_in_w  = [T_HOT_CS, 0.0, 0.0, 0.0]
+    face.T_in_w  = [T_HOT_CS_spectral_dense_sparse, 0.0, 0.0, 0.0]
     face.epsilon = [fill(1.0, n_bins) for _ in 1:4]
     face.T_in_g  = -1.0
     face.q_in_g  = 0.0
@@ -51,8 +51,8 @@ end
 function centerline_rms_cs(mesh, N_side)
     all_T = [ff.T_g for ff in mesh.fine_mesh[1]]
     T_center = reshape(all_T, N_side, N_side)[(N_side - 1) ÷ 2 + 1, :]
-    S_comp = (T_center ./ T_HOT_CS) .^ 4
-    S_ref  = [S_INTERP_CS(t) for t in centerline_taus_cs(N_side)]
+    S_comp = (T_center ./ T_HOT_CS_spectral_dense_sparse) .^ 4
+    S_ref  = [S_INTERP_CS_spectral_dense_sparse(t) for t in centerline_taus_cs(N_side)]
     return sqrt(mean((S_comp .- S_ref) .^ 2))
 end
 

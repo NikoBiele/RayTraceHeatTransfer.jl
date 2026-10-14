@@ -19,8 +19,8 @@ using GeometryBasics
 using SparseArrays
 using ConvolutionInterpolations
 
-TEMP_TOLERANCE = 5.0  # K, Tolerance for absolute temperature
-ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
+const TEMP_TOLERANCE_heat_transfer = 5.0  # K, Tolerance for absolute temperature
+const ENERGY_TOLERANCE_heat_transfer = 1e-4 # W, Absolute tolerance for energy balance
 
 #############################################################################
 ### TEST 1: ISOTHERMAL CUBE (All walls at same temperature) ###############
@@ -64,10 +64,10 @@ ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
     for (i, superface) in enumerate(domain3D.facesMesh)
         for subface in superface.subFaces
             # All surfaces should remain at isothermal temperature
-            @test isapprox(subface.T_w, T_iso, atol=TEMP_TOLERANCE)
+            @test isapprox(subface.T_w, T_iso, atol=TEMP_TOLERANCE_heat_transfer)
             
             # Net heat flux should be zero (within numerical precision)
-            @test abs(subface.q_w) < ENERGY_TOLERANCE
+            @test abs(subface.q_w) < ENERGY_TOLERANCE_heat_transfer
         end
     end
 end
@@ -115,8 +115,8 @@ end
     avg_T_face1 = mean([sf.T_w for sf in domain3D.facesMesh[1].subFaces])
     avg_T_face2 = mean([sf.T_w for sf in domain3D.facesMesh[2].subFaces])
     
-    @test isapprox(avg_T_face1, T_hot, atol=TEMP_TOLERANCE)
-    @test isapprox(avg_T_face2, T_cold, atol=TEMP_TOLERANCE)
+    @test isapprox(avg_T_face1, T_hot, atol=TEMP_TOLERANCE_heat_transfer)
+    @test isapprox(avg_T_face2, T_cold, atol=TEMP_TOLERANCE_heat_transfer)
     
     # Other walls should have temperatures between hot and cold
     for i in 3:6
@@ -126,7 +126,7 @@ end
     
     # Energy conservation: total heat in should equal total heat out
     total_q = sum(sf.q_w for i in 1:6 for sf in domain3D.facesMesh[i].subFaces)
-    @test abs(total_q) < ENERGY_TOLERANCE  # Should sum to nearly zero
+    @test abs(total_q) < ENERGY_TOLERANCE_heat_transfer  # Should sum to nearly zero
 end
 
 #############################################################################
@@ -183,7 +183,7 @@ end
     
     # Energy in should approximately equal energy out
     rel_error = abs(total_q_in - total_q_out) / max(total_q_in, total_q_out)
-    @test rel_error < ENERGY_TOLERANCE
+    @test rel_error < ENERGY_TOLERANCE_heat_transfer
 end
 
 #############################################################################
@@ -279,7 +279,7 @@ end
             
             # Energy conservation should still hold
             total_q = sum(sf.q_w for i in 1:6 for sf in domain_rot.facesMesh[i].subFaces)
-            @test abs(total_q) < ENERGY_TOLERANCE
+            @test abs(total_q) < ENERGY_TOLERANCE_heat_transfer
         end
     end
 end
@@ -334,7 +334,7 @@ end
     
     # Energy conservation
     total_q = sum(sf.q_w for i in 1:6 for sf in domain3D.facesMesh[i].subFaces)
-    @test abs(total_q) < ENERGY_TOLERANCE
+    @test abs(total_q) < ENERGY_TOLERANCE_heat_transfer
 end
 
 println("✓ 3D heat transfer tests complete")

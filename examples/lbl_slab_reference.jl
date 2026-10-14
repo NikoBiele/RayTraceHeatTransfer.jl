@@ -111,35 +111,31 @@ function lbl_slab_equilibrium(λ::AbstractVector, κ::AbstractVector, L::Real, T
     return T, sum(qλ), iters
 end
 
-# Cell-averaged (Galerkin) kernel on optical-depth edges τ_e (Nx+1).
+# Cell-averaged (Galerkin) kernel on uniformly spaced optical-depth edges τ_e (Nx+1).
+# On uniform cells the kernel depends only on |i − j| (Toeplitz), and every entry is
+# a difference of E₃ at the edges, so Nx+1 evaluations of E₃ build all of it.
 function lbl_kernel!(K::Matrix{Float64}, w1::Vector{Float64}, w2::Vector{Float64},
                      τ_e::Vector{Float64})
     Nx = length(w1)
-    τ_L = τ_e[end]
+    h  = τ_e[2] - τ_e[1]                         # optical thickness of one cell
+    if h <= 0                                    # transparent: no exchange with the gas
+        fill!(K, 0.0)                            # no gas-to-gas coupling
+        fill!(w1, 1.0)                           # E₂(0) = 1: plate 1 seen unattenuated
+        fill!(w2, 1.0)                           # E₂(0) = 1: plate 2 seen unattenuated
+        return nothing
+    end
+    e = [lbl_E3(τ) for τ in τ_e]                 # E₃ at every edge, e[k] = E₃((k−1)h)
     @inbounds for i in 1:Nx
-        a, b = τ_e[i], τ_e[i+1]
-        h = b - a
-        if h <= 0
-            w1[i] = lbl_E2(a); w2[i] = lbl_E2(τ_L - a)
-            for j in 1:Nx
-                c, d = τ_e[j], τ_e[j+1]
-                K[i, j] = j == i ? 0.0 :
-                          (c >= b ? lbl_E2(c - b) - lbl_E2(d - b) : lbl_E2(a - d) - lbl_E2(a - c))
-            end
-            continue
-        end
-        w1[i] = (lbl_E3(a) - lbl_E3(b)) / h
-        w2[i] = (lbl_E3(τ_L - b) - lbl_E3(τ_L - a)) / h
-        for j in 1:Nx
-            c, d = τ_e[j], τ_e[j+1]
-            if j == i
-                K[i, j] = 2 * (h - 0.5 + lbl_E3(h)) / h
-            elseif c >= b
-                K[i, j] = (lbl_E3(c - b) - lbl_E3(d - b) - lbl_E3(c - a) + lbl_E3(d - a)) / h
-            else
-                K[i, j] = (lbl_E3(a - d) - lbl_E3(b - d) - lbl_E3(a - c) + lbl_E3(b - c)) / h
-            end
-        end
+        w1[i] = (e[i] - e[i+1]) / h              # cell i seen from plate 1 (at τ = 0)
+        w2[i] = (e[Nx+1-i] - e[Nx+2-i]) / h      # cell i seen from plate 2 (at τ = τ_L)
+    end
+    g = zeros(Nx)                                # kernel as a function of m = |i − j|
+    g[1] = 2 * (h - 0.5 + e[2]) / h              # self-exchange of a cell (m = 0)
+    @inbounds for m in 1:Nx-1
+        g[m+1] = (e[m] - e[m+1] - e[m+1] + e[m+2]) / h   # cells m apart
+    end
+    @inbounds for j in 1:Nx, i in 1:Nx
+        K[i, j] = g[abs(i - j) + 1]              # fill the Toeplitz matrix
     end
     return nothing
 end

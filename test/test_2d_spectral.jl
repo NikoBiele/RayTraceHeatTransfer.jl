@@ -20,9 +20,9 @@ using GeometryBasics
 using SparseArrays
 using ConvolutionInterpolations
 
-SPECTRAL_TOLERANCE = 0.05 # 5% tolerance for spectral comparisons
-ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
-ANALYTICAL_TOLERANCE = 0.05 # 5% tolerance vs analytical solution (to avoid too much sampling)
+const SPECTRAL_TOLERANCE_spectral = 0.05 # 5% tolerance for spectral comparisons
+const ENERGY_TOLERANCE_spectral = 1e-4 # W, Absolute tolerance for energy balance
+const ANALYTICAL_TOLERANCE_spectral = 0.05 # 5% tolerance vs analytical solution (to avoid too much sampling)
 
 #############################################################################
 ### HELPER FUNCTIONS #######################################################
@@ -187,11 +187,11 @@ end
     
     for (i, (T_grey, T_spec)) in enumerate(zip(grey_temps, spectral_temps))
         rel_diff = abs(T_grey - T_spec) / max(T_grey, 1.0)
-        @test rel_diff < SPECTRAL_TOLERANCE
+        @test rel_diff < SPECTRAL_TOLERANCE_spectral
     end
     
     # Mean temperature comparison
-    @test isapprox(mean(grey_temps), mean(spectral_temps), rtol=SPECTRAL_TOLERANCE)
+    @test isapprox(mean(grey_temps), mean(spectral_temps), rtol=SPECTRAL_TOLERANCE_spectral)
 end
 
 #############################################################################
@@ -245,10 +245,10 @@ end
 
     for (T_grey, T_spec) in zip(grey_temps, spectral_temps)
         rel_diff = abs(T_grey - T_spec) / max(T_grey, 1.0)
-        @test rel_diff < SPECTRAL_TOLERANCE
+        @test rel_diff < SPECTRAL_TOLERANCE_spectral
     end
 
-    @test isapprox(mean(grey_temps), mean(spectral_temps), rtol=SPECTRAL_TOLERANCE)
+    @test isapprox(mean(grey_temps), mean(spectral_temps), rtol=SPECTRAL_TOLERANCE_spectral)
 end
 
 #############################################################################
@@ -291,7 +291,7 @@ end
     # Methods should agree reasonably well
     for (T_ex, T_dir) in zip(exchange_temps, direct_temps)
         rel_diff = abs(T_ex - T_dir) / max(T_ex, 1.0)
-        @test rel_diff < SPECTRAL_TOLERANCE
+        @test rel_diff < SPECTRAL_TOLERANCE_spectral
     end
 end
 
@@ -337,7 +337,7 @@ end
     # Methods should agree reasonably well
     for (T_ex, T_dir) in zip(exchange_temps, direct_temps)
         rel_diff = abs(T_ex - T_dir) / max(T_ex, 1.0)
-        @test rel_diff < SPECTRAL_TOLERANCE
+        @test rel_diff < SPECTRAL_TOLERANCE_spectral
     end
 end
 
@@ -370,9 +370,9 @@ end
     @test mesh.energy_error isa Vector
     @test length(mesh.energy_error) == n_bins
     for bin in 1:n_bins
-        @test abs(mesh.energy_error[bin]) < ENERGY_TOLERANCE
+        @test abs(mesh.energy_error[bin]) < ENERGY_TOLERANCE_spectral
     end
-    @test sum(abs.(mesh.energy_error)) < ENERGY_TOLERANCE
+    @test sum(abs.(mesh.energy_error)) < ENERGY_TOLERANCE_spectral
 end
 
 #############################################################################
@@ -402,7 +402,7 @@ end
     
     # Solution should exist and be physical
     for fine_face in mesh.fine_mesh[1]
-        @test 0.0 <= fine_face.T_g <= T_hot * (1.0 + ANALYTICAL_TOLERANCE)
+        @test 0.0 <= fine_face.T_g <= T_hot * (1.0 + ANALYTICAL_TOLERANCE_spectral)
         @test isfinite(fine_face.T_g)
         
         # Check that spectral distribution makes sense

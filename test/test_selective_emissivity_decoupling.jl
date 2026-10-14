@@ -39,7 +39,7 @@ using GeometryBasics
 using SparseArrays
 using ConvolutionInterpolations
 
-DECOUPLE_J_RTOL = 1e-8    # deterministic shared-F comparison; observed ~1e-10
+const DECOUPLE_J_RTOL = 1e-8    # deterministic shared-F comparison; observed ~1e-10
 
 @testset "Selective epsilon: per-bin vs independent grey solves" begin
     # ---- configuration -------------------------------------------------------

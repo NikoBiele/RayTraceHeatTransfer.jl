@@ -25,9 +25,9 @@ using GeometryBasics
 using SparseArrays
 using ConvolutionInterpolations
 
-ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
-ANALYTICAL_TOLERANCE = 0.05 # 5% tolerance vs analytical solution (to avoid too much sampling)
-SIGMA = RayTraceHeatTransfer.STEFAN_BOLTZMANN  # Stefan-Boltzmann constant, W/(m^2 K^4)
+const ENERGY_TOLERANCE_grey_ref = 1e-4 # W, Absolute tolerance for energy balance
+const ANALYTICAL_TOLERANCE_grey_ref = 0.05 # 5% tolerance vs analytical solution (to avoid too much sampling)
+const SIGMA_grey_ref = RayTraceHeatTransfer.STEFAN_BOLTZMANN  # Stefan-Boltzmann constant, W/(m^2 K^4)
 
 #############################################################################
 ### TEST 1: ENERGY CONSERVATION WITH REFLECTING WALLS ######################
@@ -66,7 +66,7 @@ SIGMA = RayTraceHeatTransfer.STEFAN_BOLTZMANN  # Stefan-Boltzmann constant, W/(m
     smooth!(mesh, verbose = false)
     solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
 
-    @test abs(mesh.energy_error) < ENERGY_TOLERANCE
+    @test abs(mesh.energy_error) < ENERGY_TOLERANCE_grey_ref
 end
 
 #############################################################################
@@ -114,10 +114,10 @@ end
     smooth!(mesh, k_dykstra=500, verbose = false)
     solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
 
-    @test abs(mesh.energy_error) < ENERGY_TOLERANCE
+    @test abs(mesh.energy_error) < ENERGY_TOLERANCE_grey_ref
 
     # Textbook prediction (per unit area)
-    q_textbook = SIGMA * (T_hot^4 - T_cold^4) / (1/eps_plates + 1/eps_plates - 1)
+    q_textbook = SIGMA_grey_ref * (T_hot^4 - T_cold^4) / (1/eps_plates + 1/eps_plates - 1)
 
     # Extract central hot-wall elements (the bottom row of fine faces, in
     # the middle of the width, where the parallel-plate approximation
@@ -135,7 +135,7 @@ end
     end
     q_per_area_mean = sum(q_per_area_samples) / length(q_per_area_samples)
 
-    @test abs(q_per_area_mean - q_textbook) / q_textbook < ANALYTICAL_TOLERANCE
+    @test abs(q_per_area_mean - q_textbook) / q_textbook < ANALYTICAL_TOLERANCE_grey_ref
 end
 
 println("✓ 2D grey with surface reflection tests complete")

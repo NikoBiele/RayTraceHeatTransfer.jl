@@ -19,7 +19,7 @@ using GeometryBasics
 using SparseArrays
 using ConvolutionInterpolations
 
-VF_TOLERANCE = 1e-5 # Tolerance for view factor comparisons
+const VF_TOLERANCE = 1e-5 # Tolerance for view factor comparisons
 
 #############################################################################
 ### TEST 1: NARAYANASWAMY EXAMPLES (Arbitrary Polygon Pairs) ###############

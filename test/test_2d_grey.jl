@@ -22,17 +22,17 @@ using ConvolutionInterpolations
 
 # Analytical reference from Crosbie & Schrenker (1984)
 # Source function along centerline of 1x1 square with one hot wall
-RELATIVE_TAU_Z = [0.0, 0.00611, 0.02037, 0.04251, 0.07216, 0.10884, 0.15194, 
+const RELATIVE_TAU_Z_grey = [0.0, 0.00611, 0.02037, 0.04251, 0.07216, 0.10884, 0.15194, 
                         0.20076, 0.25449, 0.31225, 0.37309, 0.43602, 0.50000, 0.56398, 
                         0.62691, 0.68775, 0.74551, 0.79924, 0.84806, 0.89116, 0.92784, 
                         0.95749, 0.97963, 0.99390, 1.00000]
 
-SOURCE_FUNC_CENTER = [0.6293, 0.6198, 0.6017, 0.5767, 0.5460, 0.5108, 0.4724, 
+const SOURCE_FUNC_CENTER_grey = [0.6293, 0.6198, 0.6017, 0.5767, 0.5460, 0.5108, 0.4724, 
                            0.4323, 0.3919, 0.3525, 0.3153, 0.2810, 0.2500, 0.2224, 
                            0.1981, 0.1768, 0.1584, 0.1424, 0.1287, 0.1171, 0.1073, 
                            0.0992, 0.0930, 0.0885, 0.0863]
-ENERGY_TOLERANCE = 1e-4 # W, Absolute tolerance for energy balance
-ANALYTICAL_TOLERANCE = 0.05 # 5% tolerance vs analytical solution (to avoid too much sampling)
+const ENERGY_TOLERANCE_grey = 1e-4 # W, Absolute tolerance for energy balance
+const ANALYTICAL_TOLERANCE_grey = 0.05 # 5% tolerance vs analytical solution (to avoid too much sampling)
 
 #############################################################################
 ### HELPER FUNCTIONS #######################################################
@@ -177,7 +177,7 @@ end
     N_rays_total = 1_000_000  # Need more rays to reduce noise like in original
     
     # Create interpolation from analytical solution
-    itp_analytical = lineInterpolation(RELATIVE_TAU_Z, SOURCE_FUNC_CENTER)
+    itp_analytical = lineInterpolation(RELATIVE_TAU_Z_grey, SOURCE_FUNC_CENTER_grey)
     
     # Sample points (tau values along centerline) - cell centers
     tau_sample = range(1.0/(2*Ndim), 1.0 - 1.0/(2*Ndim), length=Ndim)
@@ -214,11 +214,11 @@ end
             source_func_computed = dimensionlessSourceFunction(centerline_temps, T_hot)
             
             # Compare with analytical solution from Crosbie & Schrenker
-            @test isapprox(source_func_computed, analytical_values, rtol=ANALYTICAL_TOLERANCE)
+            @test isapprox(source_func_computed, analytical_values, rtol=ANALYTICAL_TOLERANCE_grey)
             
             # Energy conservation check
             if !isnothing(mesh.energy_error)
-                @test abs(mesh.energy_error) < ENERGY_TOLERANCE # Small relative to total power
+                @test abs(mesh.energy_error) < ENERGY_TOLERANCE_grey # Small relative to total power
             end
         end
         rotation_angle += π/2
@@ -269,13 +269,13 @@ end
             
             # Physical bounds
             @test T_min >= 0.0
-            @test T_max <= T_hot * (1.0 + ANALYTICAL_TOLERANCE)
+            @test T_max <= T_hot * (1.0 + ANALYTICAL_TOLERANCE_grey)
             @test T_cold <= T_mean <= T_hot
         end
     end
     
     # Mean temperatures should be relatively consistent across rotations
-    @test std(mean_temps) / mean(mean_temps) < ANALYTICAL_TOLERANCE # Less than 5% variation
+    @test std(mean_temps) / mean(mean_temps) < ANALYTICAL_TOLERANCE_grey # Less than 5% variation
 end
 
 #############################################################################
@@ -316,13 +316,13 @@ end
             push!(std_temps, std(temps))
             
             # Basic sanity checks
-            @test all(0.0 .<= temps .<= T_hot * (1.0 + ANALYTICAL_TOLERANCE))
+            @test all(0.0 .<= temps .<= T_hot * (1.0 + ANALYTICAL_TOLERANCE_grey))
         end
     end
     
     # With properly scaled rays, mean should be relatively constant
     # (not necessarily converging, but consistent within statistical noise)
-    @test std(mean_temps) / mean(mean_temps) < ANALYTICAL_TOLERANCE # Mean should be stable
+    @test std(mean_temps) / mean(mean_temps) < ANALYTICAL_TOLERANCE_grey # Mean should be stable
     
 end
 
@@ -350,7 +350,7 @@ end
     # Check energy error if available
     if !isnothing(mesh.energy_error)
         # Energy error should be small relative to total power
-        @test abs(mesh.energy_error) < ENERGY_TOLERANCE # Absolute tolerance in Watts
+        @test abs(mesh.energy_error) < ENERGY_TOLERANCE_grey # Absolute tolerance in Watts
     end
     
     # Alternative check: sum of all sources and sinks
@@ -366,7 +366,7 @@ end
     
     # In steady state with radiative equilibrium, these should balance
     rel_error = abs(total_emission - total_absorption) / max(total_emission, 1e-10)
-    @test rel_error < ANALYTICAL_TOLERANCE # 5% relative error
+    @test rel_error < ANALYTICAL_TOLERANCE_grey # 5% relative error
 end
 
 println("✓ 2D grey participating media tests complete")

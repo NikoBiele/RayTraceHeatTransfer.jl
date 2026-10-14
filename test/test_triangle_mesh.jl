@@ -14,10 +14,10 @@ using ConvolutionInterpolations
 # Circle from triangles: N_seg wedges sharing a center vertex.
 # Wedge j: (center, P_j, P_{j+1}); rim edge solid, both spokes open.
 
-N_seg  = 16;
-R      = 1.0;
-T_hot  = 1000.0;
-kappa  = 1.0;
+const N_seg  = 16;
+const R      = 1.0;
+const T_hot  = 1000.0;
+const kappa  = 1.0;
 
 rim(j) = Point2(R * cos(2π * (j - 1) / N_seg), R * sin(2π * (j - 1) / N_seg));
 

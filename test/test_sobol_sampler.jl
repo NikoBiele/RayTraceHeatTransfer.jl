@@ -7,8 +7,8 @@ using RayTraceHeatTransfer
 using GeometryBasics, StaticArrays, SparseArrays
 using Random, StatsBase, LinearAlgebra
 
-RT   = RayTraceHeatTransfer                       # shorthand for unexported internals
-RAYS = 32 * 4096                                  # 4096 rays per emitter on the 4x4 cavity
+const RT   = RayTraceHeatTransfer                       # shorthand for unexported internals
+const RAYS = 32 * 4096                                  # 4096 rays per emitter on the 4x4 cavity
 
 # ------------------------------------------------------------------ domains ---
 
@@ -212,23 +212,23 @@ end
 
 end
 
-CUBE_POINTS = [0.0 0.0 0.0; 0.0 0.0 1.0; 0.0 1.0 0.0; 0.0 1.0 1.0;
+const CUBE_POINTS_sobol = [0.0 0.0 0.0; 0.0 0.0 1.0; 0.0 1.0 0.0; 0.0 1.0 1.0;
                      1.0 0.0 0.0; 1.0 0.0 1.0; 1.0 1.0 0.0; 1.0 1.0 1.0]      # unit cube corners
-CUBE_FACES  = [1 2 4 3; 5 6 8 7; 1 5 7 3; 2 6 8 4; 3 4 8 7; 1 2 6 5]    # its six faces
-CUBE_TIN    = [1000.0, 0.0, -1.0, -1.0, -1.0, -1.0]                     # boundary values, unused by the trace
-CUBE_QIN    = [-1.0, -1.0, 0.0, 0.0, 0.0, 0.0]                          # boundary values, unused by the trace
-NDIM        = 3                                                         # 3x3 elements per face: 54 elements
+const CUBE_FACES_sobol  = [1 2 4 3; 5 6 8 7; 1 5 7 3; 2 6 8 4; 3 4 8 7; 1 2 6 5]    # its six faces
+const CUBE_TIN_sobol    = [1000.0, 0.0, -1.0, -1.0, -1.0, -1.0]                     # boundary values, unused by the trace
+const CUBE_QIN_sobol    = [-1.0, -1.0, 0.0, 0.0, 0.0, 0.0]                          # boundary values, unused by the trace
+const NDIM_sobol        = 3                                                         # 3x3 elements per face: 54 elements
 
 # trace the cube with the given keywords; dense copy of F_raw
 function trace_cube(; rays_per_emitter = 4096, kwargs...)
-    d = RayTracingDomain3D_surfaces(CUBE_POINTS, CUBE_FACES, NDIM, CUBE_QIN, CUBE_TIN, ones(6))
-    d(rays_per_emitter * 6 * NDIM^2; verbose = false, kwargs...)
+    d = RayTracingDomain3D_surfaces(CUBE_POINTS_sobol, CUBE_FACES_sobol, NDIM_sobol, CUBE_QIN_sobol, CUBE_TIN_sobol, ones(6))
+    d(rays_per_emitter * 6 * NDIM_sobol^2; verbose = false, kwargs...)
     return Matrix(d.F_raw)
 end
 
 # face-to-face view factors from the element matrix (elements ordered face by face, equal areas)
 function face_factors(F)
-    n = NDIM^2                                           # elements per face
+    n = NDIM_sobol^2                                           # elements per face
     FF = zeros(6, 6)
     for I in 1:6, J in 1:6
         rows = (I - 1) * n + 1 : I * n                   # elements of face I
@@ -238,7 +238,7 @@ function face_factors(F)
     return FF
 end
 
-FF_EXACT = [I == J ? 0.0 : 0.2 for I in 1:6, J in 1:6]                  # cube: 1/5 to each other face
+const FF_EXACT = [I == J ? 0.0 : 0.2 for I in 1:6, J in 1:6]                  # cube: 1/5 to each other face
 
 face_error(Fs) = sqrt(mean(mean(abs2, face_factors(F) .- FF_EXACT) for F in Fs))   # rms error of the 36 face factors
 
