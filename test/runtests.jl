@@ -105,6 +105,10 @@ using Test
     @testset "Sobol quasi random number sampling" begin
         include("test_sobol_sampler.jl")
     end
+    
+    @testset "Arbitrary precision" begin
+        include("test_precision.jl")
+    end
 
     println("\n" * "="^80)
     println("TEST SUITE COMPLETE")

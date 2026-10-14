@@ -1,15 +1,15 @@
-
 # Compute emissive powers (surfaces only!)
 function computeEmissivePowers!(E_known::Vector{P}, Q_known::Vector{P}, 
                                     ws::SurfaceOnlyWorkspace{P}, N_surfs::Int) where {P}
     
+    σ = stefan_boltzmann(P)                     # Stefan–Boltzmann constant in the working type
     # Surface emissive powers
     for i in 1:N_surfs
         if ws.bin_Qw_known[i] == 0  # Known temperature
-            E_known[i] = ws.epsw[i] * STEFAN_BOLTZMANN * ws.Area[i] * ws.Tw[i]^4
-            Q_known[i] = 0
+            E_known[i] = ws.epsw[i] * σ * ws.Area[i] * ws.Tw[i]^4
+            Q_known[i] = zero(P)
         else  # Known flux
-            E_known[i] = 0
+            E_known[i] = zero(P)
             Q_known[i] = ws.qw[i]
         end
     end
@@ -19,15 +19,16 @@ end
 function computeTemperatures!(T::Vector{P}, j::Vector{P}, r::Vector{P}, 
                                  ws::SurfaceOnlyWorkspace{P}, N_surfs::Int) where {P}
     
+    σ = stefan_boltzmann(P)                     # Stefan–Boltzmann constant in the working type
     for i in 1:N_surfs
-        e_i = max(j[i] - r[i], 0.0)
-        if ws.epsw[i] > 0.0 && ws.Area[i] > 0.0
-            T[i] = (e_i / (ws.epsw[i] * STEFAN_BOLTZMANN * ws.Area[i]))^0.25
+        e_i = max(j[i] - r[i], zero(P))
+        if ws.epsw[i] > 0 && ws.Area[i] > 0
+            T[i] = (e_i / (ws.epsw[i] * σ * ws.Area[i]))^0.25
         else
-            T[i] = 0.0
+            T[i] = zero(P)
         end
         if isnan(T[i])
-            T[i] = 0.0
+            T[i] = zero(P)
         end
     end
 end
@@ -71,11 +72,12 @@ function LinearAlgebra.mul!(y::AbstractVector, A::SurfaceSystemOp, x::AbstractVe
 end
 
 # Main grey solver for 3D surfaces - ALWAYS solves
+# All arithmetic runs in the element type of F (Float64, Double64, BigFloat, …).
 function equilibriumSurfacesGrey3D!(domain::D, F::AbstractMatrix; 
                                    spectral_bin::Int=1, verbose::Bool=true) where {D<:SurfaceDomain3D}
     verbose && println("=== 3D Surface-Only Grey Solver ===")
     
-    P = Float64
+    P = eltype(F)                               # working precision follows the exchange factors
 
     # Count surfaces (no volumes!)
     N_surfs = sum([length(superface.subFaces) for superface in domain.facesMesh])
@@ -100,7 +102,7 @@ function equilibriumSurfacesGrey3D!(domain::D, F::AbstractMatrix;
 
     # Step 3: Compute B matrix with variable extinction
     verbose && println("Computing B matrix with variable extinction...")
-    b = zeros(n)
+    b = zeros(P, n)
     
     # Check if we need scattering calculations
     has_reflection = sum(ws.epsw) < n
@@ -108,7 +110,7 @@ function equilibriumSurfacesGrey3D!(domain::D, F::AbstractMatrix;
     if has_reflection
         # Surface reflectivity terms
         for j in 1:N_surfs
-            b[j] = 1.0 - ws.epsw[j]
+            b[j] = one(P) - ws.epsw[j]
         end
     end
     
@@ -122,22 +124,23 @@ function equilibriumSurfacesGrey3D!(domain::D, F::AbstractMatrix;
     end
     
     # Build system matrix M  ==  I − Diagonal(coeff)·Fᵀ
-    coeff = ifelse.(Q_vec_known .== 1, 1.0, 1.0 .- ws.epsw)
+    coeff = P[Q_vec_known[i] == 1 ? one(P) : one(P) - ws.epsw[i] for i in 1:n]
 
     # Step 7: Solve linear system
     verbose && println("Solving linear system...")
     if F isa SparseMatrixCSC
+        rtol = 1e-12 * eps(P) / eps(Float64)    # 1e-12 in Float64, scaled to the working precision
         op  = SurfaceSystemOp(F, coeff, n)
         wkr = GmresWorkspace(op, h; memory = 50)  # GMRES(50): hard cap on the Krylov subspace
-        gmres!(wkr, op, h; restart = true, rtol = 1e-12)
+        gmres!(wkr, op, h; restart = true, rtol = rtol)
         j = wkr.x          # solution; wkr.stats for residual history / iters
-        wkr.stats.solved || @warn "Grey GMRES did not reach rtol = 1e-12" wkr.stats.niter
+        wkr.stats.solved || @warn "Grey GMRES did not reach rtol = $rtol" wkr.stats.niter
         verbose && println("Grey GMRES iterations: ", wkr.stats.niter)     # total inner iterations, summed over all restarts
         verbose && println("Grey GMRES converged:  ", wkr.stats.solved)    # true if the tolerance was reached before the iteration limit
         verbose && println("Grey GMRES status:     ", wkr.stats.status)    # Krylov.jl's text description of how the run ended
     else
-        M = ws.matrix1
-        M .= I - Diagonal(coeff) * F'
+        # Dense: M as a plain dense matrix in P (LAPACK in Float64, generic LU otherwise)
+        M = Matrix{P}(I - Diagonal(coeff) * F')
         j = M \ h
     end
 
@@ -145,8 +148,8 @@ function equilibriumSurfacesGrey3D!(domain::D, F::AbstractMatrix;
     verbose && println("Computing absorbed and reflected energies...")
     Abs = ws.work_vec4
     r = ws.work_vec5
-    fill!(Abs, zero(Float64))
-    fill!(r, zero(Float64))
+    fill!(Abs, zero(P))
+    fill!(r, zero(P))
     
     if F isa SparseMatrixCSC
         # Column sweep over F (CSC-native): column i of F holds F[k,i] for all senders k.
@@ -156,23 +159,23 @@ function equilibriumSurfacesGrey3D!(domain::D, F::AbstractMatrix;
         #   Abs[i] = (1−b[i]) · g_i     (absorbed by receiver i)
         rows = rowvals(F); vals = nonzeros(F)
         @inbounds for i in 1:n                 # column i == receiving element
-            g_i = 0.0
+            g_i = zero(P)
             for idx in nzrange(F, i)
                 k = rows[idx]                  # sending element
                 g_i += vals[idx] * j[k]        # F[k,i]·j[k]
             end
             r[i]   = b[i] * g_i
-            Abs[i] = (1.0 - b[i]) * g_i
+            Abs[i] = (one(P) - b[i]) * g_i
         end
     else
         # Dense: same receiver-indexed split
         for i in 1:n
-            g_i = zero(Float64)
+            g_i = zero(P)
             for k in 1:n
                 g_i += F[k,i] * j[k]
             end
             r[i]   = b[i] * g_i
-            Abs[i] = (1.0 - b[i]) * g_i
+            Abs[i] = (one(P) - b[i]) * g_i
         end
     end
     
@@ -187,7 +190,7 @@ function equilibriumSurfacesGrey3D!(domain::D, F::AbstractMatrix;
 
     # Step 11: Compute energy conservation error
     verbose && println("Computing (relative) energy conservation error...")
-    domain.energy_error = sum(j - r - Abs) / (sum(j) > 1000*eps(Float64) ? sum(j) : one(Float64))
+    domain.energy_error = sum(j - r - Abs) / (sum(j) > 1000*eps(P) ? sum(j) : one(P))
     domain.J = copy(j)    
     verbose && println("=== 3D Grey Solution Complete ===")
     

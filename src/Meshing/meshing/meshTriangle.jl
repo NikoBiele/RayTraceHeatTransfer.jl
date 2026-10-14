@@ -169,7 +169,7 @@ function meshTriangle(face::Vector{Vector{G}}, Ndim::P) where {G,P<:Integer}
 
     # create the new face (now quadrilateral)
     new_solid = SVector(true, true, true, true)
-    face2 = PolyVolume2D{G}(new_points, new_solid, 1, 1.0, 1.0)
+    face2 = PolyVolume2D{G}(new_points, new_solid, 1, G(1), G(1))
 
     # mesh as if it was a quadrilateral
     face2 = meshQuad(face2, Ndim, Ndim)
@@ -201,7 +201,7 @@ function meshTriangle(face::Vector{Vector{G}}, Ndim::P) where {G,P<:Integer}
             # create the new subface
             subface_points = SVector{3}(subface.vertices[tria_ids]...)
             subface_solid = SVector{3}(walls_solid...)
-            subface_keeper = PolyVolume2D{G}(subface_points, subface_solid, 1, 1.0, 1.0)
+            subface_keeper = PolyVolume2D{G}(subface_points, subface_solid, 1, G(1), G(1))
             push!(point1, Point3(subface_keeper.vertices[1]..., 0.0))
             push!(point2, Point3(subface_keeper.vertices[2]..., 0.0))
             push!(point3, Point3(subface_keeper.vertices[3]..., 0.0))

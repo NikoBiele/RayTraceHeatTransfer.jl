@@ -1,5 +1,5 @@
 """
-    viewFactor(POLY_A::Matrix{Float64}, POLY_B::Matrix{Float64})
+    viewFactor3D(POLY_A::Matrix{G}, POLY_B::Matrix{G})
 
 Original authors: Jacob A. Kerkhoff and Michael J. Wagner (MATLAB-implementation)
 University of Wisconsin-Madison, Energy Systems Optimization Lab
@@ -29,6 +29,10 @@ The following must be true for both polygons:
 2) polygons are simple (no self-intersecting polygons)
 3) polygons are convex (in theory, concave polygons should work, but
     this remains untested)
+
+All arithmetic is carried out in the element type G of the inputs (Float64,
+Double64, BigFloat, …), with tolerances scaled by eps(G), so the result is
+accurate to the precision of G.
 """
 function viewFactor3D(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G}
 
@@ -36,6 +40,10 @@ function viewFactor3D(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G}
 
     almostZero = 10*eps(G) # eps(Float32) # 1e-7
     halfTol = almostZero*10
+    # edges with sin²(angle) below this are evaluated with the parallel formula (Eq. 23):
+    # in Float64 (≈1.6e-10, about 1e-3 degrees) the skew formula loses precision faster
+    # than the parallel formula gains it; eps^(5/8) carries that balance to any precision
+    parallelTol = eps(G)^(5//8)
 
     # CONFIRM CORRECT INPUTS AND FIND AREA: polygon A
 
@@ -44,7 +52,7 @@ function viewFactor3D(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G}
     N = dim_A[1]  # number of vertices in polygon A
     # test for cartesian coordinates
     if dim_A[2] == 2
-        POLY_A = [POLY_A, zeros(N,1)]
+        POLY_A = hcat(POLY_A, zeros(G, N, 1))
     elseif dim_A[2] != 3
         error("Input 1: Matrix dimensions incorrect.")
     end
@@ -71,7 +79,7 @@ function viewFactor3D(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G}
         else        # area for higher order polygons
             # http://geomalgorithms.com/a01-_area.html
             POLY_A_looped = [POLY_A ; permutedims(POLY_A[1,:])]
-            toSum = [0; 0; 0]
+            toSum = zeros(G, 3)
             for i=1:N
                 toSum = toSum + cross(POLY_A_looped[i,:], POLY_A_looped[i+1,:])
             end
@@ -86,7 +94,7 @@ function viewFactor3D(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G}
     M = dim_B[1]  # number of vertices in polygon B
     # test for cartesian coordinates
     if dim_B[2] == 2
-        POLY_B = [POLY_B, zeros(M,1)]
+        POLY_B = hcat(POLY_B, zeros(G, M, 1))
     elseif dim_B[2] != 3
         error("Input 2: Matrix dimensions incorrect.")
     end
@@ -113,7 +121,7 @@ function viewFactor3D(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G}
         else        # area for higher order polygons
             # http://geomalgorithms.com/a01-_area.html
             POLY_B_looped = [POLY_B ; permutedims(POLY_B[1,:])]
-            toSum = [0; 0; 0]
+            toSum = zeros(G, 3)
             for i=1:M
                 toSum = toSum + cross(POLY_B_looped[i,:], POLY_B_looped[i+1,:])
             end
@@ -123,8 +131,8 @@ function viewFactor3D(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G}
 
     # VIEW FACTOR ANALYICAL CALCULATION
         
-    sumTerms = zeros(N,M)  # terms to sum to yield conductance
-    skewPairs = zeros(N,M) # tracks which terms come from parallel edges (for debugging)
+    sumTerms = zeros(G, N, M)    # terms to sum to yield conductance, in the working precision
+    skewPairs = zeros(Int, N, M) # tracks which terms come from parallel edges (for debugging)
     for p = 1:M # loop through vertices of polygon B
         for i = 1:N  # loop through vertices of polygon A
             r_i = permutedims(POLY_A[i,:])
@@ -151,9 +159,6 @@ function viewFactor3D(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G}
 
             # determine parameterized coordinates for each edge, and minimum
             #  distance between edge rays (edges extended infinitely into space)
-            # edges with sin²(angle) below this are evaluated with the parallel formula (Eq. 23): below about
-            # 1e-3 degrees the skew formula loses precision faster than the parallel formula gains it
-            parallelTol = 1e-10
             dMin, sOrigin, sHat, lHat, lOrigin, skew = edgePairParameters3D(r_i, r_j, r_p, r_q, parallelTol)
 
             if skew # if these edges are NOT parallel...
@@ -192,7 +197,7 @@ function viewFactor3D(POLY_A::Matrix{G}, POLY_B::Matrix{G}) where {G}
     end
 
     # "radiation conductance" : radUA = area_A*F_AB = area_B*F_BA
-    radUA = abs(sum(sum(sumTerms)))/(4*pi)  
+    radUA = abs(sum(sumTerms))/(4*G(pi))   # 4π in G: 4*pi alone would be a Float64  
 
     F_AB = radUA/area_A
     F_BA = radUA/area_B

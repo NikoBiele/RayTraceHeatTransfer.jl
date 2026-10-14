@@ -1,30 +1,33 @@
 using LinearAlgebra
 
 """
-    icosphere_mesh(subdivision_level)
+    icosphere_mesh([T = Float64,] subdivision_level)
 
 Build a triangulated unit sphere by recursively subdividing a regular
 icosahedron `subdivision_level` times and projecting new vertices onto
-the unit sphere.
+the unit sphere. All coordinates are computed in the floating-point type
+`T` (e.g. `BigFloat` after `setprecision`), so the polyhedron itself is
+exact to that precision.
 
 Level 0 → 20 triangles, 1 → 80, 2 → 320, 3 → 1280.
 """
-function icosphere_mesh(subdivision_level::Int)
-    φ = (1 + sqrt(5)) / 2
+function icosphere_mesh(::Type{T}, subdivision_level::Int) where {T<:AbstractFloat}
+    φ = (1 + sqrt(T(5))) / 2                       # golden ratio in T
+    o, l = zero(T), one(T)
 
-    ico_points_raw = [
-         0.0   1.0    φ;    0.0   1.0   -φ;
-         0.0  -1.0    φ;    0.0  -1.0   -φ;
-         1.0    φ   0.0;    1.0   -φ   0.0;
-        -1.0    φ   0.0;   -1.0   -φ   0.0;
-           φ  0.0   1.0;      φ  0.0  -1.0;
-          -φ  0.0   1.0;     -φ  0.0  -1.0
+    ico_points_raw = T[
+         o   l   φ;    o   l  -φ;
+         o  -l   φ;    o  -l  -φ;
+         l   φ   o;    l  -φ   o;
+        -l   φ   o;   -l  -φ   o;
+         φ   o   l;    φ   o  -l;
+        -φ   o   l;   -φ   o  -l
     ]
 
     points = similar(ico_points_raw)
     for i in 1:size(ico_points_raw, 1)
         v = ico_points_raw[i, :]
-        points[i, :] = v / norm(v)
+        points[i, :] = v / norm(v)                 # project onto the unit sphere in T
     end
 
     faces = [
@@ -42,7 +45,7 @@ function icosphere_mesh(subdivision_level::Int)
             key = (min(i, j), max(i, j))
             haskey(midpoint_cache, key) && return midpoint_cache[key]
             m = (points[i, :] + points[j, :]) / 2
-            m = m / norm(m)
+            m = m / norm(m)                        # project onto the unit sphere in T
             push!(new_points, m)
             midpoint_cache[key] = length(new_points)
             return length(new_points)
@@ -67,3 +70,6 @@ function icosphere_mesh(subdivision_level::Int)
 
     return points, faces
 end
+
+# Float64 by default, as before
+icosphere_mesh(subdivision_level::Int) = icosphere_mesh(Float64, subdivision_level)

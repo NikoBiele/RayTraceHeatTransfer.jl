@@ -1,6 +1,3 @@
-
-
-
 # Updated constructor with spectral support
 function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
                        q_in_w::Vector{G}, T_in_w::Vector{G}, 
@@ -55,10 +52,10 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
             inwardNormal = -normalize(cross(p2 - p1, p3 - p1))
             if isapprox(p3, p4, atol=1e-5) 
                 push!(superFaces[i].subFaces, 
-                    PolyFace3D([p1, p2, p3], true, inwardNormal, epsilon[i], 0.0, T_in_w[i]))
+                    PolyFace3D([p1, p2, p3], true, inwardNormal, epsilon[i], zero(G), T_in_w[i]))
             else
                 push!(superFaces[i].subFaces, 
-                    PolyFace3D([p1, p2, p3, p4], true, inwardNormal, epsilon[i], 0.0, T_in_w[i]))
+                    PolyFace3D([p1, p2, p3, p4], true, inwardNormal, epsilon[i], zero(G), T_in_w[i]))
             end
         end
         
@@ -90,14 +87,14 @@ function ViewFactorDomain3D(points::Matrix{G}, faces::Matrix{P}, Ndims::P,
                                 spectral_mode, n_bins, nothing, nothing, nothing, uniform_epsilon, true)
 end
     
-function (vfd::ViewFactorDomain3D)(; parallel::Bool=true, verbose::Bool=true)
+function (vfd::ViewFactorDomain3D{G})(; parallel::Bool=true, verbose::Bool=true) where {G}
 
     # Calculate view factors (wavelength-independent!)
     verbose && println("Computing view factors (geometry only, wavelength-independent)...")
     F_raw = enclosureViewFactors3D(vfd, parallel)
     
     vfd.F_raw = F_raw
-    vfd.F_smooth = Matrix{Float64}(undef, 2, 2)
+    vfd.F_smooth = Matrix{G}(undef, 2, 2)
 
     return nothing
 end

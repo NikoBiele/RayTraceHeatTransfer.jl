@@ -8,8 +8,8 @@ function imagLi2_3D(mag, angle, almostZero::G) where G
 
     if mag > almostZero
         omega = atan(mag*sin(angle),(1 - mag*cos(angle)))
-        imaginaryPart = ( (0.5*Cl3D(2.0*angle, almostZero)) + (0.5*Cl3D(2.0*omega, almostZero))
-                            - (0.5*Cl3D(2.0*omega + 2.0*angle, almostZero)) + (log(mag)*omega)  )
+        imaginaryPart = ( (0.5*Cl3D(2.0*angle)) + (0.5*Cl3D(2.0*omega))
+                            - (0.5*Cl3D(2.0*omega + 2.0*angle)) + (log(mag)*omega)  )
     else
         imaginaryPart = mag*sin(angle)
     end

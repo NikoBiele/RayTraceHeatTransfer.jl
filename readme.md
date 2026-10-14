@@ -5,12 +5,13 @@ A Julia package for radiative heat transfer using quasi-Monte Carlo ray tracing 
 ## Features
 
 - **2D participating media** — absorbing, emitting, and scattering gases with enclosing surfaces
-- **3D surface enclosures** — transparent media with semi-analytical view factors or ray tracing
+- **3D surface enclosures** — transparent media with analytical view factors or ray tracing
 - **Grey and spectral** — wavelength-independent or band-resolved radiation with automatic solver selection
 - **Quasi-Monte Carlo sampling** — Sobol sequences by default, with results independent of the thread count and reproducible from a single seed
 - **Adaptive spectral binning** — bins chosen automatically from κ(λ) samples to a user-set tolerance
 - **Directional scattering and reflection** — Henyey–Greenstein or tabulated phase functions, specular or tabulated wall reflection, on angular bins with a user-set resolution (2D)
 - **Unconditional energy conservation** — the GERT solve balances energy to machine precision for any number of rays, with or without smoothing
+- **Arbitrary precision** — analytical 3D view factors and grey 3D solves in any floating-point type, e.g. BigFloat
 - **Exchange factor smoothing** — enforces reciprocity on the ray-traced factors to machine precision, which improves accuracy
 - **Four-step workflow** — mesh → ray trace / view factors → smooth → solve
 - **Plotting extensions** — GLMakie and Plots backends for mesh and field visualisation

@@ -12,8 +12,8 @@ abstract: >-
   enclosures), smoothed to exact reciprocity and solved as one sparse linear system with a
   non-negative, energy-conserving solution. Grey, spectral and directional.
 license: MIT
-version: 0.21.1
-date-released: 2026-10-13
+version: 0.22.0
+date-released: 2026-10-14
 doi: "10.5281/zenodo.23355331"
 url: "https://gert.net"
 repository-code: "https://github.com/NikoBiele/RayTraceHeatTransfer.jl"

@@ -21,11 +21,14 @@ using SparseArrays
 # ---------------------------------------------------------------------------
 
 # F_raw / F_smooth are allocated with `undef` contents at construction, so their
-# presence says nothing about whether they hold results. Uninitialised memory is
-# either NaN or denormal (~1e-310); a real exchange factor row sums to ~1. One
-# row is enough to tell them apart, and it is O(N) rather than O(N^2).
+# presence says nothing about whether they hold results. Uninitialised Float64
+# memory is either NaN or denormal (~1e-310); a real exchange factor row sums to
+# ~1. For non-isbits element types (BigFloat, …) `undef` entries are unassigned
+# references that throw on access, so those are checked first. One row is
+# enough to tell them apart, and it is O(N) rather than O(N^2).
 function _computed(F::AbstractMatrix)
     (isempty(F) || size(F, 1) == 0) && return false
+    all(j -> isassigned(F, 1, j), axes(F, 2)) || return false   # unassigned ⇒ never computed
     s = sum(abs, @view F[1, :])
     return isfinite(s) && s > 1e-100
 end
@@ -47,15 +50,34 @@ _mdesc(F::AbstractVector) = isempty(F) ? "empty" :
     string(length(F), " × (", _mdesc(first(F)), ")")
 _mdesc(::Any) = "—"
 
+# Short decimal form of x with d significant digits, for any real type. Values in
+# the normal Float64 range print as Float64 (unchanged output for Float64 domains);
+# others, e.g. a 1e-309 BigFloat energy error, print as mantissa and decimal
+# exponent computed in x's own type, so no full-precision tail is printed.
+function _short(x::Real, d::Int)
+    f = Float64(x)
+    if iszero(x) || (isfinite(f) && abs(f) >= floatmin(Float64))
+        return string(round(f; sigdigits = d))
+    end
+    isfinite(x) || return string(x)                 # NaN / Inf as they are
+    e = floor(Int, log10(abs(x)))                   # decimal exponent
+    m = round(Float64(x / big(10.0)^e); sigdigits = d)
+    if abs(m) >= 10                                 # rounding carried into the next decade
+        m /= 10
+        e += 1
+    end
+    return string(m, "e", e)
+end
+
 function _fmt_range(lo, hi)
-    lo == hi && return string(round(lo; sigdigits = 4))
-    return string(round(lo; sigdigits = 4), " … ", round(hi; sigdigits = 4))
+    lo == hi && return _short(lo, 4)
+    return string(_short(lo, 4), " … ", _short(hi, 4))
 end
 
 _fmt_err(::Nothing) = "not solved"
-_fmt_err(e::Real)   = string(round(e; sigdigits = 3), " (relative conservation error)")
+_fmt_err(e::Real)   = string(_short(e, 3), " (relative conservation error)")
 _fmt_err(e::AbstractVector) = isempty(e) ? "not solved" :
-    string(round(maximum(abs, e); sigdigits = 3), " (max abs relative conservation error over ", length(e), " bins)")
+    string(_short(maximum(abs, e), 3), " (max abs relative conservation error over ", length(e), " bins)")
 _fmt_err(::Any) = "—"
 
 function _spectral_line(d)

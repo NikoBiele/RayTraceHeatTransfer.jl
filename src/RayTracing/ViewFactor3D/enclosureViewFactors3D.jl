@@ -1,13 +1,15 @@
-function enclosureViewFactors3D(vfd::ViewFactorDomain3D, parallel::Bool)
+function enclosureViewFactors3D(vfd::ViewFactorDomain3D{G}, parallel::Bool) where {G}
     elements = 0
     for superface in vfd.facesMesh
         for subface in superface.subFaces
             elements += 1
         end
     end
-            
-    F_raw        = zeros(elements, elements)
-    faces        = Vector{Matrix{Float64}}(undef, elements)
+
+    # View factors and vertex matrices in the domain's element type G, so the
+    # analytical evaluation and the row normalisation run in that precision
+    F_raw        = zeros(G, elements, elements)
+    faces        = Vector{Matrix{G}}(undef, elements)
 
     # ---- Pass 1: faces vertices --------------------------------
     k = 0
@@ -15,7 +17,7 @@ function enclosureViewFactors3D(vfd::ViewFactorDomain3D, parallel::Bool)
         for subface in superface.subFaces
             k += 1
             verts  = subface.vertices
-            face   = Matrix{Float64}(undef, length(verts), 3)
+            face   = Matrix{G}(undef, length(verts), 3)
             for v in eachindex(verts)
                 face[v, :] = verts[v]
             end
@@ -28,8 +30,8 @@ function enclosureViewFactors3D(vfd::ViewFactorDomain3D, parallel::Bool)
         face1 = faces[i]
         for j in (i + 1):elements
             v1, v2, A1, A2 = viewFactor3D(face1, faces[j])
-            v1 = (isnan(v1) || v1 < 0.0) ? 0.0 : v1
-            v2 = (isnan(v2) || v2 < 0.0) ? 0.0 : v2
+            v1 = (isnan(v1) || v1 < 0) ? zero(v1) : v1
+            v2 = (isnan(v2) || v2 < 0) ? zero(v2) : v2
             F_raw[i, j] = v1
             F_raw[j, i] = v2
         end

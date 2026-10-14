@@ -19,12 +19,26 @@ const yVecGlobal2D = SVector(0.0, 1.0)
 const xVecGlobal3D = SVector(1.0, 0.0, 0.0)
 const yVecGlobal3D = SVector(0.0, 1.0, 0.0)
 const zVecGlobal3D = SVector(0.0, 0.0, 1.0)
-const STEFAN_BOLTZMANN = 5.670374419e-8
-const h_P = 6.626e-34  # Planck constant
-const c0 = 2.998e8     # speed of light  
-const k_B = 1.38e-23   # Boltzmann constant
-const C1 = 1.191042972e-16 # 2 h c^2  [W m^2 / sr]
-const C2 = 1.4387768775039337e-2 # h_P * c0 / k_B
+
+# Exact SI defining constants (2019 redefinition of the SI)
+const h_P = 6.62607015e-34   # Planck constant [J s]
+const c0  = 299792458.0      # speed of light in vacuum [m/s]
+const k_B = 1.380649e-23     # Boltzmann constant [J/K]
+
+"""
+    stefan_boltzmann(T)
+
+Stefan–Boltzmann constant σ = 2π⁵k⁴/(15h³c²) in the floating-point type `T`.
+Since 2019, h, c and k are exact by definition, so σ is known to any precision.
+"""
+stefan_boltzmann(::Type{Float64}) = 5.6703744191844294e-8      # correctly rounded
+stefan_boltzmann(::Type{T}) where {T} =
+    2 * T(pi)^5 * (T(1380649) / T(10)^29)^4 /                   # 2π⁵k⁴
+    (15 * (T(662607015) / T(10)^42)^3 * T(299792458)^2)         # 15h³c²
+
+const STEFAN_BOLTZMANN = stefan_boltzmann(Float64)  # [W/(m² K⁴)]
+const C1 = 1.1910429723971884e-16   # 2 h c² [W m² / sr]
+const C2 = 1.4387768775039337e-2    # h c / k [m K]
 
 # Declare plotting function names so they can be extended by an extension:
 function plotMesh end
