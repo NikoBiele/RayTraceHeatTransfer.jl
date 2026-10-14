@@ -97,7 +97,7 @@ Worked examples, rendered with their code, figures and output, are on [gert.net]
 
 The fundamental method is presented in:
 
-- Bielefeld, N. M. (2026). A Sparsity-Preserving Radiation Exchange Factor Formulation with Proven Non-Negativity, Non-Singularity and Energy Conservation *arXiv preprint*, [arXiv:2512.22157](https://arxiv.org/abs/2512.22157).
+- Bielefeld, N. M. (2026). A Sparsity-Preserving Radiation Exchange Factor Formulation with Proven Non-Negativity, Non-Singularity and Energy Conservation. *arXiv preprint*, [arXiv:2512.22157](https://arxiv.org/abs/2512.22157).
 
 For reciprocal exchange factors, it reproduces the zone method of Hottel, in the explicit matrix form of Noble:
 

@@ -42,8 +42,8 @@ rim(j) = Point2(R * cos(2π * (j - 1) / N_seg), R * sin(2π * (j - 1) / N_seg));
     solveEquilibrium!(mesh, mesh.F_smooth, verbose = false)
     T_g = [ff.T_g for fine in mesh.fine_mesh for ff in fine]
     # test for isothermal
-    @test extrema(T_g)[1] > T_hot - 1e-3
-    @test extrema(T_g)[2] < T_hot + 1e-3
+    @test extrema(T_g)[1] > T_hot - 1e-8
+    @test extrema(T_g)[2] < T_hot + 1e-8
 end
 
 @testset "Center temperature and symmetry of circular triangular mesh" begin
