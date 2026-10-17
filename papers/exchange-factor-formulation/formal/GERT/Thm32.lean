@@ -1,44 +1,38 @@
-/-
-  Theorem 3.2, Bielefeld (2026), arXiv:2512.22157v2 — Mathlib version.
-  "Upper Bound on Spectral Radius of the Reflection-Scattering Matrix"
+import GERT.Defs
 
-  ✅ STATUS: rev 2. All lemma names confirmed on user's Mathlib; this revision
-  fixes the one unsolved goal in `Rmat_row_norm_sum_le` (simp applied `abs_mul`
-  before the whole-product `abs_of_nonneg` could fire → now `simp only` + exact)
-  and rescopes [DecidableEq n] / [Nonempty n] per theorem for the linters.
+/-!
+# Theorem 3.2: upper bound on the spectral radius of R
 
-  Instance hygiene as mathematical content:
-  * [DecidableEq n] is needed ONLY in part (c) — for the identity matrix and
-    the determinant. Everything else is decidability-free.
-  * [Nonempty n] is needed ONLY where an eigenvector is consumed (a / c);
-    the row bound and part (b) are vacuously fine for empty index types.
+Bielefeld (2026), arXiv:2512.22157v3, Section 3.1.
 
-  Contents:
-  * `eigenvalue_norm_le_of_row_norm_sum_le` — general lemma (any normed field):
-      rows satisfy Σⱼ‖Mᵢⱼ‖ ≤ c  ⟹  every eigenvalue μ has ‖μ‖ ≤ c.
-  * `Rmat_row_norm_sum_le`   — rows of R = F∘B satisfy Σⱼ|Rᵢⱼ| ≤ bmax (eq. 22).
-  * `thm32_eigenvalue_bound` — part (a): complex eigenvalues of R have ‖μ‖ ≤ bmax.
-  * `thm32_uniform_attained` — part (b): b ≡ bmax ⟹ R·𝟙 = bmax·𝟙 (bound attained).
-  * `thm32_D_isUnit`         — part (c): bmax < 1 ⟹ D = I − Rᵀ invertible.
+* `eigenvalue_norm_le_of_row_norm_sum_le` — general lemma (any normed field):
+  rows satisfy Σⱼ ‖Mᵢⱼ‖ ≤ c ⟹ every eigenvalue μ has ‖μ‖ ≤ c
+  (the max-coordinate argument behind ρ(M) ≤ ‖M‖∞)
+* `Rmat_row_norm_sum_le` — rows of R = F ∘ B satisfy Σⱼ |Rᵢⱼ| ≤ bmax (eq. 21)
+* `thm32_eigenvalue_bound` — part (a): complex eigenvalues of R have ‖μ‖ ≤ bmax
+* `thm32_uniform_attained` — part (b): b ≡ bmax ⟹ R 𝟙 = bmax 𝟙 (bound attained)
+* `thm32_D_isUnit` — part (c): bmax < 1 ⟹ D = I − Rᵀ invertible
+
+Theorem 3.5 (`Dmat_isUnit_of_irreducible`) sharpens part (c) for irreducible
+F: a single bₖ₀ < 1 then suffices.
 -/
-import Mathlib
 
 open Matrix Finset
 
+namespace GERT
+
 variable {n : Type*} [Fintype n]
 
-/-! ### General eigenvalue bound (Gershgorin-type, via the max coordinate) -/
-
 section GeneralLemma
+
 variable [Nonempty n] {𝕜 : Type*} [NormedField 𝕜]
 
 /-- If every row of `M` satisfies `Σⱼ ‖M i j‖ ≤ c`, then any eigenvalue `μ`
-    of `M` satisfies `‖μ‖ ≤ c`.  (The scalar argument behind ρ(M) ≤ ‖M‖∞.) -/
+    of `M` satisfies `‖μ‖ ≤ c`. -/
 theorem eigenvalue_norm_le_of_row_norm_sum_le
     {M : Matrix n n 𝕜} {c : ℝ} (hM : ∀ i, ∑ j, ‖M i j‖ ≤ c)
     {μ : 𝕜} {v : n → 𝕜} (hv : v ≠ 0) (heig : M.mulVec v = μ • v) :
     ‖μ‖ ≤ c := by
-  -- pick the coordinate of maximal modulus
   obtain ⟨i, -, hi⟩ :=
     Finset.exists_max_image (Finset.univ : Finset n) (fun k => ‖v k‖)
       ⟨Classical.arbitrary n, Finset.mem_univ _⟩
@@ -46,7 +40,6 @@ theorem eigenvalue_norm_le_of_row_norm_sum_le
     obtain ⟨k, hk⟩ := Function.ne_iff.mp hv
     calc (0:ℝ) < ‖v k‖ := norm_pos_iff.mpr hk
       _ ≤ ‖v i‖ := hi k (Finset.mem_univ k)
-  -- the i-th row of the eigenvalue equation
   have hrow : ∑ j, M i j * v j = μ * v i := by
     have h := congrFun heig i
     simpa [Matrix.mulVec, dotProduct, Pi.smul_apply, smul_eq_mul] using h
@@ -64,20 +57,11 @@ theorem eigenvalue_norm_le_of_row_norm_sum_le
 
 end GeneralLemma
 
-/-! ### The paper's setting: R = F ∘ B, B column-constant (paper eqs. 8, 10) -/
-
 section Thm32
 
-variable (F : Matrix n n ℝ) (b : n → ℝ) (bmax : ℝ)
+variable {F : Matrix n n ℝ} {b : n → ℝ} {bmax : ℝ}
 
-/-- Reflection-scattering matrix R = F ∘ B, entrywise `R i j = F i j * b j`
-    (paper eq. 10 with the column-constant B of eq. 8). -/
-def Rmat : Matrix n n ℝ := Matrix.of fun i j => F i j * b j
-
-variable {F b bmax}
-
-/-- Row sums of |R| are bounded by `bmax` (the computation inside eq. 22):
-    Σⱼ bⱼ Fᵢⱼ ≤ bmax Σⱼ Fᵢⱼ = bmax. -/
+/-- Row sums of |R| are bounded by `bmax` (eq. 21): Σⱼ bⱼ Fᵢⱼ ≤ bmax Σⱼ Fᵢⱼ = bmax. -/
 theorem Rmat_row_norm_sum_le
     (hF0 : ∀ i j, 0 ≤ F i j) (hF1 : ∀ i, ∑ j, F i j = 1)
     (hb0 : ∀ j, 0 ≤ b j) (hbm : ∀ j, b j ≤ bmax) (i : n) :
@@ -92,8 +76,7 @@ theorem Rmat_row_norm_sum_le
     _ = bmax := by rw [hF1 i, one_mul]
 
 /-- **Theorem 3.2, part (a)**: every complex eigenvalue μ of (the
-    complexification of) R satisfies ‖μ‖ ≤ bmax.  For matrices the spectrum
-    is exactly the set of eigenvalues, so this is ρ(R) ≤ bmax (paper eq. 22). -/
+    complexification of) R satisfies ‖μ‖ ≤ bmax, i.e. ρ(R) ≤ bmax. -/
 theorem thm32_eigenvalue_bound [Nonempty n]
     (hF0 : ∀ i j, 0 ≤ F i j) (hF1 : ∀ i, ∑ j, F i j = 1)
     (hb0 : ∀ j, 0 ≤ b j) (hbm : ∀ j, b j ≤ bmax)
@@ -106,8 +89,7 @@ theorem thm32_eigenvalue_bound [Nonempty n]
   simpa [hmap] using Rmat_row_norm_sum_le hF0 hF1 hb0 hbm i
 
 /-- **Theorem 3.2, part (b)**: with uniform coefficients `b ≡ bmax` the bound
-    is attained — 𝟙 is an eigenvector of R with eigenvalue bmax
-    ("with equality when bⱼ = bmax uniformly"). -/
+    is attained: 𝟙 is an eigenvector of R with eigenvalue bmax. -/
 theorem thm32_uniform_attained
     (hF1 : ∀ i, ∑ j, F i j = 1) (hb : ∀ j, b j = bmax) :
     (Rmat F b).mulVec (fun _ => 1) = bmax • (fun _ => (1:ℝ)) := by
@@ -118,21 +100,20 @@ theorem thm32_uniform_attained
 
 /-- **Theorem 3.2, part (c)**: if bmax < 1 then D = I − Rᵀ is invertible.
     Proof: det(I − Rᵀ) = det(I − R); if it vanished, some v ≠ 0 would satisfy
-    R·v = 1·v, i.e. 1 would be an eigenvalue of R — contradicting ‖μ‖ ≤ bmax < 1.
-    (NB: the transpose step is essential — Rᵀ's ROW sums are R's COLUMN sums,
-    which are NOT bounded by bmax; eigenvalue invariance under transpose is
-    what carries the argument. This step is implicit in the paper.) -/
+    R v = v, so 1 would be an eigenvalue of R, contradicting ‖μ‖ ≤ bmax < 1.
+    The transpose step matters: the ROW sums of Rᵀ are the COLUMN sums of R,
+    which are not bounded by bmax; eigenvalue invariance under transposition
+    carries the argument. -/
 theorem thm32_D_isUnit [DecidableEq n] [Nonempty n]
     (hF0 : ∀ i j, 0 ≤ F i j) (hF1 : ∀ i, ∑ j, F i j = 1)
     (hb0 : ∀ j, 0 ≤ b j) (hbm : ∀ j, b j ≤ bmax) (hlt : bmax < 1) :
-    IsUnit (1 - (Rmat F b)ᵀ) := by
+    IsUnit (Dmat F b) := by
+  unfold Dmat
   rw [Matrix.isUnit_iff_isUnit_det, isUnit_iff_ne_zero]
   intro hdet
-  -- move to the untransposed matrix: det(1 − Rᵀ) = det((1 − R)ᵀ) = det(1 − R)
   have htr : (1 - (Rmat F b)ᵀ) = (1 - Rmat F b)ᵀ := by
     rw [Matrix.transpose_sub, Matrix.transpose_one]
   rw [htr, Matrix.det_transpose] at hdet
-  -- a singular matrix kills some nonzero vector
   obtain ⟨v, hvne, hv0⟩ := (Matrix.exists_mulVec_eq_zero_iff).mpr hdet
   have heig : (Rmat F b).mulVec v = (1:ℝ) • v := by
     rw [Matrix.sub_mulVec, Matrix.one_mulVec, sub_eq_zero] at hv0
@@ -145,7 +126,4 @@ theorem thm32_D_isUnit [DecidableEq n] [Nonempty n]
 
 end Thm32
 
-#check @eigenvalue_norm_le_of_row_norm_sum_le
-#check @thm32_eigenvalue_bound
-#check @thm32_uniform_attained
-#check @thm32_D_isUnit
+end GERT

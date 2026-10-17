@@ -126,7 +126,7 @@ function writeResultsToDomainGrey!(domain::RayTracingDomain2D, T::Vector{P}, j::
             fine_face.r_g = r[vol_idx]
             fine_face.g_g = Abs[vol_idx] + r[vol_idx]
             fine_face.q_g = e_vol - Abs[vol_idx]
-            fine_face.i_g = j[vol_idx]/(4*pi*fine_face.volume)
+            fine_face.i_g = j[vol_idx]/(4*pi*(fine_face.kappa_g + fine_face.sigma_s_g)*fine_face.volume)
         end
     end
 end

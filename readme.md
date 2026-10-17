@@ -97,9 +97,9 @@ Worked examples, rendered with their code, figures and output, are on [gert.net]
 
 The fundamental method is presented in:
 
-- Bielefeld, N. M. (2026). A Sparsity-Preserving Radiation Exchange Factor Formulation with Proven Non-Negativity, Non-Singularity and Energy Conservation. *arXiv preprint*, [arXiv:2512.22157](https://arxiv.org/abs/2512.22157).
+- Bielefeld, N. M. (2026). Non-Negativity, Non-Singularity and Energy Conservation of the Zonal Method with Non-Reciprocal Exchange Factors. *arXiv preprint*, [arXiv:2512.22157](https://arxiv.org/abs/2512.22157).
 
-For reciprocal exchange factors, it reproduces the zone method of Hottel, in the explicit matrix form of Noble:
+It is the zone method of Hottel, written in power variables, and for reciprocal exchange factors it reproduces the explicit matrix form of Noble:
 
 - Hottel, H. C. & Sarofim, A. F. (1967). *Radiative Transfer*. McGraw-Hill, New York.
 - Noble, J. J. (1975). The zone method: explicit matrix relations for total exchange areas. *International Journal of Heat and Mass Transfer*, 18(2), 261–269. [doi:10.1016/0017-9310(75)90158-1](https://doi.org/10.1016/0017-9310(75)90158-1)

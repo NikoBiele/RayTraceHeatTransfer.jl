@@ -1,7 +1,4 @@
 Manifest.toml
-_old/
-_docs/
-_.github/
 /test_scripts
 papers/*/figures/*.pdf
 papers/*/figures/*.png
@@ -18,9 +15,5 @@ papers/*/manuscript/*.synctex.gz
 papers/*/manuscript/*.pdf
 papers/*/manuscript/*.spl
 
-# temporary excludes
-papers/exchange-factor-formulation/figures
-papers/exchange-factor-formulation/manuscript
-papers/exchange-factor-formulation/README.md
+# temporary exclude
 papers/projection-smoothing
-papers/README.md
