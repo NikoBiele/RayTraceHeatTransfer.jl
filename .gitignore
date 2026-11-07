@@ -1,5 +1,6 @@
 Manifest.toml
 /test_scripts
+/bench
 papers/*/figures/*.pdf
 papers/*/figures/*.png
 

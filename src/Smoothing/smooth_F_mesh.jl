@@ -16,9 +16,12 @@ smoothed repeatedly under different settings.
 - `k_dykstra`: Dykstra rounds before the alternating projection finalisation.
   `0` gives pure alternating projections; larger values approach the
   minimum-norm correction. The value is only used where the structure of
-  `F_raw` leaves a choice: sparse or weakly cross-coupled input is smoothed by
-  alternating projections alone, and a dense input whose a priori rates make
-  Dykstra cheaper per decade of defect reduction than alternating projections
+  `F_raw` leaves a choice. Optically thick 2D input, whose gas escape
+  fraction (the fraction of gas emission absorbed at the walls) lies below a
+  threshold that falls slowly with the number of elements and the rays per
+  element, is smoothed by alternating projections alone, as is sparse input
+  too large to densify; a dense input whose a priori rates make Dykstra
+  cheaper per decade of defect reduction than alternating projections
   (near-parallel-plate enclosures) runs Dykstra to its floor regardless of
   `k_dykstra`. In between, the prescribed rounds are run; the default of 1
   gives the orthogonal-projection start, and more rounds move the result

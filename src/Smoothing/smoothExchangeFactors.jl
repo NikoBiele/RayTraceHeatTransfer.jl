@@ -293,6 +293,39 @@ function cross_coupling_chi(F::AbstractMatrix, n_surf::Integer; surfaces_first::
     return acc / N, nz, nz / N, nz / N^2, Base.summarysize(F) / 2^30
 end
 
+# Gas escape fraction of a traced matrix: the fraction of gas emission absorbed
+# at the walls, sum_g w_i sum_s F_ij / sum_g w_i, with w the emissive weights
+# (areas for surfaces, 4 beta V for cells) and the surfaces first. Unlike the
+# count-weighted chi, it is a property of the enclosure and converges under
+# mesh refinement, so it serves as the coordinate of the AP / OP+AP rule.
+function gas_escape_fraction(F::AbstractMatrix, w::AbstractVector, n_surf::Integer)
+    N = size(F, 1)
+    # No gas, or gas with no emissive weight (a transparent bin): the limit
+    # beta -> 0, in which all gas emission reaches the walls.
+    if n_surf >= N
+        return 1.0
+    end
+    s = 1:n_surf
+    g = (n_surf + 1):N
+    w_g = @view w[g]
+    total = sum(w_g)
+    if total <= 0
+        return 1.0
+    end
+    escape = vec(sum(F[g, s], dims = 2))
+    return sum(w_g .* escape) / total
+end
+
+# Threshold of the gas escape fraction below which alternating projections
+# alone give the more accurate solution, and above which the orthogonal
+# projection start (OP+AP) does. Fitted on rectangular scattering enclosures
+# against converged references, for 165 <= N <= 2805 elements and
+# 10^3 to 10^4 rays per emitting element; both dependences are weak and
+# logarithmic, and the fit is used as is outside that range.
+function ap_threshold(N::Integer, rays_per_emitter::Real)
+    return 0.583 - 0.081 * log10(N) - 0.024 * log10(rays_per_emitter)
+end
+
 function Y_mat(w::AbstractVector)
     N = length(w)
     if N > 1000
@@ -456,7 +489,7 @@ function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
                         println("  measured ρ_D ≈ $(round(rho_fit; sigdigits=4)) over the last 20 rounds; estimated $k_left more rounds to the floor")
                     end
                 end
-                if k_max == k_cap && k_ap_needed <= k_ap
+                if log_rho_ap !== nothing && log_rho_ap < 0 && k_max == k_cap && k_ap_needed <= k_ap
                     if rho_meas >= 1
                         exchange_meas = 0.0
                     else
@@ -664,42 +697,60 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
     else
         size(F_raw,1)
     end
+    N = length(w)
 
-    verbose && println("Matrix size: $(length(w))×$(length(w))")
+    verbose && println("Matrix size: $(N)×$(N)")
 
-    # use for deciding between sparse/dense path and AP/OP
-    nz = length(w)^2 # initialize dense (for view factors)
+    # Nonzero statistics decide the sparse/dense path; the gas escape fraction
+    # Φ_g against its threshold decides AP-only versus OP+AP (2D participating
+    # media only). The threshold depends weakly on N and on the rays per
+    # emitting element; a domain that was never traced reports n_rays = 0
+    # and gets the 10^4 rays per emitter the rule was centred on.
+    nz = N^2 # initialize dense (for view factors)
+    phi_g = 1.0      # no gas: the beta -> 0 limit, in which all gas emission reaches the walls
+    phi_star = 0.0
     if rtm.surfaces_only
         if F_raw isa SparseMatrixCSC
             nz = nnz(F_raw)
         end
-        off_diag_chi = 0.0
     else
-        off_diag_chi, nz, perrow, dens, mem_GB = cross_coupling_chi(F_raw, num_surfaces)
+        chi, nz, perrow, dens, mem_GB = cross_coupling_chi(F_raw, num_surfaces)
         verbose && println("Raw ray traced sparse matrix statistics:")
         verbose && println("    nonzeros: ", nz, ", per-row density: ", round(perrow; sigdigits=6),
                             ", density: ", round(dens;sigdigits=6), ", memory footprint (GB): ", mem_GB)
+        phi_g = gas_escape_fraction(F_raw, w, num_surfaces)
+        if !isfinite(phi_g)
+            phi_g = 1.0
+        end
+        if rtm.n_rays > 0
+            rays_per_emitter = rtm.n_rays / N
+        else
+            rays_per_emitter = 10_000.0
+        end
+        phi_star = ap_threshold(N, rays_per_emitter)
+        verbose && println("Gas escape fraction of F_raw is Φ_g = $(round(phi_g; sigdigits=4)); AP threshold Φ_g* = $(round(phi_star; sigdigits=4)) at N = $N, $(round(Int, rays_per_emitter)) rays per emitter")
     end
-    nz_over_N = Float64(nz / length(w))
-    if nz / length(w)^2 > 0.25
+    nz_over_N = Float64(nz / N)
+    if nz / N^2 > 0.25
         F_raw = Matrix(F_raw)
     end
+    ap_preferred = phi_g < phi_star
 
-    verbose && println("Off-diagonal cross-coupling of F_raw is χ = $off_diag_chi")
-    # Near-parallel-plate input (ρ_AP > 0.99) overrides the χ gate, and the
+    # Near-parallel-plate input (ρ_AP > 0.99) overrides the Φ_g rule, and the
     # sparse gate when the dense Dykstra arrays fit in memory, because pure
     # alternating projections are then infeasible; the cost rule in DkAP sets
     # the rounds. Dykstra holds about six dense N×N Float64 arrays.
-    # Sparse input with χ > 0.4 is densified for Dykstra when the dense working
-    # set (about eight N×N Float64 arrays, 64 N² bytes) stays within ~1 GB, i.e.
-    # N up to about 4000; near-parallel-plate input is densified whenever the
-    # arrays fit in memory, because pure alternating projections are infeasible there.
+    # Sparse input above the threshold is densified for Dykstra when the dense
+    # working set (about eight N×N Float64 arrays, 64 N² bytes) stays within
+    # ~1 GB, i.e. N up to about 4000; near-parallel-plate input is densified
+    # whenever the arrays fit in memory, because pure alternating projections
+    # are infeasible there.
     flagged     = rho_ap !== nothing && rho_ap > 0.99
-    dense_fits  = 64 * length(w)^2 < 0.5 * Sys.free_memory()
-    dense_small = 64 * length(w)^2 < 2^30
-    densify     = F_raw isa SparseMatrixCSC && ((flagged && dense_fits) || (off_diag_chi >= 0.4 && dense_small))
+    dense_fits  = 64 * N^2 < 0.5 * Sys.free_memory()
+    dense_small = 64 * N^2 < 2^30
+    densify     = F_raw isa SparseMatrixCSC && ((flagged && dense_fits) || (!ap_preferred && dense_small))
     if typeof(rtm) <: ViewFactorDomain3D ||
-        (typeof(rtm) <: RayTracingDomain2D && off_diag_chi < 0.4 && !flagged) ||
+        (typeof(rtm) <: RayTracingDomain2D && ap_preferred && !flagged) ||
         (F_raw isa SparseMatrixCSC && !densify)
 
         if flagged && F_raw isa SparseMatrixCSC
@@ -711,7 +762,7 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
 
     else
         if F_raw isa SparseMatrixCSC
-            verbose && println("    Sparse input with χ ≥ 0.4 and N = $(length(w)): densifying for Dykstra")
+            verbose && println("    Sparse input above the AP threshold with N = $N: densifying for Dykstra")
             F_raw = Matrix(F_raw)
         end
         if rho_ap === nothing

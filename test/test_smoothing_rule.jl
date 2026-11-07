@@ -4,7 +4,8 @@ println("-"^60)
 
 using Test
 using RayTraceHeatTransfer
-using RayTraceHeatTransfer: predict_rho_data, get_w, DualSolver, dykstra_rate_bound, DkAP
+using RayTraceHeatTransfer: predict_rho_data, get_w, DualSolver, dykstra_rate_bound, DkAP,
+                            gas_escape_fraction, ap_threshold
 using GeometryBasics, StaticArrays
 using LinearAlgebra
 
@@ -105,6 +106,41 @@ end
     @test out3[5] > 3                                          # prescribed count overridden
     @test out3[2]
     @test out3[7] > out2[7]                                    # more PCG work in total
+end
+
+@testset "Gas escape fraction rule" begin
+    println("  escape fraction mesh independence, n_rays stored, thick and thin cavities routed")
+    # the same cavity at two mesh resolutions: Phi_g is a property of the enclosure
+    coarse = rule_cavity(2.0, 4.0, 6, 12, 1.0)
+    fine   = rule_cavity(2.0, 4.0, 12, 24, 1.0)
+    coarse(2_000_000; verbose = false)
+    fine(4_000_000; verbose = false)
+    @test coarse.n_rays == 2_000_000
+    @test fine.n_rays == 4_000_000
+    phi_c = gas_escape_fraction(coarse.F_raw, get_w(coarse), length(coarse.surface_mapping))
+    phi_f = gas_escape_fraction(fine.F_raw, get_w(fine), length(fine.surface_mapping))
+    @test 0 < phi_c < 1
+    @test abs(phi_f - phi_c) < 0.02 * phi_c
+    # a thick cavity (optical size 4 x 8) sits below the threshold: AP only
+    thick = rule_cavity(2.0, 4.0, 6, 12, 2.0)
+    thick(2_000_000; verbose = false)
+    N_t = length(get_w(thick))
+    phi_t = gas_escape_fraction(thick.F_raw, get_w(thick), length(thick.surface_mapping))
+    @test phi_t < ap_threshold(N_t, thick.n_rays / N_t)
+    stats = smooth!(thick; verbose = false)
+    @test stats.k_dykstra[1] == 0
+    @test stats.converged[1]
+    # the ordinary thin cavity of the tests above sits above it: OP+AP
+    thin = rule_cavity(2.0, 3.0, 4, 6, 0.05)
+    thin(2_000_000; verbose = false)
+    N_n = length(get_w(thin))
+    phi_n = gas_escape_fraction(thin.F_raw, get_w(thin), length(thin.surface_mapping))
+    @test phi_n > ap_threshold(N_n, thin.n_rays / N_n)
+    # the no-gas limit
+    @test gas_escape_fraction(ones(4, 4), ones(4), 4) == 1.0
+    # the threshold falls with N and with the ray budget
+    @test ap_threshold(2805, 1_000) < ap_threshold(165, 1_000)
+    @test ap_threshold(165, 10_000) < ap_threshold(165, 1_000)
 end
 
 println("✓ Smoothing cost rule tests passed")
