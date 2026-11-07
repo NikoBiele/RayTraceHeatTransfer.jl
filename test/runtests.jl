@@ -66,6 +66,10 @@ using Test
         include("test_reproducible.jl")
     end
 
+    @testset "Smoothing rule" begin
+        include("test_smoothing_rule.jl")
+    end
+
     @testset "Transparent bin" begin
         include("test_transparent_bin.jl")
     end

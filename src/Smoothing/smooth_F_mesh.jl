@@ -15,9 +15,15 @@ smoothed repeatedly under different settings.
 # Keyword arguments
 - `k_dykstra`: Dykstra rounds before the alternating projection finalisation.
   `0` gives pure alternating projections; larger values approach the
-  minimum-norm correction. The default `nothing` picks whichever performs best
-  for the problem at hand, based on the structure of `F_raw`. Rounds stop early
-  once the iterate is feasible.
+  minimum-norm correction. The value is only used where the structure of
+  `F_raw` leaves a choice: sparse or weakly cross-coupled input is smoothed by
+  alternating projections alone, and a dense input whose a priori rates make
+  Dykstra cheaper per decade of defect reduction than alternating projections
+  (near-parallel-plate enclosures) runs Dykstra to its floor regardless of
+  `k_dykstra`. In between, the prescribed rounds are run; the default of 1
+  gives the orthogonal-projection start, and more rounds move the result
+  toward the minimum-norm correction. Rounds stop early once the iterate is
+  feasible or its defect stops improving.
 - `renorm`: scale the weight vector by its smallest entry before projecting.
 - `verbose`: print per-bin progress and per-iteration defect bounds.
 - `k_ap`: cap on alternating projection iterations. Reaching it warns and
@@ -37,11 +43,13 @@ bin (length 1 for grey or spectrally uniform domains):
 - `converged`: whether the alternating projections reached the target
 - `delta_raw`: the raw unsmoothed distance to the energy conservation/reciprocity
   feasible manifold
-- `delta_smooth`: certified upper bound on the distance from `F_smooth` to the
-  energy conservation/reciprocity feasible manifold
-- `k_dykstra`: Dykstra rounds actually performed, which may be fewer than
-  requested
-- `k_ap`: alternating projection iterations performed
+- `delta_smooth`: distance from `F_smooth` to the energy conservation/reciprocity
+  feasible manifold: a certified upper bound when alternating projections
+  finalised, the exact dual distance when Dykstra reached its floor on its own
+- `k_dykstra`: Dykstra rounds actually performed, which may differ from the
+  value requested (see `k_dykstra` above)
+- `k_ap`: alternating projection iterations performed; `0` when Dykstra reached
+  its floor and no finalisation was needed
 - `k_pcg_tot`, `k_pcg_max`: total and per-round maximum preconditioned
   conjugate gradient iterations in the dual solves; both `0` when
   `k_dykstra == 0`
@@ -70,6 +78,24 @@ function smooth!(rtm::Union{RayTracingDomain2D,SurfaceDomain3D};
     end
     k_ap = something(k_ap, 1_000)
 
+    # A priori alternating-projection rate for the cost rule that sets the
+    # Dykstra budget, one value per spectral bin. The predictor needs the
+    # macro-surface grouping, so it is 2D only; elsewhere every bin gets
+    # `nothing` and the prescribed k_dykstra applies.
+    rho_bins = nothing
+    if rtm isa RayTracingDomain2D
+        pred = predict_rho_data(rtm)
+        rho_bins = pred.rho_bins
+        if verbose
+            if pred.exact
+                println("A priori alternating-projection rate ρ_AP ≈ $(round(pred.rho_est; sigdigits=6)) (worst bin)")
+            else
+                println("A priori alternating-projection rate ρ_AP ≥ $(round(pred.rho_est; sigdigits=6)) (worst bin, blind-set search truncated)")
+            end
+        end
+    end
+    rho_for(bin) = rho_bins === nothing ? nothing : rho_bins[bin]
+
     # Smooth exchange factors based on spectral mode
     if rtm.spectral_mode == :spectral_variable && typeof(rtm) <: RayTracingDomain2D
         # Variable spectral - smooth each F matrix separately
@@ -95,7 +121,8 @@ function smooth!(rtm::Union{RayTracingDomain2D,SurfaceDomain3D};
                 verbose=verbose,
                 smooth_surfaces_only=rtm.surfaces_only,
                 renorm=renorm,
-                spectral_bin=bin
+                spectral_bin=bin,
+                rho_ap=rho_for(bin)
             )
             F_smooth[bin] = F_smooth_bin
             converged_out[bin] = converged_i
@@ -117,7 +144,8 @@ function smooth!(rtm::Union{RayTracingDomain2D,SurfaceDomain3D};
                 verbose=verbose,
                 smooth_surfaces_only=rtm.surfaces_only,
                 renorm=renorm,
-                spectral_bin=representative_bin
+                spectral_bin=representative_bin,
+                rho_ap=rho_for(representative_bin)
             )
             for j in idx_group
                 F_smooth[j] = F_smooth_bin
@@ -145,7 +173,8 @@ function smooth!(rtm::Union{RayTracingDomain2D,SurfaceDomain3D};
             k_dykstra=k_dykstra,
             verbose=verbose,
             smooth_surfaces_only=rtm.surfaces_only,
-            renorm=renorm
+            renorm=renorm,
+            rho_ap=rho_for(1)
         )
         converged_out = [converged_i]
         delta_raw_out = [delta_raw_i]

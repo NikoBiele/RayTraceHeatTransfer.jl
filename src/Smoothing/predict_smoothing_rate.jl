@@ -31,6 +31,7 @@ function predict_rho_data(rtm::RayTracingDomain2D)
     wg    = [g.weight for g in groups]
 
     rho_worst = 0.0; t_worst = -Inf; delta_worst = 0.0
+    rho_bins  = zeros(length(Fbins))               # per-bin rate, for per-bin decisions
     exact_all = true
     for (b, F) in enumerate(Fbins)
         adj = _surface_adjacency(F, g_of, G, n_surf)
@@ -48,6 +49,7 @@ function predict_rho_data(rtm::RayTracingDomain2D)
 
         t   = (2 * wS - W) / W
         rho_pred = 1 + min(t, 0.0)/2
+        rho_bins[b] = rho_pred
         if rho_pred > rho_worst
             rho_worst, t_worst = rho_pred, t
             delta_worst = delta_R_raw(F, w)        # measured, not assumed
@@ -55,7 +57,8 @@ function predict_rho_data(rtm::RayTracingDomain2D)
         wS > W / 2 * (1 + 1e-9) &&
             @warn "predict_rho_data: blind set exceeds half total weight (bin $b)"
     end
-    return (; t_data = t_worst, rho_est = rho_worst, delta_init = delta_worst, exact = exact_all)
+    return (; t_data = t_worst, rho_est = rho_worst, delta_init = delta_worst, exact = exact_all,
+              rho_bins = rho_bins)
 end
 
 function _surface_adjacency(F::SparseMatrixCSC, g_of, G, n_surf)

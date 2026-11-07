@@ -15,11 +15,15 @@ Rmul!(y, S::DualSolver, v) = (mul!(y, Symmetric(S.Y, :U), v); @. y += S.rowsum *
 
 function solve_R(S::DualSolver, b; rtol = 1e-14, maxiter = 200)
     x = zeros(eltype(b), length(b))
+    bn = norm(b)
+    bn == 0 && return x, 0                             # constraints already met exactly
     r = copy(b); z = S.dinv .* r; p = copy(z)
-    rz = dot(r, z); bn = norm(b); Ap = similar(b)
+    rz = dot(r, z); Ap = similar(b)
     for it in 1:maxiter
         Rmul!(Ap, S, p)
-        alpha = rz / dot(p, Ap)
+        pAp = dot(p, Ap)
+        pAp > 0 || return x, it                        # direction exhausted at rounding level
+        alpha = rz / pAp
         @. x += alpha * p
         @. r -= alpha * Ap
         norm(r) ≤ rtol * bn && return x, it
@@ -308,6 +312,28 @@ function Y_mat(w::AbstractVector)
     end
 end
 
+# A priori bound on the Dykstra contraction rate from the support of the traced
+# exchange factors. One Dykstra round spreads a row's residual over the row with
+# the reduced-mass weights Y and the cone then discards the part that lands
+# outside the support, so the one-row estimate of the contraction factor is
+# 1 - (Y-weight on the support) / (total Y-weight). The symmetric coupling
+# between rows can only slow this, so the slowest row gives a lower bound on
+# the rate: the true rate is at least the value returned here.
+function dykstra_rate_bound(F::AbstractMatrix, dual::DualSolver)
+    N = size(F, 1)
+    f_min = Inf
+    for i in 1:N
+        s = 0.0
+        @inbounds for j in 1:N
+            if F[i, j] > 0 || F[j, i] > 0
+                s += dual.Y[i, j]
+            end
+        end
+        f_min = min(f_min, s / dual.rowsum[i])
+    end
+    return 1 - f_min
+end
+
 function Xbar_b(F::AbstractMatrix, w::AbstractVector, Y::AbstractMatrix)
     N = length(w)
     if N > 1000
@@ -337,7 +363,7 @@ end
 
 function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
               k_dykstra::Int=0, k_ap::Int=1000, verbose::Bool=true,
-              nz_over_N::Real=length(w))
+              nz_over_N::Real=length(w), rho_ap::Union{Nothing,Real}=nothing)
 
     delta_raw = delta_R_raw(F_raw, w)
               
@@ -348,25 +374,139 @@ function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
     end
 
     dual = DualSolver(w)                               # Y, R-diagonal, preconditioner: once
+    N = length(w)
     F_smooth = copy(F_raw); P = zeros(size(F_raw)); delta = Inf; iters = 0
-    k_pcg_tot = 0; k_pcg_max = 0; k_dyk_conv = k_dykstra
-    for k in 1:k_dykstra
+    k_pcg_tot = 0; k_pcg_max = 0
+
+    # Cost rule. One Dykstra round is worth log(ρ_D)/log(ρ_AP) alternating
+    # projection steps (the exchange rate) and costs (5 + k_pcg) N² against
+    # 3 nnz(X) per step (the cost ratio). If a round pays, every round pays, so
+    # Dykstra then runs to its floor; otherwise the prescribed k_dykstra rounds
+    # are kept. ρ_AP comes from the a priori rate predictor, ρ_D from the
+    # support bound; the measured δ⟂ ratios replace the bound as they arrive.
+    k_cap = 20_000
+    k_max = k_dykstra
+    cost_ratio = Inf
+    k_ap_needed = 0
+    delta_hist = Tuple{Int,Float64}[]
+    log_rho_ap = rho_ap === nothing ? nothing : log(min(float(rho_ap), 1.0))
+    rho_d = dykstra_rate_bound(F_raw, dual)
+    ap_cost = 3 * nz_over_N * N                         # 3·nnz of the traced matrix: the AP-only alternative
+    target = 8 * eps(Float64)
+    guard  = sqrt(N) * target                          # floor-aware acceptance, as in AP
+    delta_prev = Inf; k_prev = 0
+    delta_best = Inf; flat = 0
+    k = 0
+    while k < k_max
+        k += 1
         G, iters = OP(F_smooth, w, dual)
         k_pcg_tot += iters
         k_pcg_max = max(iters, k_pcg_max)
         F_smooth = max.(G + P, 0.0)
-        if k % 5 == 0 || k == k_dykstra
+        if k == 1 && log_rho_ap !== nothing
+            cost_ratio = (5 + iters) * N^2 / ap_cost
+            if log_rho_ap >= 0
+                exchange = Inf
+                k_ap_needed = typemax(Int)
+            else
+                exchange = log(rho_d) / log_rho_ap
+                # alternating-projection steps from the raw defect to the floor at ρ_AP
+                k_ap_needed = ceil(Int, log(guard / max(delta_raw, guard)) / log_rho_ap)
+            end
+            if exchange > cost_ratio
+                k_max = k_cap
+                verbose && println("Cost rule: exchange rate $(round(exchange; sigdigits=3)) > cost ratio $(round(cost_ratio; sigdigits=3)); Dykstra runs to its floor (ρ_AP ≈ $(round(rho_ap; sigdigits=6)), ρ_D ≥ $(round(rho_d; sigdigits=4)))")
+            elseif k_ap_needed > k_ap
+                k_max = k_cap
+                verbose && println("Cost rule: exchange rate $(round(exchange; sigdigits=3)) ≤ cost ratio $(round(cost_ratio; sigdigits=3)), but alternating projections would need about $k_ap_needed steps (k_ap = $k_ap); Dykstra runs to its floor (ρ_AP ≈ $(round(rho_ap; sigdigits=6)), ρ_D ≥ $(round(rho_d; sigdigits=4)))")
+            else
+                verbose && println("Cost rule: exchange rate $(round(exchange; sigdigits=3)) ≤ cost ratio $(round(cost_ratio; sigdigits=3)); keeping $k_dykstra prescribed Dykstra rounds (ρ_AP ≈ $(round(rho_ap; sigdigits=6)), ρ_D ≥ $(round(rho_d; sigdigits=4)))")
+            end
+        end
+        if k % 5 == 0 || k == k_max
             delta = delta_perp(F_smooth, w; mode_indicator=:DYK, dual)
             verbose && println("Dykstra round $k ($iters PCG iterations): δ⟂ = $delta")
+            if delta >= delta_best * (1 - 1e-3)
+                flat += 1
+            else
+                flat = 0
+            end
+            delta_best = min(delta_best, delta)
+            if flat >= 3 && delta < guard
+                verbose && println("  Dykstra contraction exhausted at round $k (floor δ⟂ ≈ $delta)")
+                break
+            end
+            if isfinite(delta_prev) && delta_prev > 0 && delta > 0
+                rho_meas = (delta / delta_prev)^(1 / (k - k_prev))
+                # projected rounds to the floor, so a user can judge a long run early.
+                # The local rate mostly rises as the slow mode takes over, so early
+                # estimates tend to be low; the rate comes from a least-squares line
+                # through log δ⟂ over the last four readings (20 rounds), printed
+                # every 50 rounds. An estimate, not a bound.
+                push!(delta_hist, (k, delta))
+                if verbose && k_max == k_cap && k % 50 == 0 && delta > guard && length(delta_hist) >= 4
+                    pts = delta_hist[end-3:end]
+                    xs = [Float64(p[1]) for p in pts]
+                    ys = [log(p[2]) for p in pts]
+                    xm = sum(xs) / 4; ym = sum(ys) / 4
+                    slope = sum((xs .- xm) .* (ys .- ym)) / sum((xs .- xm) .^ 2)
+                    if slope < 0
+                        rho_fit = exp(slope)
+                        k_left = ceil(Int, log(guard / delta) / slope)
+                        println("  measured ρ_D ≈ $(round(rho_fit; sigdigits=4)) over the last 20 rounds; estimated $k_left more rounds to the floor")
+                    end
+                end
+                if k_max == k_cap && k_ap_needed <= k_ap
+                    if rho_meas >= 1
+                        exchange_meas = 0.0
+                    else
+                        exchange_meas = log(rho_meas) / log_rho_ap
+                    end
+                    if exchange_meas < cost_ratio
+                        verbose && println("Cost rule: measured exchange rate $(round(exchange_meas; sigdigits=3)) fell below the cost ratio; switching to alternating projections")
+                        break
+                    end
+                end
+            end
+            delta_prev = delta; k_prev = k
         end
-        if delta < 8 * eps(Float64)
-            k_dyk_conv = k
+        # Below the guard sqrt(N)·8ε, continue to the rounding target 8ε only when
+        # the measured rate makes that cheap (at most 100 more rounds); a slow run
+        # stops at the guard, which is already sqrt(N) rounding units.
+        if delta < target
             break
+        end
+        if delta < guard
+            rounds_to_target = 100
+            if isfinite(delta_prev) && delta_prev > delta && delta > 0 && k > k_prev
+                rho_loc = (delta / delta_prev)^(1 / (k - k_prev))
+                if rho_loc < 1
+                    rounds_to_target = ceil(Int, log(target / delta) / log(rho_loc))
+                end
+            end
+            if rounds_to_target >= 100
+                break
+            end
         end
         P = G + P - F_smooth
     end
-    F_smooth ./= sum(F_smooth, dims = 2)               # always renormalise, always finalise
-    F_smooth, k_ap, converged, delta_max = AP(F_smooth, w, num_surfaces; k_ap, verbose, nz_over_N)
+    k_dyk_conv = k
+    if k == k_cap && !(delta < max(target, guard) || (flat >= 3 && delta < guard))
+        @warn "Dykstra reached the round cap $k_cap without reaching its floor; alternating projections finalise from here."
+    end
+    # A Dykstra iterate at its floor is already reciprocal and row-stochastic to
+    # rounding, and δ⟂ is its exact distance to the feasible set. Returning it
+    # directly keeps that certificate; the alternating-projection finaliser
+    # cannot improve it and, near the parallel-plate limit, could only drift it
+    # along the slow mode.
+    F_smooth ./= sum(F_smooth, dims = 2)               # exact closure first; reciprocity stays at rounding level
+    if delta < max(target, guard) || (flat >= 3 && delta < guard)
+        verbose && println("Dykstra converged at round $k (δ⟂ = $delta); no finaliser needed")
+        return F_smooth, true, delta_raw, delta, k_dyk_conv, 0, k_pcg_tot, k_pcg_max
+    end
+    # The finaliser accepts the same floor Dykstra used, sqrt(N)·8ε, so it does
+    # not grind at the slow alternating-projection rate below a floor already reached.
+    F_smooth, k_ap, converged, delta_max = AP(F_smooth, w, num_surfaces; k_ap, verbose, nz_over_N = 1.0)
     return F_smooth, converged, delta_raw, delta_max, k_dyk_conv, k_ap, k_pcg_tot, k_pcg_max
 end
 
@@ -380,10 +520,10 @@ end
 # Returns a matrix of the same size as F_raw.
 function DkAP_active(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
                      k_dykstra::Int=0, k_ap::Int=1000, verbose::Bool=true,
-                     nz_over_N::Real=length(w))
+                     nz_over_N::Real=length(w), rho_ap::Union{Nothing,Real}=nothing)
     active = findall(>(0), w)
     length(active) == length(w) &&
-        return DkAP(F_raw, w, num_surfaces; k_dykstra, k_ap, verbose, nz_over_N)
+        return DkAP(F_raw, w, num_surfaces; k_dykstra, k_ap, verbose, nz_over_N, rho_ap)
     inactive = findall(<=(0), w)
     verbose && println("    $(length(inactive)) zero-weight elements excluded from the projection")
 
@@ -391,7 +531,7 @@ function DkAP_active(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int
     rs = sum(F_act, dims=2)
     rs[rs .== 0] .= 1
     F_act = F_act ./ rs
-    out = DkAP(F_act, w[active], num_surfaces; k_dykstra, k_ap, verbose, nz_over_N)
+    out = DkAP(F_act, w[active], num_surfaces; k_dykstra, k_ap, verbose, nz_over_N, rho_ap)
 
     F_sub = out[1]
     F_smooth = F_sub isa SparseMatrixCSC ? spzeros(eltype(F_sub), size(F_raw)...) :
@@ -515,7 +655,8 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
                                  k_dykstra::Int=1,
                                  verbose::Bool=true,
                                  renorm::Bool=true,
-                                 spectral_bin::Int=1)
+                                 spectral_bin::Int=1,
+                                 rho_ap::Union{Nothing,Real}=nothing)
 
     w = get_w(rtm; spectral_bin)
     num_surfaces = if typeof(rtm) <: RayTracingDomain2D
@@ -545,16 +686,39 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
     end
 
     verbose && println("Off-diagonal cross-coupling of F_raw is χ = $off_diag_chi")
+    # Near-parallel-plate input (ρ_AP > 0.99) overrides the χ gate, and the
+    # sparse gate when the dense Dykstra arrays fit in memory, because pure
+    # alternating projections are then infeasible; the cost rule in DkAP sets
+    # the rounds. Dykstra holds about six dense N×N Float64 arrays.
+    # Sparse input with χ > 0.4 is densified for Dykstra when the dense working
+    # set (about eight N×N Float64 arrays, 64 N² bytes) stays within ~1 GB, i.e.
+    # N up to about 4000; near-parallel-plate input is densified whenever the
+    # arrays fit in memory, because pure alternating projections are infeasible there.
+    flagged     = rho_ap !== nothing && rho_ap > 0.99
+    dense_fits  = 64 * length(w)^2 < 0.5 * Sys.free_memory()
+    dense_small = 64 * length(w)^2 < 2^30
+    densify     = F_raw isa SparseMatrixCSC && ((flagged && dense_fits) || (off_diag_chi >= 0.4 && dense_small))
     if typeof(rtm) <: ViewFactorDomain3D ||
-        (typeof(rtm) <: RayTracingDomain2D && off_diag_chi < 0.4) ||
-        F_raw isa SparseMatrixCSC
-        
-        verbose && println("    Using AP only (0 Dykstra rounds)")
-        k_dykstra = 0
-    
-    else # chi > 0.4 || typeof(rtm) <: RayTracingDomain3D_surfaces || typeof(F_raw) <: Matrix
+        (typeof(rtm) <: RayTracingDomain2D && off_diag_chi < 0.4 && !flagged) ||
+        (F_raw isa SparseMatrixCSC && !densify)
 
-        verbose && println("    Using prescribed $k_dykstra Dykstra rounds")
+        if flagged && F_raw isa SparseMatrixCSC
+            verbose && println("    Near-parallel-plate input too large to densify; using AP only")
+        else
+            verbose && println("    Using AP only (0 Dykstra rounds)")
+        end
+        k_dykstra = 0
+
+    else
+        if F_raw isa SparseMatrixCSC
+            verbose && println("    Sparse input with χ ≥ 0.4 and N = $(length(w)): densifying for Dykstra")
+            F_raw = Matrix(F_raw)
+        end
+        if rho_ap === nothing
+            verbose && println("    Using prescribed $k_dykstra Dykstra rounds")
+        else
+            verbose && println("    Dykstra budget set by the cost rule (prescribed k_dykstra = $k_dykstra applies if a round does not pay)")
+        end
     end
 
     if smooth_surfaces_only && !(F_raw isa SparseMatrixCSC)
@@ -565,7 +729,7 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
     end
 
     return DkAP_active(F_raw, w, num_surfaces; k_dykstra=k_dykstra,
-                k_ap=k_ap, verbose=verbose, nz_over_N=nz_over_N)
+                k_ap=k_ap, verbose=verbose, nz_over_N=nz_over_N, rho_ap=rho_ap)
 end
 
 function AP_convergence_check(w::AbstractVector, num_surfaces::Int)
