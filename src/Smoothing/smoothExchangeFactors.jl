@@ -216,13 +216,27 @@ function _level_counts(w, a)
     return n
 end
 
+# Largest eigenvalue of a symmetric matrix. eigmax uses LAPACK's syevr (MRRR),
+# which some OpenBLAS builds abandon with an internal error even on small,
+# well-conditioned matrices; syev (implicit QL/QR) is then used instead.
+function _eigmax_symmetric(A::Symmetric)
+    try
+        return eigmax(A)
+    catch e
+        if e isa LinearAlgebra.LAPACKException
+            return maximum(LinearAlgebra.LAPACK.syev!('N', 'U', Matrix(A)))
+        end
+        rethrow()
+    end
+end
+
 function _mu_min_levels(a::AbstractVector{<:Real}, n::AbstractVector{<:Integer})
     L = length(a); N = sum(n)
     S = [a[l]^2 / (a[l]^2 + a[m]^2) for l in 1:L, m in 1:L]
     K = [a[l] * a[m] / (a[l]^2 + a[m]^2) for l in 1:L, m in 1:L]
     lam_within = S * n                       # eigenvalue per level, mult n_l - 1
     A = Symmetric(Diagonal(lam_within) - sqrt.(n * n') .* K)
-    gmax = eigmax(A)
+    gmax = _eigmax_symmetric(A)
     for l in 1:L
         n[l] > 1 && (gmax = max(gmax, lam_within[l]))
     end
@@ -235,7 +249,7 @@ function _mu_min_dense(w::AbstractVector{<:Real})
     for k in 1:N
         G[k, k] = sum(w[k]^2 / (w[k]^2 + w[j]^2) for j in 1:N if j != k)
     end
-    return N - eigmax(Symmetric(G))
+    return N - _eigmax_symmetric(Symmetric(G))
 end
 
 function _log_bin(w, t)

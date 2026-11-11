@@ -25,17 +25,17 @@ function build_2d_repro()
     return RayTracingDomain2D([face], [(NDIM_REPRO, NDIM_REPRO)], verbose = false)
 end
 
-const CUBE_POINTS = [0.0 0.0 0.0; 0.0 0.0 1.0; 0.0 1.0 0.0; 0.0 1.0 1.0;
+const CUBE_POINTS_REPRO = [0.0 0.0 0.0; 0.0 0.0 1.0; 0.0 1.0 0.0; 0.0 1.0 1.0;
                      1.0 0.0 0.0; 1.0 0.0 1.0; 1.0 1.0 0.0; 1.0 1.0 1.0]
-const CUBE_FACES  = [1 2 4 3; 5 6 8 7; 1 5 7 3; 2 6 8 4; 3 4 8 7; 1 2 6 5]
-const CUBE_TIN    = [1000.0, 0.0, -1.0, -1.0, -1.0, -1.0]
-const CUBE_QIN    = [-1.0, -1.0, 0.0, 0.0, 0.0, 0.0]
-const CUBE_EPS    = ones(6)
+const CUBE_FACES_REPRO  = [1 2 4 3; 5 6 8 7; 1 5 7 3; 2 6 8 4; 3 4 8 7; 1 2 6 5]
+const CUBE_TIN_REPRO    = [1000.0, 0.0, -1.0, -1.0, -1.0, -1.0]
+const CUBE_QIN_REPRO    = [-1.0, -1.0, 0.0, 0.0, 0.0, 0.0]
+const CUBE_EPS_REPRO    = ones(6)
 
-build_3d_mc() = RayTracingDomain3D_surfaces(CUBE_POINTS, CUBE_FACES, NDIM_REPRO,
-                                            CUBE_QIN, CUBE_TIN, CUBE_EPS)
-build_3d_vf() = ViewFactorDomain3D(CUBE_POINTS, CUBE_FACES, NDIM_REPRO,
-                                   CUBE_QIN, CUBE_TIN, CUBE_EPS)
+build_3d_mc() = RayTracingDomain3D_surfaces(CUBE_POINTS_REPRO, CUBE_FACES_REPRO, NDIM_REPRO,
+                                            CUBE_QIN_REPRO, CUBE_TIN_REPRO, CUBE_EPS_REPRO)
+build_3d_vf() = ViewFactorDomain3D(CUBE_POINTS_REPRO, CUBE_FACES_REPRO, NDIM_REPRO,
+                                   CUBE_QIN_REPRO, CUBE_TIN_REPRO, CUBE_EPS_REPRO)
 
 shifted_seeds() = (1:Threads.nthreads()) .+ 1000
 

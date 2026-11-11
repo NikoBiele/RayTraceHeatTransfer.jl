@@ -12,11 +12,11 @@ using GeometryBasics
 
 # ---- geometry ----------------------------------------------------------------
 
-const CUBE_POINTS = [0.0 0.0 0.0; 0.0 0.0 1.0; 0.0 1.0 0.0; 0.0 1.0 1.0;
+const CUBE_POINTS_GEOM = [0.0 0.0 0.0; 0.0 0.0 1.0; 0.0 1.0 0.0; 0.0 1.0 1.0;
                      1.0 0.0 0.0; 1.0 0.0 1.0; 1.0 1.0 0.0; 1.0 1.0 1.0]
-const CUBE_FACES  = [1 2 4 3; 5 6 8 7; 1 5 7 3; 2 6 8 4; 3 4 8 7; 1 2 6 5]
-const CUBE_TIN    = [1000.0, 0.0, -1.0, -1.0, -1.0, -1.0]
-const CUBE_QIN    = [-1.0, -1.0, 0.0, 0.0, 0.0, 0.0]
+const CUBE_FACES_GEOM  = [1 2 4 3; 5 6 8 7; 1 5 7 3; 2 6 8 4; 3 4 8 7; 1 2 6 5]
+const CUBE_TIN_GEOM    = [1000.0, 0.0, -1.0, -1.0, -1.0, -1.0]
+const CUBE_QIN_GEOM    = [-1.0, -1.0, 0.0, 0.0, 0.0, 0.0]
 
 # regular tetrahedron, volume 8/3
 const TET_POINTS = [ 1.0  1.0  1.0;  1.0 -1.0 -1.0; -1.0  1.0 -1.0; -1.0 -1.0  1.0]
@@ -82,17 +82,17 @@ end
     rpe  = 200_000
     eps6 = ones(6)
 
-    ref = solvedVF(CUBE_POINTS, CUBE_FACES, Ndim, CUBE_QIN, CUBE_TIN, eps6)
+    ref = solvedVF(CUBE_POINTS_GEOM, CUBE_FACES_GEOM, Ndim, CUBE_QIN_GEOM, CUBE_TIN_GEOM, eps6)
     ref_means = faceMeans(ref)
 
     variants = Dict(
-        "as given"      => CUBE_FACES,
-        "all reversed"  => CUBE_FACES[:, end:-1:1],
-        "rotated rows"  => vcat([circshift(CUBE_FACES[i, :], i)' for i in 1:6]...))
+        "as given"      => CUBE_FACES_GEOM,
+        "all reversed"  => CUBE_FACES_GEOM[:, end:-1:1],
+        "rotated rows"  => vcat([circshift(CUBE_FACES_GEOM[i, :], i)' for i in 1:6]...))
 
     for (label, F) in variants
         @testset "$label" begin
-            d = solvedMC(CUBE_POINTS, F, Ndim, CUBE_QIN, CUBE_TIN, eps6, rpe)
+            d = solvedMC(CUBE_POINTS_GEOM, F, Ndim, CUBE_QIN_GEOM, CUBE_TIN_GEOM, eps6, rpe)
             @test abs(d.energy_error) < 1e-10
             @test maximum(abs, faceMeans(d) .- ref_means) < 2.0
         end
@@ -106,13 +106,13 @@ end
 @testset "Broken geometry rejected at construction" begin
     eps5 = ones(5); eps7 = ones(7)
 
-    holed = CUBE_FACES[2:end, :]                       # one face missing
+    holed = CUBE_FACES_GEOM[2:end, :]                       # one face missing
     @test_throws ErrorException RayTracingDomain3D_surfaces(
-        CUBE_POINTS, holed, 3, CUBE_QIN[2:end], CUBE_TIN[2:end], eps5)
+        CUBE_POINTS_GEOM, holed, 3, CUBE_QIN_GEOM[2:end], CUBE_TIN_GEOM[2:end], eps5)
 
-    doubled = vcat(CUBE_FACES, CUBE_FACES[1:1, :])     # one face duplicated
+    doubled = vcat(CUBE_FACES_GEOM, CUBE_FACES_GEOM[1:1, :])     # one face duplicated
     @test_throws ErrorException RayTracingDomain3D_surfaces(
-        CUBE_POINTS, doubled, 3, [CUBE_QIN; -1.0], [CUBE_TIN; 1000.0], eps7)
+        CUBE_POINTS_GEOM, doubled, 3, [CUBE_QIN_GEOM; -1.0], [CUBE_TIN_GEOM; 1000.0], eps7)
 end
 
 #############################################################################
@@ -120,7 +120,7 @@ end
 #############################################################################
 
 @testset "Tracer invariants" begin
-    cases = [("cube",        CUBE_POINTS, CUBE_FACES, CUBE_QIN, CUBE_TIN, ones(6)),
+    cases = [("cube",        CUBE_POINTS_GEOM, CUBE_FACES_GEOM, CUBE_QIN_GEOM, CUBE_TIN_GEOM, ones(6)),
              ("tetrahedron", TET_POINTS,  TET_FACES,  TET_QIN,  TET_TIN,  ones(4)),
              ("L-duct",      L_POINTS,    L_FACES,    L_QIN,    L_TIN,    ones(14))]
 
@@ -144,7 +144,7 @@ end
     Ndim = 3
     rpe  = 500_000
 
-    cases = [("cube",        CUBE_POINTS, CUBE_FACES, CUBE_QIN, CUBE_TIN, ones(6)),
+    cases = [("cube",        CUBE_POINTS_GEOM, CUBE_FACES_GEOM, CUBE_QIN_GEOM, CUBE_TIN_GEOM, ones(6)),
              ("tetrahedron", TET_POINTS,  TET_FACES,  TET_QIN,  TET_TIN,  ones(4))]
 
     for (name, pts, fcs, q, T, e) in cases
@@ -173,13 +173,13 @@ end
     Ndim = 2
     eps6 = ones(6)
 
-    ref   = solvedVF(CUBE_POINTS, CUBE_FACES, Ndim, CUBE_QIN, CUBE_TIN, eps6)
+    ref   = solvedVF(CUBE_POINTS_GEOM, CUBE_FACES_GEOM, Ndim, CUBE_QIN_GEOM, CUBE_TIN_GEOM, eps6)
     T_ref = collectT(ref)
     free  = findall(t -> t < 0, collectTin(ref))
 
     errs = Float64[]
     for rpe in (10_000, 1_000_000)
-        d = solvedMC(CUBE_POINTS, CUBE_FACES, Ndim, CUBE_QIN, CUBE_TIN, eps6, rpe)
+        d = solvedMC(CUBE_POINTS_GEOM, CUBE_FACES_GEOM, Ndim, CUBE_QIN_GEOM, CUBE_TIN_GEOM, eps6, rpe)
         @test abs(d.energy_error) < 1e-10
         push!(errs, sqrt(mean(abs2, collectT(d)[free] .- T_ref[free])))
     end
