@@ -38,10 +38,11 @@ Every problem follows the same four steps:
 2. **Exchange factors** — quasi-Monte Carlo ray tracing (2D participating media,
    3D surface enclosures) or analytical view factors (3D convex surface
    enclosures), producing exchange factor matrix `F_raw`.
-3. **Smooth** — for ray-traced exchange factors, `smooth!(domain)` projects
-   `F_raw` onto the nearest matrix satisfying reciprocity and energy
-   conservation, producing `F_smooth` and returning convergence diagnostics.
-   Analytical view factors are already reciprocal to round-off and skip this step.
+3. **Smooth** — for ray-traced exchange factors, `smooth!(domain)` enforces
+   reciprocity and energy conservation on `F_raw`, choosing per bin between
+   alternating projections and Dykstra's projection, and returns `F_smooth`
+   with convergence diagnostics. Analytical view factors are already reciprocal
+   to round-off and skip this step.
 4. **Solve** — `solveEquilibrium!(domain, domain.F_smooth)`, or
    `domain.F_raw` for analytical view factors, yields the steady state.
 

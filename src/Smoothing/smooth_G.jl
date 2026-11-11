@@ -12,7 +12,7 @@
 
 # one reversal pair; nodes 1:N ↔ (·, a), N+1:2N ↔ (·, ā)
 function _smooth_G_pair(Ga::SparseMatrixCSC, Gā::SparseMatrixCSC, w::AbstractVector,
-                        pa::AbstractVector, pā::AbstractVector, ns::Int; k_ap::Int)
+                        pa::AbstractVector, pā::AbstractVector, ns::Int; k_ap::Union{Nothing,Int})
     N = size(Ga, 1)
     Is = Int[]; Js = Int[]; Vs = Float64[]
     Ia, Ja, Va = findnz(Ga)
@@ -41,7 +41,7 @@ function _smooth_G_pair(Ga::SparseMatrixCSC, Gā::SparseMatrixCSC, w::AbstractVe
     return Gsa, Gsā, converged, delta_raw, delta_max, k_used
 end
 
-function smooth_G!(rtm::RayTracingDomain2D; k_ap::Int = 20_000, verbose::Bool = true, keep_F_raw::Bool = true)
+function smooth_G!(rtm::RayTracingDomain2D; k_ap::Union{Nothing,Int} = nothing, verbose::Bool = true, keep_F_raw::Bool = true)
     dm = rtm.directional_model
     dm === nothing && error("smooth_G!: the domain has no directional_model")
     G_raw = rtm.G_raw
@@ -79,7 +79,7 @@ function smooth_G!(rtm::RayTracingDomain2D; k_ap::Int = 20_000, verbose::Bool = 
         verbose && println("Smoothed G for spectral bin $k/$K: $(length(pair_list)) reversal pairs, ",
                            "AP iterations ≤ $(k_ap_out[k]), δ_R raw ≤ $(round(delta_raw_out[k], sigdigits = 3)), ",
                            "bound after ≤ $(round(delta_max_out[k], sigdigits = 3))",
-                           converged_out[k] ? "" : "  — NOT converged, raise k_ap")
+                           converged_out[k] ? "" : "  — NOT converged (see the alternating-projection warning)")
     end
 
     rtm.G_smooth = spectral_layout ? G_all : G_all[1]

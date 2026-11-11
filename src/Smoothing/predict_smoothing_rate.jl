@@ -61,6 +61,38 @@ function predict_rho_data(rtm::RayTracingDomain2D)
               rho_bins = rho_bins)
 end
 
+# 3D surface enclosures: the macro-surfaces are the planar faces the domain is
+# built from (elements on one plane cannot see each other), grouped through
+# elementParents; blindness between faces is read from F_raw as in 2D. The
+# exchange factors do not depend on wavelength in 3D, so the single rate is
+# repeated for every spectral bin. For a convex box of face areas A_k this gives
+# rho = 1 - (W - 2 max A_k) / (2W), W the total area.
+function predict_rho_data(rtm::SurfaceDomain3D)
+    parents = elementParents(rtm)
+    n_surf  = length(parents)
+    G       = length(rtm.facesMesh)
+    F       = rtm.F_raw
+    w       = get_w(rtm)
+
+    wg = zeros(G)                                  # summed element areas per face
+    for (i, g) in enumerate(parents)
+        wg[g] += w[i]
+    end
+    adj = _surface_adjacency(F, parents, G, n_surf)
+
+    # a face with internal coupling (not planar) cannot sit in a blind set
+    ok = [!adj[g, g] for g in 1:G]
+    Sg, wS, exact = mwis_groups(wg[ok], Matrix(adj[ok, ok]))
+
+    W = sum(w)
+    t = (2 * wS - W) / W
+    rho_pred = 1 + min(t, 0.0) / 2
+    wS > W / 2 * (1 + 1e-9) &&
+        @warn "predict_rho_data: blind set exceeds half total weight"
+    return (; t_data = t, rho_est = rho_pred, delta_init = delta_R_raw(F, w), exact = exact,
+              rho_bins = fill(rho_pred, rtm.n_spectral_bins))
+end
+
 function _surface_adjacency(F::SparseMatrixCSC, g_of, G, n_surf)
     adj  = falses(G, G)
     rows = rowvals(F); vals = nonzeros(F)

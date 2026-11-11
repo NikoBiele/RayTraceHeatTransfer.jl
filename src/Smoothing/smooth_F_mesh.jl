@@ -1,5 +1,5 @@
 """
-    smooth!(rtm; k_ap=1_000, k_dykstra=nothing, verbose=true, renorm=true)
+    smooth!(rtm; k_ap=nothing, k_dykstra=1, verbose=true, renorm=true)
 
 Project the raw exchange factors in `rtm.F_raw` onto the set of physically
 admissible exchange factors, storing the result in `rtm.F_smooth`.
@@ -16,22 +16,26 @@ smoothed repeatedly under different settings.
 - `k_dykstra`: Dykstra rounds before the alternating projection finalisation.
   `0` gives pure alternating projections; larger values approach the
   minimum-norm correction. The value is only used where the structure of
-  `F_raw` leaves a choice. Optically thick 2D input, whose gas escape
-  fraction (the fraction of gas emission absorbed at the walls) lies below a
-  threshold that falls slowly with the number of elements and the rays per
-  element, is smoothed by alternating projections alone, as is sparse input
-  too large to densify; a dense input whose a priori rates make Dykstra
-  cheaper per decade of defect reduction than alternating projections
-  (near-parallel-plate enclosures) runs Dykstra to its floor regardless of
-  `k_dykstra`. In between, the prescribed rounds are run; the default of 1
-  gives the orthogonal-projection start, and more rounds move the result
-  toward the minimum-norm correction. Rounds stop early once the iterate is
-  feasible or its defect stops improving.
+  `F_raw` leaves a choice. Input traced with `method = :pathlength` is
+  smoothed by alternating projections alone. So is optically thick 2D input,
+  whose gas escape fraction (the fraction of gas emission absorbed at the
+  walls) lies below a threshold that falls slowly with the number of elements,
+  and sparse input too large to densify; a dense input whose a priori rates
+  make Dykstra cheaper per decade of defect reduction than alternating
+  projections (near-parallel-plate enclosures) runs Dykstra to its floor
+  regardless of `k_dykstra`. In between, the prescribed rounds are run;
+  the default of 1 gives the orthogonal-projection start, and more rounds
+  move the result toward the minimum-norm correction. Rounds stop early once
+  the iterate is feasible or its defect stops improving.
 - `renorm`: scale the weight vector by its smallest entry before projecting.
 - `verbose`: print per-bin progress and per-iteration defect bounds.
-- `k_ap`: cap on alternating projection iterations. Reaching it warns and
-  leaves `converged` false. Default 1000; 20 000 for a domain with a
-  `directional_model`.
+- `k_ap`: alternating projection iterations. With the default `nothing` they
+  run until the iterate converges, reaches its floor, or stops improving (the
+  best defect falls by less than 0.1 % over 1 000 iterations), with a ceiling
+  of 10^6. An integer caps them instead. Stopping at a cap or a stall warns and
+  leaves `converged` false. The same applies to a domain with a
+  `directional_model`. When the a priori rate predicts more than 10 000
+  iterations, `smooth!` warns before it starts.
 
 With a `directional_model` set, the angular exchange factors `G_raw` are smoothed
 instead (per-bin emission shares, reversed-bin reciprocity, zero pattern kept),
@@ -75,27 +79,62 @@ function smooth!(rtm::Union{RayTracingDomain2D,SurfaceDomain3D};
                                  renorm::Bool=true,
                                  keep_F_raw::Bool=true)
 
-    # directional domain: smooth the angular exchange factors, F_smooth = Σₐ G_smooth[a]
+    # directional domain: smooth the angular exchange factors, F_smooth = Σₐ G_smooth[a];
+    # k_ap = nothing (the default) stops alternating projections on progress, an Int caps them
     if rtm isa RayTracingDomain2D && rtm.directional_model !== nothing
-        return smooth_G!(rtm; k_ap = something(k_ap, 20_000), verbose = verbose, keep_F_raw = keep_F_raw)
+        return smooth_G!(rtm; k_ap = k_ap, verbose = verbose, keep_F_raw = keep_F_raw)
     end
-    k_ap = something(k_ap, 1_000)
 
-    # A priori alternating-projection rate for the cost rule that sets the
-    # Dykstra budget, one value per spectral bin. The predictor needs the
-    # macro-surface grouping, so it is 2D only; elsewhere every bin gets
-    # `nothing` and the prescribed k_dykstra applies.
+    # A priori alternating-projection rate, one value per spectral bin, from the
+    # blind macro-surfaces (straight walls in 2D, planar faces in 3D). In 2D it
+    # also feeds the cost rule that sets the Dykstra budget; in 3D it only informs
+    # the output below, and every bin gets `nothing` for the routing.
     rho_bins = nothing
+    pred = predict_rho_data(rtm)
     if rtm isa RayTracingDomain2D
-        pred = predict_rho_data(rtm)
         rho_bins = pred.rho_bins
-        if verbose
-            if pred.exact
-                println("A priori alternating-projection rate ρ_AP ≈ $(round(pred.rho_est; sigdigits=6)) (worst bin)")
-            else
-                println("A priori alternating-projection rate ρ_AP ≥ $(round(pred.rho_est; sigdigits=6)) (worst bin, blind-set search truncated)")
+    end
+    if verbose
+        if pred.exact
+            println("A priori alternating-projection rate ρ_AP ≈ $(round(pred.rho_est; sigdigits=6)) (worst bin)")
+        else
+            println("A priori alternating-projection rate ρ_AP ≥ $(round(pred.rho_est; sigdigits=6)) (worst bin, blind-set search truncated)")
+        end
+    end
+
+    # Warn when alternating projections are predicted to need many iterations:
+    # from the raw defect to the floor at the predicted rate. A first-order
+    # estimate, exact near the parallel-plate limit, that fine meshes away from
+    # it can exceed several-fold.
+    if rtm.F_raw isa Vector
+        N_el = size(rtm.F_raw[1], 1)
+    else
+        N_el = size(rtm.F_raw, 1)
+    end
+    guard = sqrt(N_el) * 8 * eps(Float64)
+    k_slow = Int[]
+    n_unbounded = 0
+    for rho in pred.rho_bins
+        if rho >= 1
+            n_unbounded += 1
+        else
+            k_est = ceil(Int, log(guard / max(pred.delta_init, guard)) / log(rho))
+            if k_est > 10_000
+                push!(k_slow, k_est)
             end
         end
+    end
+    if !isempty(k_slow) || n_unbounded > 0
+        msg = "Alternating projections are predicted to converge slowly (ρ_AP up to $(round(pred.rho_est; sigdigits=6))):"
+        if !isempty(k_slow)
+            msg *= "\n  about $(maximum(k_slow)) iterations in the slowest of $(length(k_slow)) bin(s) above 10 000;" *
+                   " an estimate that fine meshes can exceed several-fold."
+        end
+        if n_unbounded > 0
+            msg *= "\n  $(n_unbounded) bin(s) without a finite estimate (exactly bipartite blind set)."
+        end
+        msg *= "\n  With k_ap = nothing (the default) smoothing runs until it converges or stalls; an explicit k_ap caps it."
+        @warn msg
     end
     rho_for(bin) = rho_bins === nothing ? nothing : rho_bins[bin]
 

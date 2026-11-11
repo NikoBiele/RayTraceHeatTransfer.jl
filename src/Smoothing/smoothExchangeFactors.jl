@@ -318,12 +318,14 @@ end
 
 # Threshold of the gas escape fraction below which alternating projections
 # alone give the more accurate solution, and above which the orthogonal
-# projection start (OP+AP) does. Fitted on rectangular scattering enclosures
-# against converged references, for 165 <= N <= 2805 elements and
-# 10^3 to 10^4 rays per emitting element; both dependences are weak and
-# logarithmic, and the fit is used as is outside that range.
-function ap_threshold(N::Integer, rays_per_emitter::Real)
-    return 0.583 - 0.081 * log10(N) - 0.024 * log10(rays_per_emitter)
+# projection start (OP+AP) does. Fitted as a power law in the number of
+# elements on rectangular scattering enclosures, scored against unsmoothed
+# references (an unbiased yardstick for both smoothers), for
+# 165 <= N <= 2805 elements and 10^3 to 10^4 rays per emitting element; the
+# ray budget had no significant effect. Outside that range of N the power law
+# is extrapolated; it decays slowly and stays positive.
+function ap_threshold(N::Integer)
+    return 0.494 * Float64(N)^(-0.113)
 end
 
 function Y_mat(w::AbstractVector)
@@ -395,7 +397,7 @@ function OP(F_OP::AbstractMatrix, w::AbstractVector, dual::DualSolver)
 end
 
 function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
-              k_dykstra::Int=0, k_ap::Int=1000, verbose::Bool=true,
+              k_dykstra::Int=0, k_ap::Union{Nothing,Int}=nothing, verbose::Bool=true,
               nz_over_N::Real=length(w), rho_ap::Union{Nothing,Real}=nothing)
 
     delta_raw = delta_R_raw(F_raw, w)
@@ -449,7 +451,7 @@ function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
             if exchange > cost_ratio
                 k_max = k_cap
                 verbose && println("Cost rule: exchange rate $(round(exchange; sigdigits=3)) > cost ratio $(round(cost_ratio; sigdigits=3)); Dykstra runs to its floor (ρ_AP ≈ $(round(rho_ap; sigdigits=6)), ρ_D ≥ $(round(rho_d; sigdigits=4)))")
-            elseif k_ap_needed > k_ap
+            elseif k_ap !== nothing && k_ap_needed > k_ap
                 k_max = k_cap
                 verbose && println("Cost rule: exchange rate $(round(exchange; sigdigits=3)) ≤ cost ratio $(round(cost_ratio; sigdigits=3)), but alternating projections would need about $k_ap_needed steps (k_ap = $k_ap); Dykstra runs to its floor (ρ_AP ≈ $(round(rho_ap; sigdigits=6)), ρ_D ≥ $(round(rho_d; sigdigits=4)))")
             else
@@ -489,7 +491,7 @@ function DkAP(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
                         println("  measured ρ_D ≈ $(round(rho_fit; sigdigits=4)) over the last 20 rounds; estimated $k_left more rounds to the floor")
                     end
                 end
-                if log_rho_ap !== nothing && log_rho_ap < 0 && k_max == k_cap && k_ap_needed <= k_ap
+                if log_rho_ap !== nothing && log_rho_ap < 0 && k_max == k_cap && (k_ap === nothing || k_ap_needed <= k_ap)
                     if rho_meas >= 1
                         exchange_meas = 0.0
                     else
@@ -552,7 +554,7 @@ end
 # always have positive weight and come first, so num_surfaces is unchanged.
 # Returns a matrix of the same size as F_raw.
 function DkAP_active(F_raw::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
-                     k_dykstra::Int=0, k_ap::Int=1000, verbose::Bool=true,
+                     k_dykstra::Int=0, k_ap::Union{Nothing,Int}=nothing, verbose::Bool=true,
                      nz_over_N::Real=length(w), rho_ap::Union{Nothing,Real}=nothing)
     active = findall(>(0), w)
     length(active) == length(w) &&
@@ -683,7 +685,7 @@ end
 
 # Updated smoothing algorithm
 function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::AbstractMatrix;
-                                 k_ap::Int=1_000,
+                                 k_ap::Union{Nothing,Int}=nothing,
                                  smooth_surfaces_only::Bool=false,
                                  k_dykstra::Int=1,
                                  verbose::Bool=true,
@@ -703,9 +705,8 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
 
     # Nonzero statistics decide the sparse/dense path; the gas escape fraction
     # Φ_g against its threshold decides AP-only versus OP+AP (2D participating
-    # media only). The threshold depends weakly on N and on the rays per
-    # emitting element; a domain that was never traced reports n_rays = 0
-    # and gets the 10^4 rays per emitter the rule was centred on.
+    # media only). The threshold is a slowly decaying power law in N; the
+    # ray budget has no significant effect on it.
     nz = N^2 # initialize dense (for view factors)
     phi_g = 1.0      # no gas: the beta -> 0 limit, in which all gas emission reaches the walls
     phi_star = 0.0
@@ -722,13 +723,8 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
         if !isfinite(phi_g)
             phi_g = 1.0
         end
-        if rtm.n_rays > 0
-            rays_per_emitter = rtm.n_rays / N
-        else
-            rays_per_emitter = 10_000.0
-        end
-        phi_star = ap_threshold(N, rays_per_emitter)
-        verbose && println("Gas escape fraction of F_raw is Φ_g = $(round(phi_g; sigdigits=4)); AP threshold Φ_g* = $(round(phi_star; sigdigits=4)) at N = $N, $(round(Int, rays_per_emitter)) rays per emitter")
+        phi_star = ap_threshold(N)
+        verbose && println("Gas escape fraction of F_raw is Φ_g = $(round(phi_g; sigdigits=4)); AP threshold Φ_g* = $(round(phi_star; sigdigits=4)) at N = $N")
     end
     nz_over_N = Float64(nz / N)
     if nz / N^2 > 0.25
@@ -736,16 +732,25 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
     end
     ap_preferred = phi_g < phi_star
 
-    # Near-parallel-plate input (ρ_AP > 0.99) overrides the Φ_g rule, and the
-    # sparse gate when the dense Dykstra arrays fit in memory, because pure
-    # alternating projections are then infeasible; the cost rule in DkAP sets
-    # the rounds. Dykstra holds about six dense N×N Float64 arrays.
-    # Sparse input above the threshold is densified for Dykstra when the dense
-    # working set (about eight N×N Float64 arrays, 64 N² bytes) stays within
+    # Pathlength input is smoothed by alternating projections alone, whatever Φ_g
+    # and ρ_AP say: its gas columns are expected values rather than counts, and the
+    # projection branch fits that noise worse in every regime measured, including
+    # near-parallel-plate enclosures. Alternating projections run until they
+    # converge, reach their floor or stall (k_ap = nothing), however slow.
+    pathlength_input = typeof(rtm) <: RayTracingDomain2D && rtm.trace_method == :pathlength
+    if pathlength_input
+        ap_preferred = true
+        verbose && println("    Pathlength input: alternating projections only")
+    end
+
+    # Near-parallel-plate input (ρ_AP > 0.99, counted input only) overrides the Φ_g
+    # rule, and the sparse gate when the dense Dykstra arrays fit in memory; the
+    # cost rule in DkAP sets the rounds. Dykstra holds about six dense N×N Float64
+    # arrays. Sparse input above the threshold is densified for Dykstra when the
+    # dense working set (about eight N×N Float64 arrays, 64 N² bytes) stays within
     # ~1 GB, i.e. N up to about 4000; near-parallel-plate input is densified
-    # whenever the arrays fit in memory, because pure alternating projections
-    # are infeasible there.
-    flagged     = rho_ap !== nothing && rho_ap > 0.99
+    # whenever the arrays fit in memory.
+    flagged     = !pathlength_input && rho_ap !== nothing && rho_ap > 0.99
     dense_fits  = 64 * N^2 < 0.5 * Sys.free_memory()
     dense_small = 64 * N^2 < 2^30
     densify     = F_raw isa SparseMatrixCSC && ((flagged && dense_fits) || (!ap_preferred && dense_small))
@@ -871,7 +876,7 @@ end
 recover_F(X::Matrix{Float64}, r::Vector{Float64}) = X ./ r
 
 function AP(F_AP::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
-            k_ap::Int=1_000, verbose::Bool=true,
+            k_ap::Union{Nothing,Int}=nothing, verbose::Bool=true,
             nz_over_N::Real=length(w))
 
     AP_convergence_check(w, num_surfaces)
@@ -886,19 +891,35 @@ function AP(F_AP::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
     switch = 4 * guard
     max_stride = 52
 
+    # Stopping. With k_ap = nothing AP runs until it converges, accepts its floor
+    # or stops making progress, up to a last-resort ceiling; an explicit k_ap is a
+    # hard cap. In both modes a run whose best defect has not improved by
+    # stall_tol over stall_window iterations above the floor is stopped as stalled.
+    ceiling      = 1_000_000
+    stall_window = 1_000
+    stall_tol    = 1e-3
+    if k_ap === nothing
+        k_limit = ceiling
+    else
+        k_limit = k_ap
+    end
+
     delta_raw = delta_R_raw(F_AP, w)                   # defect of the input (MC-bounded)
     X_iter = build_X(F_AP, w)
     r = zeros(N); u = zeros(N); e = ones(N)
     hunger!(r, u, X_iter, w, e)                        # (X_0, u_0)
     delta = delta_R_X(X_iter, w, u)                    # defect of the iterate recovered from X_0
-    delta < target && (k_ap = 0)                    # already converged, exit
+    if delta < target                                  # already converged, exit
+        k_limit = 0
+    end
     delta_init = delta; delta_best = delta
     verbose && println("  raw input: δ_R = $delta_raw;  after first reciprocity projection: $delta ≤ δ⟂ ≤ $(mult*delta)")
 
     k = 0; k_next = 0; c = 0; flat = 0
     k_prev = 0; delta_prev = delta; rho_est = 0.5; floor_accepted = false
+    k_win = 0; delta_win = delta; stalled = false
 
-    while k < k_ap && delta > target
+    while k < k_limit && delta > target
         scale!(X_iter, u)                              # X_k -> X_{k+1}
         k += 1
         hunger!(r, u, X_iter, w, e)                    # (X_k, u_k), needed for the next step anyway
@@ -915,6 +936,14 @@ function AP(F_AP::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
                 verbose && println("  contraction exhausted at iteration $k (floor δ_R ≈ $delta)")
                 break
             end
+            # progress over the last stall_window iterations, measured on the best defect
+            if k - k_win >= stall_window
+                if delta_best > delta_win * (1 - stall_tol)
+                    stalled = true
+                    break
+                end
+                k_win, delta_win = k, delta_best
+            end
             k_prev, delta_prev = k, delta
             if delta > switch
                 stride = max(1, ceil(Int, log(delta / target) / log(1 / rho_est)))
@@ -928,6 +957,12 @@ function AP(F_AP::AbstractMatrix, w::AbstractVector, num_surfaces::Int;
     converged = delta <= target || floor_accepted
     if converged
         verbose && println("Converged after $k iterations. Final: $delta ≤ δ⟂ ≤ $(mult*delta)")
+    elseif stalled
+        @warn "AP stopped improving above its floor after $k iterations. Final: $delta ≤ δ⟂ ≤ $(mult*delta).\n" *
+              "The traced support may not admit reciprocity and closure together; more rays " *
+              "(or, with a directional model, fewer direction bins) usually help."
+    elseif k_ap === nothing
+        @warn "AP reached its ceiling of $ceiling iterations while still converging. Final: $delta ≤ δ⟂ ≤ $(mult*delta)"
     else
         @warn "AP reached k_ap = $k_ap. Final: $delta ≤ δ⟂ ≤ $(mult*delta)"
     end

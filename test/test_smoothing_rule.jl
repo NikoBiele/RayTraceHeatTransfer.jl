@@ -109,14 +109,12 @@ end
 end
 
 @testset "Gas escape fraction rule" begin
-    println("  escape fraction mesh independence, n_rays stored, thick and thin cavities routed")
+    println("  escape fraction mesh independence, thick and thin cavities routed, threshold power law")
     # the same cavity at two mesh resolutions: Phi_g is a property of the enclosure
     coarse = rule_cavity(2.0, 4.0, 6, 12, 1.0)
     fine   = rule_cavity(2.0, 4.0, 12, 24, 1.0)
     coarse(2_000_000; verbose = false)
     fine(4_000_000; verbose = false)
-    @test coarse.n_rays == 2_000_000
-    @test fine.n_rays == 4_000_000
     phi_c = gas_escape_fraction(coarse.F_raw, get_w(coarse), length(coarse.surface_mapping))
     phi_f = gas_escape_fraction(fine.F_raw, get_w(fine), length(fine.surface_mapping))
     @test 0 < phi_c < 1
@@ -126,7 +124,7 @@ end
     thick(2_000_000; verbose = false)
     N_t = length(get_w(thick))
     phi_t = gas_escape_fraction(thick.F_raw, get_w(thick), length(thick.surface_mapping))
-    @test phi_t < ap_threshold(N_t, thick.n_rays / N_t)
+    @test phi_t < ap_threshold(N_t)
     stats = smooth!(thick; verbose = false)
     @test stats.k_dykstra[1] == 0
     @test stats.converged[1]
@@ -135,12 +133,54 @@ end
     thin(2_000_000; verbose = false)
     N_n = length(get_w(thin))
     phi_n = gas_escape_fraction(thin.F_raw, get_w(thin), length(thin.surface_mapping))
-    @test phi_n > ap_threshold(N_n, thin.n_rays / N_n)
+    @test phi_n > ap_threshold(N_n)
     # the no-gas limit
     @test gas_escape_fraction(ones(4, 4), ones(4), 4) == 1.0
-    # the threshold falls with N and with the ray budget
-    @test ap_threshold(2805, 1_000) < ap_threshold(165, 1_000)
-    @test ap_threshold(165, 10_000) < ap_threshold(165, 1_000)
+    # the threshold falls with N, and the power law stays positive far beyond
+    # the fitted range of N
+    @test ap_threshold(2805) < ap_threshold(165)
+    @test 0 < ap_threshold(1_000_000) < ap_threshold(2805)
+end
+
+@testset "Pathlength input: alternating projections only, stopped on progress" begin
+    println("  pathlength thin slit and ordinary cavity routed to AP, beyond the old cap of 1000")
+    # the thin slit that :exchange sends to Dykstra (branch 3 above)
+    slit = rule_cavity(0.002, 10.0, 2, 40, 0.05)
+    slit(2_000_000; method = :pathlength, verbose = false)
+    @test slit.trace_method == :pathlength
+    @test predict_rho_data(slit).rho_est > 0.99
+    stats = @test_logs (:warn, r"predicted to converge slowly") match_mode = :any smooth!(slit; verbose = false)
+    @test stats.k_dykstra[1] == 0                              # no Dykstra, despite the near-parallel-plate rate
+    @test stats.converged[1]                                   # k_ap = nothing: run to convergence
+    @test stats.k_ap[1] > 1_000                                # beyond the old fixed cap
+    @test maximum(abs.(sum(slit.F_smooth, dims = 2) .- 1)) < 1e-12
+    # a mesh that takes over the recorded paths is pathlength input as well
+    reuse = rule_cavity(0.002, 10.0, 2, 40, 0.5)
+    reuse.path_store = slit.path_store
+    exchangeFactors!(reuse; verbose = false)
+    @test reuse.trace_method == :pathlength
+    # the ordinary thin cavity, which the Phi_g rule sends to OP+AP under :exchange
+    thin = rule_cavity(2.0, 3.0, 4, 6, 0.05)
+    thin(2_000_000; method = :pathlength, verbose = false)
+    N_n = length(get_w(thin))
+    @test gas_escape_fraction(thin.F_raw, get_w(thin), length(thin.surface_mapping)) > ap_threshold(N_n)
+    stats_thin = smooth!(thin; verbose = false)
+    @test stats_thin.k_dykstra[1] == 0
+    @test stats_thin.converged[1]
+end
+
+@testset "3D rate prediction: closed form for a flat box" begin
+    println("  1 x 1 x 0.1 box: predicted rate equals 1 - h/(1 + 2h)")
+    h = 0.1
+    box_points = [0.0 0.0 0.0; 0.0 0.0 h; 0.0 1.0 0.0; 0.0 1.0 h;
+                  1.0 0.0 0.0; 1.0 0.0 h; 1.0 1.0 0.0; 1.0 1.0 h]
+    box_faces = [1 2 4 3; 5 6 8 7; 1 5 7 3; 2 6 8 4; 3 4 8 7; 1 2 6 5]
+    box = RayTracingDomain3D_surfaces(box_points, box_faces, 3,
+                                      [-1.0, -1.0, 0.0, 0.0, 0.0, 0.0], [1000.0, 0.0, -1.0, -1.0, -1.0, -1.0], ones(6))
+    box(6 * 9 * 10_000; seeds = 1, verbose = false)
+    pred = predict_rho_data(box)
+    @test pred.exact
+    @test abs(pred.rho_est - (1 - h / (1 + 2 * h))) < 1e-12   # largest blind set: one square face
 end
 
 println("✓ Smoothing cost rule tests passed")

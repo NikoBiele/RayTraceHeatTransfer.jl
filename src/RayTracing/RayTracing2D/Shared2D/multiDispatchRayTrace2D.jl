@@ -83,6 +83,6 @@ function (rtm::RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; me
     else
         error("Unknown ray tracing method: $method, must be :exchange, :direct or :pathlength.")
     end
-    rtm.n_rays = Int(rays_tot)
+    rtm.trace_method = method
     return nothing
 end

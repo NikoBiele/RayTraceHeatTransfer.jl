@@ -267,6 +267,9 @@ function exchangeFactors!(rtm::RayTracingDomain2D; verbose::Bool = true)
     verbose && println("Exchange factors from $(n_rays(store)) recorded rays for $n_bins bin(s)",
                        dm === nothing ? "" : " × $(n_angular_bins(dm)) direction bins")
 
+    # exchange factors deposited from recorded paths are pathlength input, also on a
+    # mesh that took over the store without tracing itself
+    rtm.trace_method = :pathlength
     return _set_F_raw!(rtm, F_bins)
 end
 

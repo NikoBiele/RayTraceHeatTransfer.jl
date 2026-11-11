@@ -242,9 +242,9 @@ mutable struct RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}
     # automatic calculation of global energy conservation error
     energy_error::Union{Nothing, G, Vector{G}} where {G}
 
-    # total rays of the last trace (0 before any trace); the smoothing rule
-    # uses the rays per emitting element, n_rays / N
-    n_rays::Int
+    # tracer of the last trace (:none before any trace, else :exchange, :direct or
+    # :pathlength); smoothing sends pathlength input to alternating projections
+    trace_method::Symbol
 end
 
 mutable struct PolyFace3D{G}
