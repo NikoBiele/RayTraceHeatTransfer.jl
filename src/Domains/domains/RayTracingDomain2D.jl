@@ -95,7 +95,8 @@ function RayTracingDomain2D(rtm::IntermediateMesh2D, verbose::Bool)
         nothing,  # fine_grids_opt
         nothing,  # fine_bboxes_opt
         nothing,  # energy_error
-        :none     # trace_method, set by the tracer
+        :none,    # trace_method, set by the tracer
+        0         # rays_per_emitter, set by the :exchange tracer
     )
 
     rtm_optim.uniform_across_bin = validateExtinctionUniformity!(rtm_optim; verbose=verbose)

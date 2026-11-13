@@ -245,6 +245,10 @@ mutable struct RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID}
     # tracer of the last trace (:none before any trace, else :exchange, :direct or
     # :pathlength); smoothing sends pathlength input to alternating projections
     trace_method::Symbol
+
+    # mean rays per emitting element of the last :exchange trace (0 before any such
+    # trace); the smoothing rule's threshold depends on it
+    rays_per_emitter::Int
 end
 
 mutable struct PolyFace3D{G}

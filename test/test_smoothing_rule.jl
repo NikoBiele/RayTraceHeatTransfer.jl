@@ -39,7 +39,9 @@ end
 @testset "Branch 3: thin slit runs Dykstra to its floor" begin
     println("  thin slit (near parallel plates), sparse input densified, Dykstra expected")
     mesh = rule_cavity(0.002, 10.0, 2, 40, 0.05)
-    mesh(2_000_000; verbose = false)
+    # uniform rays keep the slow camp mode this branch is built for; weighted rays
+    # trace the walls so precisely that a single round reaches the floor
+    mesh(2_000_000; ray_allocation = :uniform, verbose = false)
     pred = predict_rho_data(mesh)
     @test pred.rho_est > 0.99
     stats = smooth!(mesh; verbose = false)
@@ -109,7 +111,7 @@ end
 end
 
 @testset "Gas escape fraction rule" begin
-    println("  escape fraction mesh independence, thick and thin cavities routed, threshold power law")
+    println("  escape fraction mesh independence, thick and thin cavities routed, threshold in N and rays")
     # the same cavity at two mesh resolutions: Phi_g is a property of the enclosure
     coarse = rule_cavity(2.0, 4.0, 6, 12, 1.0)
     fine   = rule_cavity(2.0, 4.0, 12, 24, 1.0)
@@ -123,8 +125,9 @@ end
     thick = rule_cavity(2.0, 4.0, 6, 12, 2.0)
     thick(2_000_000; verbose = false)
     N_t = length(get_w(thick))
+    @test thick.rays_per_emitter == div(2_000_000, N_t)              # recorded by the :exchange trace
     phi_t = gas_escape_fraction(thick.F_raw, get_w(thick), length(thick.surface_mapping))
-    @test phi_t < ap_threshold(N_t)
+    @test phi_t < ap_threshold(N_t, thick.rays_per_emitter)
     stats = smooth!(thick; verbose = false)
     @test stats.k_dykstra[1] == 0
     @test stats.converged[1]
@@ -133,13 +136,19 @@ end
     thin(2_000_000; verbose = false)
     N_n = length(get_w(thin))
     phi_n = gas_escape_fraction(thin.F_raw, get_w(thin), length(thin.surface_mapping))
-    @test phi_n > ap_threshold(N_n)
+    @test phi_n > ap_threshold(N_n, thin.rays_per_emitter)
     # the no-gas limit
     @test gas_escape_fraction(ones(4, 4), ones(4), 4) == 1.0
-    # the threshold falls with N, and the power law stays positive far beyond
-    # the fitted range of N
-    @test ap_threshold(2805) < ap_threshold(165)
-    @test 0 < ap_threshold(1_000_000) < ap_threshold(2805)
+    # the threshold falls with N and with the ray budget, and approaches a
+    # mesh-converged value
+    @test ap_threshold(2805, 3_000) < ap_threshold(165, 3_000)
+    @test ap_threshold(525, 10_000) < ap_threshold(525, 1_000)
+    @test abs(ap_threshold(1_000_000, 3_000) - ap_threshold(10_000_000, 3_000)) < 1e-5
+    @test 0.1 < ap_threshold(10_000_000, 10_000) < ap_threshold(2805, 10_000)
+    # the budget is clamped to the fitted range, and no recorded count takes its middle
+    @test ap_threshold(525, 100_000) == ap_threshold(525, 10_000)
+    @test ap_threshold(525, 100) == ap_threshold(525, 1_000)
+    @test ap_threshold(525, 0) == ap_threshold(525, 3_000)
 end
 
 @testset "Pathlength input: alternating projections only, stopped on progress" begin
@@ -162,8 +171,9 @@ end
     # the ordinary thin cavity, which the Phi_g rule sends to OP+AP under :exchange
     thin = rule_cavity(2.0, 3.0, 4, 6, 0.05)
     thin(2_000_000; method = :pathlength, verbose = false)
+    @test thin.rays_per_emitter == 0                           # only an :exchange trace records the count
     N_n = length(get_w(thin))
-    @test gas_escape_fraction(thin.F_raw, get_w(thin), length(thin.surface_mapping)) > ap_threshold(N_n)
+    @test gas_escape_fraction(thin.F_raw, get_w(thin), length(thin.surface_mapping)) > ap_threshold(N_n, thin.rays_per_emitter)
     stats_thin = smooth!(thin; verbose = false)
     @test stats_thin.k_dykstra[1] == 0
     @test stats_thin.converged[1]

@@ -19,7 +19,8 @@ smoothed repeatedly under different settings.
   `F_raw` leaves a choice. Input traced with `method = :pathlength` is
   smoothed by alternating projections alone. So is optically thick 2D input,
   whose gas escape fraction (the fraction of gas emission absorbed at the
-  walls) lies below a threshold that falls slowly with the number of elements,
+  walls) lies below a threshold that settles as the number of elements grows
+  and falls with the rays per element of the `:exchange` trace,
   and sparse input too large to densify; a dense input whose a priori rates
   make Dykstra cheaper per decade of defect reduction than alternating
   projections (near-parallel-plate enclosures) runs Dykstra to its floor

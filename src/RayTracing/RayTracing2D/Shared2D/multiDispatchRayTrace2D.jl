@@ -3,7 +3,8 @@ function (rtm::RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; me
                                 seeds::Union{Vector{K},K,UnitRange{K},Nothing}=nothing,
                                 rngs::Union{Vector{<:Random.AbstractRNG},<:Random.AbstractRNG,Nothing}=nothing,
                                 nudge=nothing, verbose=true, rec=nothing, chunk_rays::Integer=10_000_000,
-                                sampler::Union{Symbol,Nothing}=nothing) where
+                                sampler::Union{Symbol,Nothing}=nothing,
+                                ray_allocation::Union{Symbol,Nothing}=nothing) where
                                 {VPF,VVPF,MT,VT,DIII,DII,P<:Integer,GRID,S<:Integer,K<:Integer}
     
     # A domain built with acceleration = false is geometry-only and has no spatial
@@ -44,6 +45,26 @@ function (rtm::RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; me
         seeds = nothing      # the per-thread seeds below are unused by the Sobol sampler
     end
 
+    # Ray allocation over the emitters: :weighted (the default for :exchange) gives
+    # rays in proportion to the reciprocity weight w (area for walls, 4 beta V for
+    # gas cells), with the gas share capped at its equal-count share; :uniform gives
+    # every emitter the same number of rays. The pathlength tracer keeps one trace
+    # for every optical thickness and the direct tracer allocates by emitted power,
+    # so both use their own allocation. `ray_allocation = nothing` picks the default.
+    if ray_allocation === nothing
+        if method == :exchange
+            ray_allocation = :weighted
+        else
+            ray_allocation = :uniform
+        end
+    end
+    ray_allocation in (:weighted, :uniform) ||
+        error("Unknown ray_allocation: $ray_allocation, must be :weighted or :uniform.")
+    if ray_allocation == :weighted && method != :exchange
+        error("ray_allocation = :weighted is only available for method = :exchange. " *
+              "Omit `ray_allocation` for method = :$method.")
+    end
+
     if seeds === nothing
         seeds = 1:nthreads
     elseif seeds isa Integer
@@ -74,7 +95,7 @@ function (rtm::RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; me
 
     if method == :exchange
         exchangeRayTracing!(rtm, rays_tot, trace_nudge, verbose, rec, seeds, rngs, nthreads;
-                            sampler=sampler, sobol_seed=sobol_seed)
+                            sampler=sampler, sobol_seed=sobol_seed, ray_allocation=ray_allocation)
     elseif method == :direct
         directRayTracing!(rtm, rays_tot, trace_nudge, verbose, seeds, rngs, nthreads)
     elseif method == :pathlength
@@ -84,5 +105,13 @@ function (rtm::RayTracingDomain2D{VPF,VVPF,MT,VT,DIII,DII,GRID})(rays_tot::P; me
         error("Unknown ray tracing method: $method, must be :exchange, :direct or :pathlength.")
     end
     rtm.trace_method = method
+    # mean rays per emitting element, the ray budget the smoothing rule uses; only an
+    # :exchange trace sets it, any other trace resets it
+    if method == :exchange
+        n_emitters = length(rtm.surface_mapping) + length(rtm.volume_mapping)
+        rtm.rays_per_emitter = div(rays_tot, n_emitters)
+    else
+        rtm.rays_per_emitter = 0
+    end
     return nothing
 end
