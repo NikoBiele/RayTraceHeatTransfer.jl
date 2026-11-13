@@ -109,10 +109,6 @@ using Test
     @testset "Sobol quasi random number sampling" begin
         include("test_sobol_sampler.jl")
     end
-
-    @testset "Ray allocation" begin
-        include("test_ray_allocation.jl")
-    end
     
     @testset "Arbitrary precision" begin
         include("test_precision.jl")

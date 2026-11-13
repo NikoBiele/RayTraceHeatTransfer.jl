@@ -332,23 +332,14 @@ end
 
 # Threshold of the gas escape fraction below which alternating projections
 # alone give the more accurate solution, and above which the orthogonal
-# projection start (OP+AP) does. It is the zero of a curve fitted to the log
-# error ratio log(err_AP / err_OPAP) over the gas escape fraction, on
-# rectangular scattering enclosures traced with weighted ray allocation and
-# scored against unsmoothed references (an unbiased yardstick for both
-# smoothers), for 165 <= N <= 2805 elements and 10^3 to 10^4 rays per emitting
-# element. The zero approaches a mesh-converged value as N grows and falls
-# with the ray budget. The budget is clamped to the fitted range: as the rays
-# grow, both smoothers approach the same matrix and the zero stops mattering.
-# rays_per_emitter = 0 (no :exchange trace recorded) takes the middle of the
-# range.
-function ap_threshold(N::Integer, rays_per_emitter::Integer)
-    rays = rays_per_emitter
-    if rays <= 0
-        rays = 3_000
-    end
-    rays = clamp(rays, 1_000, 10_000)
-    return 0.299 + 7.8 / N - 0.057 * log10(rays / 1_000)
+# projection start (OP+AP) does. Fitted as a power law in the number of
+# elements on rectangular scattering enclosures, scored against unsmoothed
+# references (an unbiased yardstick for both smoothers), for
+# 165 <= N <= 2805 elements and 10^3 to 10^4 rays per emitting element; the
+# ray budget had no significant effect. Outside that range of N the power law
+# is extrapolated; it decays slowly and stays positive.
+function ap_threshold(N::Integer)
+    return 0.494 * Float64(N)^(-0.113)
 end
 
 function Y_mat(w::AbstractVector)
@@ -728,8 +719,8 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
 
     # Nonzero statistics decide the sparse/dense path; the gas escape fraction
     # Φ_g against its threshold decides AP-only versus OP+AP (2D participating
-    # media only). The threshold approaches a mesh-converged value as N grows
-    # and falls with the rays per emitting element of the :exchange trace.
+    # media only). The threshold is a slowly decaying power law in N; the
+    # ray budget has no significant effect on it.
     nz = N^2 # initialize dense (for view factors)
     phi_g = 1.0      # no gas: the beta -> 0 limit, in which all gas emission reaches the walls
     phi_star = 0.0
@@ -746,16 +737,8 @@ function smooth_F(rtm::Union{RayTracingDomain2D,SurfaceDomain3D}, F_raw::Abstrac
         if !isfinite(phi_g)
             phi_g = 1.0
         end
-        rays_rule = 0
-        if typeof(rtm) <: RayTracingDomain2D
-            rays_rule = rtm.rays_per_emitter
-        end
-        phi_star = ap_threshold(N, rays_rule)
-        if rays_rule > 0
-            verbose && println("Gas escape fraction of F_raw is Φ_g = $(round(phi_g; sigdigits=4)); AP threshold Φ_g* = $(round(phi_star; sigdigits=4)) at N = $N and $rays_rule rays per element")
-        else
-            verbose && println("Gas escape fraction of F_raw is Φ_g = $(round(phi_g; sigdigits=4)); AP threshold Φ_g* = $(round(phi_star; sigdigits=4)) at N = $N (no :exchange ray count recorded, 3000 rays per element assumed)")
-        end
+        phi_star = ap_threshold(N)
+        verbose && println("Gas escape fraction of F_raw is Φ_g = $(round(phi_g; sigdigits=4)); AP threshold Φ_g* = $(round(phi_star; sigdigits=4)) at N = $N")
     end
     nz_over_N = Float64(nz / N)
     if nz / N^2 > 0.25
